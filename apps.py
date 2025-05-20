@@ -1,10 +1,11 @@
 import os
 import tkinter as tk
-from tkinter import filedialog, messagebox, ttk  # tambahkan ttk di sini
+from tkinter import filedialog, messagebox, ttk
 import openpyxl
 import subprocess
 import sys
 import json
+from openpyxl.styles import Alignment
 
 def pilih_file_routing():
     root = tk.Tk()
@@ -65,15 +66,15 @@ def buat_mapping_driver(master_path, lokasi_value):
 
 def pilih_lokasi():
     lokasi_dict = {
-        "Sidoarjo": "plsda",
-        "Jakarta": "pljkt",
-        "Bandung": "plbdg",
-        "Semarang": "plsmg",
-        "Yogyakarta": "plygy",
-        "Malang": "plmlg",
-        "Denpasar": "pldps",
-        "Makasar": "plmks",
-        "Jember": "pljbr"
+        "01. Sidoarjo": "plsda",
+        "02. Jakarta": "pljkt",
+        "03. Bandung": "plbdg",
+        "04. Semarang": "plsmg",
+        "05. Yogyakarta": "plygy",
+        "06. Malang": "plmlg",
+        "07. Denpasar": "pldps",
+        "08. Makasar": "plmks",
+        "09. Jember": "pljbr"
     }
 
     if getattr(sys, 'frozen', False):
@@ -322,6 +323,32 @@ def main():
             adjusted_width = max_length + 2  # Tambahan padding
             new_ws.column_dimensions[col_letter].width = adjusted_width
 
+        # Daftar kolom yang diratakan ke tengah
+        center_columns = [
+            "Weight Percentage", "Volume Percentage", "Total Distance (m)",
+            "Total Visits", "Total Delivered", "Ship Duration"
+        ]
+
+        # Terapkan alignment berdasarkan nama kolom di Filtered Data
+        for col in new_ws.iter_cols(min_row=1, max_row=new_ws.max_row):
+            header = col[0].value
+            if header in center_columns:
+                alignment = Alignment(horizontal='center')
+            else:
+                alignment = Alignment(horizontal='left')
+            for cell in col:
+                cell.alignment = alignment
+
+        # Ubah nilai DRY dan FRZ di sheet 'Type Total Distance' ke kilometer
+        if "Type Total Distance" in new_wb.sheetnames:
+            ttd_ws = new_wb["Type Total Distance"]
+            dry_cell = ttd_ws["A2"]
+            frz_cell = ttd_ws["B2"]
+            
+            if isinstance(dry_cell.value, (int, float)):
+                dry_cell.value = round(dry_cell.value / 1000, 2)
+            if isinstance(frz_cell.value, (int, float)):
+                frz_cell.value = round(frz_cell.value / 1000, 2)
 
         save_path = simpan_file(new_wb)
         if save_path:
