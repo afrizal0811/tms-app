@@ -105,7 +105,12 @@ def main():
 
         df_comp['Customer Order'] = df_comp['title']
         df_comp['Status'] = df_comp['label']
-        df_comp['Reason'] = df_comp['Alasan Batal'] if 'Alasan Batal' in df_comp.columns else None
+        df_comp['Reason'] = df_comp.apply(
+            lambda x: x['Alasan Tolakan'] if x['Status'] == 'TERIMA SEBAGIAN' 
+            else x['Alasan Batal'] if x['Status'] in ['PENDING', 'BATAL'] 
+            else None,
+            axis=1
+        )
 
         df_comp['Faktur Batal/ Tolakan SO'] = df_comp.apply(lambda x: x['Customer Order'] if x['Status'] == 'BATAL' else None, axis=1)
         df_comp['Terkirim Sebagian'] = df_comp.apply(lambda x: x['Customer Order'] if x['Status'] == 'TERIMA SEBAGIAN' else None, axis=1)
@@ -140,6 +145,12 @@ def main():
         }
 
         compilation_df = df_comp[kolom_final].rename(columns=rename_kolom)
+
+        compilation_df['Temperature'] = compilation_df['Driver'].apply(
+            lambda x: 'DRY' if isinstance(x, str) and 'DRY' in x.upper()
+            else 'FRZ' if isinstance(x, str) and 'FRZ' in x.upper()
+            else None
+        )
 
         # Kolom kosong warna merah
         compilation_df.insert(compilation_df.columns.get_loc('Open Time'), '', '')
