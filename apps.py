@@ -7,6 +7,7 @@ import sys
 from openpyxl import load_workbook
 from openpyxl.utils import get_column_letter
 from geopy.distance import geodesic
+from openpyxl.styles import Alignment
 
 def convert_datetime_column(df, column_name, source_format=None, target_format='%H:%M'):
     def convert(val):
@@ -191,13 +192,25 @@ def main():
                 lambda row: is_in_range(row['expectedCoordinate'], row['doneCoordinate']),
                 axis=1
             )
+
+        # Tambahkan kolom 'Is Same Sequence' di akhir
+        if 'Planned Sequence' in df.columns and 'Actual Sequence' in df.columns:
+            df['Is Same Sequence'] = df.apply(
+                lambda row: row['Planned Sequence'] == row['Actual Sequence']
+                if pd.notna(row['Planned Sequence']) and pd.notna(row['Actual Sequence'])
+                else pd.NA,
+                axis=1
+            )
+
         # Atur urutan kolom sesuai keinginan
         desired_columns = [
             'License Plat', 'Driver', 'Customer', 'Status Delivery',
             'Open Time', 'Close Time', 'Actual Time Arrived', 'Actual Time Depatured',
             'Planned Visit Time', 'Actual Visit Time',
-            'Planned Sequence', 'Actual Sequence', 'Actual vs Expected Distance (m)'
+            'Planned Sequence', 'Actual Sequence', 'Actual vs Expected Distance (m)',
+            'Is Same Sequence'
         ]
+
         df = df[[col for col in desired_columns if col in df.columns]]
 
         # Simpan ke Excel
@@ -206,6 +219,29 @@ def main():
             messagebox.showwarning("Proses Gagal", "Proses Dibatalkan")
             return
         df.to_excel(save_path, index=False)
+
+        # Buka workbook dan worksheet
+        wb = load_workbook(save_path)
+        ws = wb.active
+
+        # Kolom yang ingin dirata tengah
+        center_columns = [
+            'Status Delivery', 'Open Time', 'Close Time',
+            'Actual Time Arrived', 'Actual Time Depatured',
+            'Planned Visit Time', 'Actual Visit Time',
+            'Planned Sequence', 'Actual Sequence'
+        ]
+
+        # Buat mapping kolom ke huruf kolom
+        header_to_letter = {cell.value: cell.column_letter for cell in ws[1] if cell.value in center_columns}
+
+        # Terapkan alignment center untuk kolom-kolom tersebut
+        for col_letter in header_to_letter.values():
+            for row in range(2, ws.max_row + 1):
+                ws[f"{col_letter}{row}"].alignment = Alignment(horizontal="center", vertical="center")
+
+        wb.save(save_path)
+
         autosize_columns(save_path)
 
         # Buka file otomatis setelah selesai
