@@ -4,7 +4,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox
 import subprocess
 import re
-from openpyxl.styles import PatternFill
+from openpyxl.styles import PatternFill, Alignment
 
 def pilih_file_excel():
     root = tk.Tk()
@@ -187,9 +187,24 @@ def main():
                 sheet.column_dimensions[column].width = (max_length + 2)
 
             red_fill = PatternFill(start_color='FF0000', end_color='FF0000', fill_type='solid')
-            empty_column = sheet['G']  # Karena ada kolom baru di awal
+            empty_column = sheet['G']
             for cell in empty_column:
                 cell.fill = red_fill
+
+            # Rata tengah dan kiri sesuai kolom
+            center_columns = [
+                'Open Time', 'Close Time', 'ETA', 'ETD', 'Actual Arrival', 'Actual Departure',
+                'Visit Time', 'Actual Visit Time (minute)', 'Customer ID',
+                'ET Sequence', 'Real Sequence', 'Temperature'
+            ]
+            header = [cell.value for cell in sheet[1]]
+            for col_idx, col_name in enumerate(header, 1):
+                align_center = Alignment(horizontal='center')
+                align_left = Alignment(horizontal='left')
+                alignment = align_center if col_name in center_columns else align_left
+                for cell in sheet.iter_cols(min_col=col_idx, max_col=col_idx, min_row=2):
+                    for c in cell:
+                        c.alignment = alignment
 
         buka_file(final_path)
 
