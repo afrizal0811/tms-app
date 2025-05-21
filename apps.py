@@ -93,7 +93,7 @@ def main():
         df.drop(columns=['doneTime_rank'], inplace=True)
 
         df['Customer ID'] = df['title'].apply(extract_customer_id) if 'title' in df.columns else None
-        df['Actual Visit Time (minute)'] = df.apply(hitung_actual_visit_time, axis=1)
+        df['Actual Visit Time'] = df.apply(hitung_actual_visit_time, axis=1)
 
         df['Driver'] = df['assignee'].astype(str).str.strip().str.lower()
         email_to_name = dict(zip(data_df['Email'], data_df['Driver']))
@@ -131,7 +131,7 @@ def main():
             'Driver', 'Faktur Batal/ Tolakan SO', 'Terkirim Sebagian', 'Pending', 'Reason',
             'Open Time', 'Close Time', 'eta', 'etd',
             'Klik Jika Anda Sudah Sampai', 'doneTime',
-            'Visit Time', 'Actual Visit Time (minute)',
+            'Visit Time', 'Actual Visit Time',
             'Customer ID', 'routePlannedOrder', 'Real Seq'
         ]
 
@@ -194,7 +194,7 @@ def main():
             # Rata tengah dan kiri sesuai kolom
             center_columns = [
                 'Open Time', 'Close Time', 'ETA', 'ETD', 'Actual Arrival', 'Actual Departure',
-                'Visit Time', 'Actual Visit Time (minute)', 'Customer ID',
+                'Visit Time', 'Actual Visit Time', 'Customer ID',
                 'ET Sequence', 'Real Sequence', 'Temperature'
             ]
             header = [cell.value for cell in sheet[1]]
