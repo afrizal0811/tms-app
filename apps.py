@@ -4,16 +4,13 @@ import os
 import sys
 import requests
 import webbrowser
+from version import CURRENT_VERSION, REMOTE_VERSION_URL, DOWNLOAD_LINK
 
 from Combine_Routing import apps as combine_routing
 from RO_vs_Real import apps as ro_vs_real
 from Pending_SO import apps as pending_so
 from Truck_Detail import apps as truck_detail
 from Truck_Usage import apps as truck_usage
-
-CURRENT_VERSION = "1.0.0"
-REMOTE_VERSION_URL = "https://raw.githubusercontent.com/afrizal0811/tms-app/refs/heads/main/version.txt"
-DOWNLOAD_LINK = "https://github.com/afrizalmaulanamuh/tms-app/releases/latest"  # kalau kamu nanti taruh installer di GitHub Releases
 
 # Fungsi untuk tombol 1
 def button1_action():
