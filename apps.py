@@ -2,11 +2,18 @@ import tkinter as tk
 from tkinter import messagebox
 import os
 import sys
+import requests
+import webbrowser
+
 from Combine_Routing import apps as combine_routing
 from RO_vs_Real import apps as ro_vs_real
 from Pending_SO import apps as pending_so
 from Truck_Detail import apps as truck_detail
 from Truck_Usage import apps as truck_usage
+
+CURRENT_VERSION = "1.0.0"
+REMOTE_VERSION_URL = "https://raw.githubusercontent.com/afrizal0811/tms-app/refs/heads/main/version.txt"
+DOWNLOAD_LINK = "https://github.com/afrizalmaulanamuh/tms-app/releases/latest"  # kalau kamu nanti taruh installer di GitHub Releases
 
 # Fungsi untuk tombol 1
 def button1_action():
@@ -41,9 +48,28 @@ def on_closing():
     root.destroy()
     sys.exit()  # pastikan exit beneran clean
 
+def check_update():
+    try:
+        response = requests.get(REMOTE_VERSION_URL)
+        latest_version = response.text.strip()
+
+        if latest_version != CURRENT_VERSION:
+            result = messagebox.askyesno(
+                "Update Tersedia",
+                f"Versi terbaru: {latest_version}\nVersi kamu: {CURRENT_VERSION}\n\nMau buka halaman update?"
+            )
+            if result:
+                webbrowser.open(DOWNLOAD_LINK)
+    except Exception as e:
+        messagebox.showerror("Gagal Cek Update", f"Gagal mengecek versi terbaru:\n{e}")
+
+
 # Membuat jendela utama
 root = tk.Tk()
 root.title("TMS Data Processing")
+
+# Cek update otomatis setelah 1 detik app dibuka
+root.after(1000, check_update)
 
 # Menentukan ukuran jendela
 window_width = 700
