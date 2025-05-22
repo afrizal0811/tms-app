@@ -69,22 +69,6 @@ def baca_file_data():
         messagebox.showerror("Error", f"Terjadi kesalahan saat membaca file 'Master Driver.xlsx': {e}")
         return None
 
-def parse_coordinates(coord_str):
-    try:
-        lat, lon = map(float, str(coord_str).split(','))
-        return (lat, lon)
-    except:
-        return None
-
-def is_in_range(expected_coord, done_coord):
-    expected_point = parse_coordinates(expected_coord)
-    done_point = parse_coordinates(done_coord)
-    if expected_point and done_point:
-        distance = geodesic(expected_point, done_point).meters
-        return round(distance, 1)
-    return ""
-
-
 def main():
     root = Tk()
     root.withdraw()
@@ -187,12 +171,6 @@ def main():
         if 'Driver' in df.columns:
             df = insert_blank_rows(df, 'Driver')
 
-        if 'expectedCoordinate' in df.columns and 'doneCoordinate' in df.columns:
-            df['Actual vs Expected Distance (m)'] = df.apply(
-                lambda row: is_in_range(row['expectedCoordinate'], row['doneCoordinate']),
-                axis=1
-            )
-
         # Tambahkan kolom 'Is Same Sequence' di akhir
         if 'Planned Sequence' in df.columns and 'Actual Sequence' in df.columns:
             df['Is Same Sequence'] = df.apply(
@@ -207,8 +185,7 @@ def main():
             'License Plat', 'Driver', 'Customer', 'Status Delivery',
             'Open Time', 'Close Time', 'Actual Time Arrived', 'Actual Time Depatured',
             'Planned Visit Time', 'Actual Visit Time',
-            'Planned Sequence', 'Actual Sequence', 'Actual vs Expected Distance (m)',
-            'Is Same Sequence'
+            'Planned Sequence', 'Actual Sequence', 'Is Same Sequence'
         ]
 
         df = df[[col for col in desired_columns if col in df.columns]]
