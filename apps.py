@@ -66,7 +66,7 @@ root = tk.Tk()
 root.title("TMS Data Processing")
 
 # Cek update otomatis setelah 1 detik app dibuka
-root.after(1000, check_update)
+root.after(10, check_update)
 
 # Menentukan ukuran jendela
 window_width = 700
