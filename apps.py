@@ -1,16 +1,16 @@
-import requests 
-import tkinter as tk
-from tkinter import ttk, messagebox, filedialog
-from tkcalendar import DateEntry
-import pandas as pd
-from datetime import datetime, timedelta
-import os
-import subprocess
-import json
 from config import API_TOKEN, CABANG_OPTIONS
-import openpyxl
+from datetime import datetime, timedelta
 from openpyxl.styles import PatternFill, Alignment 
 from openpyxl.utils import get_column_letter 
+from tkcalendar import DateEntry
+from tkinter import ttk, messagebox, filedialog
+import json
+import openpyxl
+import os
+import pandas as pd
+import requests 
+import subprocess
+import tkinter as tk
 
 CONFIG_PATH = "config.json"
 
@@ -263,7 +263,7 @@ def ambil_data(tanggal_str):
 
             # --- CEK KRITIS DI SINI: Jika setelah semua filter data API kosong, tampilkan pesan dan berhenti ---
             if df_api_data.empty:
-                tk.messagebox.showerror("Error", "Data tidak ditemukan untuk tanggal dan cabang yang dipilih.")
+                tk.messagebox.showerror("Error", "Data tidak ditemukan")
                 return
             # --- AKHIR CEK KRITIS ---
 
