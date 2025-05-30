@@ -216,13 +216,13 @@ def ambil_data(tanggal_str):
     }
 
     response = requests.get(url, params=params, headers=headers)
-    
-    # Cek jika data mentah dari API sudah kosong
-    if response.json()["tasks"]["data"] == []:
-        tk.messagebox.showerror("Error", "Data tidak ditemukan.") 
-        return
 
     if response.status_code == 200:
+         # Cek jika data mentah dari API sudah kosong
+        if response.json()["tasks"]["data"] == []:
+            tk.messagebox.showerror("Error", "Data tidak ditemukan.") 
+            return
+    
         result = response.json()
         items = result.get("tasks", {}).get("data", [])
 
@@ -267,7 +267,11 @@ def ambil_data(tanggal_str):
                 return
             # --- AKHIR CEK KRITIS ---
 
-            mapping_df = pd.read_excel("Master_Driver.xlsx")
+            try:
+                mapping_df = pd.read_excel("Master_Driver.xlsx")
+            except FileNotFoundError:
+                messagebox.showerror("", "File 'Master_Driver.xlsx' tidak ditemukan.")
+                return
             
             # Pastikan kolom 'Plat' ada di Master_Driver.xlsx
             required_master_cols = {'Email', 'Driver', 'Plat'}
@@ -355,10 +359,12 @@ def ambil_data(tanggal_str):
         simpan_file_excel(final_df)
 
     else:
-        # Ini adalah blok untuk status code API tidak 200
-        print(f"Gagal request: {response.status_code}")
-        print(response.text)
-        tk.messagebox.showerror("Error", f"Gagal mengambil data dari API. Status Code: {response.status_code}")
+        result = response.json()
+        tk.messagebox.showerror(
+            "API Error",
+            f"Status Code: {response.status_code}\n{result['message']}"
+        )
+
 
 
 def pilih_cabang_gui():
