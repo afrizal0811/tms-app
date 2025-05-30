@@ -1,6 +1,6 @@
 import requests 
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, filedialog
 from tkcalendar import DateEntry
 import pandas as pd
 from datetime import datetime, timedelta
@@ -9,7 +9,8 @@ import subprocess
 import json
 from config import API_TOKEN, CABANG_OPTIONS
 import openpyxl
-from openpyxl.styles import Font, PatternFill
+from openpyxl.styles import PatternFill, Alignment 
+from openpyxl.utils import get_column_letter 
 
 CONFIG_PATH = "config.json"
 
@@ -37,20 +38,13 @@ def tambah_7_jam(waktu_str):
     return (waktu + timedelta(hours=7)).strftime("%Y-%m-%d %H:%M:%S")
 
 def simpan_file_excel(dataframe):
-    import os
-    import subprocess
-    import openpyxl
-    from openpyxl.styles import Font
-    from tkinter import filedialog
-    import pandas as pd
-
     # Hapus kolom yang gak dibutuhin
     kolom_buang = ['finish.lat', 'finish.lon', 'finish.notes']
     dataframe = dataframe.drop(columns=[col for col in kolom_buang if col in dataframe.columns])
 
     # Rename kolom awal
     kolom_baru = {
-        'Email': 'Driver',
+        'Driver': 'Driver', 
         'startTime': 'Start Trip',
         'finish.finishTime': 'Finish Trip',
         'trackedTime': 'Tracked Time',
@@ -87,14 +81,29 @@ def simpan_file_excel(dataframe):
         'Finish Trip': 'Finish Time'
     })
 
+    # --- START: Tambahkan tanda petik satu (') di depan Tracked Time dan Total Duration ---
+    if 'Tracked Time' in dataframe.columns:
+        # Pastikan kolom bertipe string sebelum menambahkan tanda petik
+        dataframe['Tracked Time'] = dataframe['Tracked Time'].astype(str)
+        dataframe['Tracked Time'] = dataframe['Tracked Time'].apply(lambda x: f"'{x}" if pd.notna(x) and x != 'None' and x != '' else x)
+    if 'Total Duration' in dataframe.columns:
+        # Pastikan kolom bertipe string sebelum menambahkan tanda petik
+        dataframe['Total Duration'] = dataframe['Total Duration'].astype(str)
+        dataframe['Total Duration'] = dataframe['Total Duration'].apply(lambda x: f"'{x}" if pd.notna(x) and x != 'None' and x != '' else x)
+    # --- END: Tambahkan tanda petik satu (') ---
+
     # Bikin angka jarak jadi 2 angka di belakang koma
     if 'Total Distance' in dataframe.columns:
         dataframe['Total Distance'] = pd.to_numeric(dataframe['Total Distance'], errors='coerce')
         dataframe['Total Distance'] = dataframe['Total Distance'].round(2)
+        # Ubah tipe data kolom ke 'object' agar bisa menampung string kosong
+        dataframe['Total Distance'] = dataframe['Total Distance'].astype(object) 
+        # KOSONGKAN NILAI JIKA 0
+        dataframe.loc[dataframe['Total Distance'] == 0, 'Total Distance'] = '' 
 
-
-    # Urutin kolom
+    # Urutin kolom, tambahkan 'Plat' di awal
     urutan_kolom = [
+        'Plat', 
         'Driver',
         'Start Date',
         'Start Time',
@@ -104,7 +113,9 @@ def simpan_file_excel(dataframe):
         'Total Duration',
         'Total Distance',
     ]
-    dataframe = dataframe[urutan_kolom]
+    # Filter kolom yang ada di dataframe
+    urutan_kolom_final = [col for col in urutan_kolom if col in dataframe.columns]
+    dataframe = dataframe[urutan_kolom_final]
 
     # Simpan file
     folder = filedialog.askdirectory(title="Pilih folder untuk menyimpan file")
@@ -120,24 +131,65 @@ def simpan_file_excel(dataframe):
 
     dataframe.to_excel(filename, index=False)
 
-    # Bold 3 baris terakhir kolom pertama
+    # --- Start: Perubahan untuk format Excel ---
     wb = openpyxl.load_workbook(filename)
     ws = wb.active
-    max_row = ws.max_row
 
+    # 1. Rata tengah (Center) untuk kolom yang ditentukan
+    kolom_rata_tengah = ['Plat', 'Start Date', 'Start Time', 'Finish Date', 'Finish Time', 'Tracked Time', 'Total Duration', 'Total Distance']
+    
+    # Buat dictionary untuk memetakan nama kolom ke indeks kolom (numerik 1, 2, 3...)
+    col_idx_map = {col_name: idx + 1 for idx, col_name in enumerate(dataframe.columns)}
+
+
+    center_alignment = Alignment(horizontal='center', vertical='center')
+
+    for col_name in kolom_rata_tengah:
+        if col_name in col_idx_map: # Pastikan kolom ada di dataframe
+            col_number = col_idx_map[col_name]
+            for row_idx in range(1, ws.max_row + 1): # Iterasi dari baris 1 (header) hingga akhir
+                cell = ws.cell(row=row_idx, column=col_number)
+                cell.alignment = center_alignment
+
+    # 2. Atur lebar kolom otomatis
+    for column_idx, column_name in enumerate(dataframe.columns):
+        # Dapatkan huruf kolom (misal 'A', 'B') dari indeks numerik
+        column_letter = get_column_letter(column_idx + 1)
+        max_length = 0
+
+        for row_idx in range(1, ws.max_row + 1):
+            cell_value = ws.cell(row=row_idx, column=column_idx + 1).value
+            try:
+                # Konversi ke string untuk menghitung panjang, dan handle None
+                cell_str = str(cell_value) if cell_value is not None else ""
+                if len(cell_str) > max_length:
+                    max_length = len(cell_str)
+            except:
+                pass
+        
+        # Tambahkan sedikit padding (misal 2-3 karakter)
+        adjusted_width = (max_length + 2) 
+        if adjusted_width > 0: # Pastikan lebarnya positif
+            ws.column_dimensions[column_letter].width = adjusted_width
+
+    # Warna merah untuk tanggal start/finish yang berbeda
     merah_fill = PatternFill(start_color="FF0000", end_color="FF0000", fill_type="solid")
 
-    for row in range(2, max_row + 1):  # mulai dari baris 2 (hindari header)
-        start_date = ws.cell(row=row, column=2).value
-        finish_date = ws.cell(row=row, column=4).value
-        if start_date and finish_date and start_date != finish_date:
-            ws.cell(row=row, column=2).fill = merah_fill
-            ws.cell(row=row, column=4).fill = merah_fill
+    # Dapatkan indeks kolom numerik untuk 'Start Date' dan 'Finish Date'
+    start_date_col_idx = col_idx_map.get('Start Date')
+    finish_date_col_idx = col_idx_map.get('Finish Date')
 
-    # for row in range(max_row - 2, max_row + 1):
-    #     ws.cell(row=row, column=1).font = Font(bold=True)
+    if start_date_col_idx and finish_date_col_idx: # Pastikan kolom ditemukan
+        for row in range(2, ws.max_row + 1):  # mulai dari baris 2 (hindari header)
+            start_date_cell = ws.cell(row=row, column=start_date_col_idx)
+            finish_date_cell = ws.cell(row=row, column=finish_date_col_idx)
+
+            if start_date_cell.value and finish_date_cell.value and start_date_cell.value != finish_date_cell.value:
+                start_date_cell.fill = merah_fill
+                finish_date_cell.fill = merah_fill
 
     wb.save(filename)
+    # --- End: Perubahan untuk format Excel ---
 
     # Buka file
     try:
@@ -165,64 +217,104 @@ def ambil_data(tanggal_str):
 
     response = requests.get(url, params=params, headers=headers)
     
+    # Cek jika data mentah dari API sudah kosong
     if response.json()["tasks"]["data"] == []:
-        tk.messagebox.showerror("Error", "Data tidak ditemukan")
+        tk.messagebox.showerror("Error", "Data tidak ditemukan.") 
         return
 
     if response.status_code == 200:
         result = response.json()
         items = result.get("tasks", {}).get("data", [])
 
-        items = [
-            item for item in items
-            if item.get("trackedTime") not in [None, 0]
-            and item.get("trackedTime", 0) >= 10
-            and item.get("finish", {}).get("totalDistance", float('inf')) > 5
-        ]
-
-
+        # Filter awal berdasarkan trackedTime dan totalDistance
+        filtered_items = []
         for item in items:
-            item["_id"] = extract_email_from_id(item["_id"])
-            item["startTime"] = tambah_7_jam(item["startTime"])
-            if "finish" in item and item["finish"]:
-                item["finish"]["finishTime"] = tambah_7_jam(item["finish"]["finishTime"])
-                if "totalDuration" in item["finish"]:
-                    item["finish"]["totalDuration"] = convert_to_jam(item["finish"]["totalDuration"])
-            if "trackedTime" in item:
-                item["trackedTime"] = convert_to_jam(item["trackedTime"])
+            if item.get("trackedTime") not in [None, 0] \
+               and item.get("trackedTime", 0) >= 10 \
+               and item.get("finish", {}).get("totalDistance", float('inf')) > 5:
+                # Lakukan transformasi data di sini untuk item yang lolos filter
+                item_copy = item.copy() 
+                item_copy["_id"] = extract_email_from_id(item_copy["_id"])
+                item_copy["startTime"] = tambah_7_jam(item_copy["startTime"])
+                if "finish" in item_copy and item_copy["finish"]:
+                    item_copy["finish"]["finishTime"] = tambah_7_jam(item_copy["finish"]["finishTime"])
+                    if "totalDuration" in item_copy["finish"]:
+                        item_copy["finish"]["totalDuration"] = convert_to_jam(item_copy["finish"]["totalDuration"])
+                if "trackedTime" in item_copy:
+                    item_copy["trackedTime"] = convert_to_jam(item_copy["trackedTime"])
+                filtered_items.append(item_copy)
 
-        # Buat dataframe
-        df = pd.json_normalize(items)
-        df.rename(columns={"_id": "Email"}, inplace=True)
+        df_api_data = pd.json_normalize(filtered_items)
+        df_api_data.rename(columns={"_id": "Email"}, inplace=True) 
 
         # Filter startTime sesuai tanggal input (setelah ditambah 7 jam)
-        df['startTime'] = pd.to_datetime(df['startTime'])
-        df = df[df['startTime'].dt.strftime("%Y-%m-%d") == tanggal_input]
+        if 'startTime' in df_api_data.columns:
+            df_api_data['startTime'] = pd.to_datetime(df_api_data['startTime'])
+            df_api_data = df_api_data[df_api_data['startTime'].dt.strftime("%Y-%m-%d") == tanggal_input]
 
         # --- START FILTER & MAPPING DRIVER ---
         try:
-            # Filter email berdasarkan nama cabang dari config.json
             config = load_config()
-            if config and "cabang" in config:
-                nama_cabang = config["cabang"].lower()
-                df = df[df['Email'].str.contains(nama_cabang)]
+            nama_cabang = config["cabang"].lower() if config and "cabang" in config else ""
+
+            # Filter data API berdasarkan cabang
+            if 'Email' in df_api_data.columns:
+                df_api_data = df_api_data[df_api_data['Email'].str.contains(nama_cabang, na=False, case=False)]
+
+            # --- CEK KRITIS DI SINI: Jika setelah semua filter data API kosong, tampilkan pesan dan berhenti ---
+            if df_api_data.empty:
+                tk.messagebox.showerror("Error", "Data tidak ditemukan untuk tanggal dan cabang yang dipilih.")
+                return
+            # --- AKHIR CEK KRITIS ---
 
             mapping_df = pd.read_excel("Master_Driver.xlsx")
             
-            # Cek kolom yang dibutuhkan ada gak
-            if not {'Email', 'Driver'}.issubset(mapping_df.columns):
-                raise ValueError("File Master_Driver.xlsx harus ada kolom 'Email' dan 'Driver'")
+            # Pastikan kolom 'Plat' ada di Master_Driver.xlsx
+            required_master_cols = {'Email', 'Driver', 'Plat'}
+            if not required_master_cols.issubset(mapping_df.columns):
+                raise ValueError(f"File Master_Driver.xlsx harus ada kolom: {', '.join(required_master_cols)}")
+
+            mapping_df_filtered = mapping_df[mapping_df['Email'].str.contains(nama_cabang, na=False, case=False)]
+
+            # Lakukan VLOOKUP, sekarang sertakan 'Plat'
+            # Merging df_api_data (yang sudah dipastikan tidak kosong) dengan mapping_df_filtered
+            df_merged = df_api_data.merge(mapping_df_filtered[['Email', 'Driver', 'Plat']], on='Email', how='left')
             
-            # Merge untuk mapping Driver berdasarkan Email
-            df = df.merge(mapping_df[['Email', 'Driver']], on='Email', how='left')
-            df['Email'] = df['Driver']
-            df.drop(columns=['Driver'], inplace=True)
-            df = df.sort_values(by='Email', ascending=True)
+            # Jika Driver atau Plat kosong setelah merge, isi dengan Email atau string kosong
+            df_merged['Driver'] = df_merged['Driver'].fillna(df_merged['Email']) 
+            df_merged['Plat'] = df_merged['Plat'].fillna('') 
+
+            df_merged.drop(columns=['Email'], inplace=True) 
+            df_merged = df_merged.sort_values(by='Driver', ascending=True)
 
         except Exception as e:
             messagebox.showerror("Error", f"Gagal load atau mapping file Master_Driver.xlsx:\n{e}")
+            return
 
-        # Tambah kode filter duplikat di sini
+        # --- Tambah driver yg belum ada ---
+        existing_drivers = df_merged['Driver'].unique().tolist()
+        mapping_df_filtered_drivers = mapping_df_filtered['Driver'].unique().tolist()
+        missing_rows_df = mapping_df_filtered[~mapping_df_filtered['Driver'].isin(existing_drivers)].copy()
+        
+        # Hanya tambahkan jika memang ada driver yang tidak punya data perjalanan
+        if not missing_rows_df.empty:
+            # Buat DataFrame baru hanya dengan kolom 'Driver' dan 'Plat' dari missing_rows
+            missing_drivers_df_processed = missing_rows_df[['Driver', 'Plat']].copy()
+            
+            # Pastikan missing_drivers_df_processed memiliki kolom yang sama dengan df_merged
+            for col in df_merged.columns:
+                if col not in missing_drivers_df_processed.columns:
+                    missing_drivers_df_processed[col] = "" 
+
+            # Pastikan urutan kolom sesuai dengan df_merged utama sebelum concatenating
+            missing_drivers_df_processed = missing_drivers_df_processed[df_merged.columns]
+            
+            final_df = pd.concat([df_merged, missing_drivers_df_processed], ignore_index=True)
+            
+        else: # Jika tidak ada missing_rows, final_df adalah df_merged
+            final_df = df_merged.copy()
+
+        # --- Filter duplikat ---
         def durasi_ke_menit(durasi_str):
             try:
                 jam, menit = map(int, durasi_str.split(':'))
@@ -230,10 +322,10 @@ def ambil_data(tanggal_str):
             except:
                 return 0
 
-        df['finish.totalDuration_menit'] = df['finish.totalDuration'].apply(durasi_ke_menit)
-        df['finish.totalDistance'] = pd.to_numeric(df['finish.totalDistance'], errors='coerce').fillna(0)
+        final_df['finish.totalDuration_menit'] = final_df['finish.totalDuration'].apply(durasi_ke_menit)
+        final_df['finish.totalDistance'] = pd.to_numeric(final_df['finish.totalDistance'], errors='coerce').fillna(0)
 
-        df = df.sort_values(by='Email')
+        final_df = final_df.sort_values(by='Driver') 
 
         def filter_duplikat(grup):
             idx_to_drop = []
@@ -248,37 +340,26 @@ def ambil_data(tanggal_str):
                             break
             return grup.drop(idx_to_drop)
 
-        groups = [filter_duplikat(group) for _, group in df.groupby('Email')]
+        groups = [filter_duplikat(group) for _, group in final_df[final_df['finish.totalDuration_menit'] > 0].groupby('Driver')] 
+        filtered_df_final = pd.concat(groups, ignore_index=True) if groups else pd.DataFrame()
 
-        if groups == []:
-            tk.messagebox.showerror("Error", "Data tidak ditemukan")
-            return
-        
-        df = pd.concat(groups, ignore_index=True)
+        # Gabung lagi dengan driver kosong tadi di akhir
+        kosong_df = final_df[final_df['finish.totalDuration_menit'] == 0]
+        final_df = pd.concat([filtered_df_final, kosong_df], ignore_index=True)
 
+        final_df.drop(columns=['finish.totalDuration_menit'], inplace=True)
 
-        df.drop(columns=['finish.totalDuration_menit'], inplace=True)
+        # Urutkan final_df berdasarkan kolom 'Driver' secara ascending
+        final_df = final_df.sort_values(by='Driver', ascending=True)
 
-        # Tambahin 2 baris kosong
-        # empty_rows = pd.DataFrame([[""] * len(df.columns)] * 2, columns=df.columns)
-
-        # # Bikin baris note-nya
-        # notes = pd.DataFrame({
-        #     df.columns[0]: [
-        #         "*Data diambil berdasarkan tanggal Start Trip.",
-        #         "*Jika tidak muncul, berarti Driver belum Start Trip di tanggal tersebut atau belum Finish Trip dari hari sebelumnya.",
-        #         "*Cek tanggal sebelumnya jika ada data yang hilang."
-        #     ]
-        # })
-
-        # # Gabungin: data asli + 2 baris kosong + 3 baris note
-        # df_final = pd.concat([df, empty_rows, notes], ignore_index=True)
-
-        simpan_file_excel(df)
+        simpan_file_excel(final_df)
 
     else:
+        # Ini adalah blok untuk status code API tidak 200
         print(f"Gagal request: {response.status_code}")
         print(response.text)
+        tk.messagebox.showerror("Error", f"Gagal mengambil data dari API. Status Code: {response.status_code}")
+
 
 def pilih_cabang_gui():
     root = tk.Tk()
