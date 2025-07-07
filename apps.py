@@ -1,4 +1,4 @@
-from config import API_TOKEN, CABANG_OPTIONS
+from .config import API_TOKEN
 from datetime import datetime, timedelta
 from openpyxl.styles import PatternFill, Alignment 
 from openpyxl.utils import get_column_letter 
@@ -11,9 +11,16 @@ import pandas as pd
 import requests 
 import subprocess
 import tkinter as tk
+import sys
 
 CONFIG_PATH = "config.json"
 
+def get_base_path():
+    if getattr(sys, 'frozen', False):
+        return os.path.dirname(sys.executable)
+    else:
+        return os.path.dirname(__file__)
+    
 def simpan_config(data):
     with open(CONFIG_PATH, 'w') as f:
         json.dump(data, f)
@@ -255,11 +262,13 @@ def ambil_data(tanggal_str):
         # --- START FILTER & MAPPING DRIVER ---
         try:
             config = load_config()
-            nama_cabang = config["cabang"].lower() if config and "cabang" in config else ""
+            # Ganti "cabang" menjadi "lokasi" di kedua tempat
+            nama_lokasi = config["lokasi"].lower() if config and "lokasi" in config else ""
 
-            # Filter data API berdasarkan cabang
+            # Filter data API berdasarkan lokasi
             if 'Email' in df_api_data.columns:
-                df_api_data = df_api_data[df_api_data['Email'].str.contains(nama_cabang, na=False, case=False)]
+                # Ganti variabelnya agar lebih jelas
+                df_api_data = df_api_data[df_api_data['Email'].str.contains(nama_lokasi, na=False, case=False)]
 
             # --- CEK KRITIS DI SINI: Jika setelah semua filter data API kosong, tampilkan pesan dan berhenti ---
             if df_api_data.empty:
@@ -278,7 +287,7 @@ def ambil_data(tanggal_str):
             if not required_master_cols.issubset(mapping_df.columns):
                 raise ValueError(f"File Master_Driver.xlsx harus ada kolom: {', '.join(required_master_cols)}")
 
-            mapping_df_filtered = mapping_df[mapping_df['Email'].str.contains(nama_cabang, na=False, case=False)]
+            mapping_df_filtered = mapping_df[mapping_df['Email'].str.contains(nama_lokasi, na=False, case=False)]
 
             # Lakukan VLOOKUP, sekarang sertakan 'Plat'
             # Merging df_api_data (yang sudah dipastikan tidak kosong) dengan mapping_df_filtered
@@ -297,7 +306,6 @@ def ambil_data(tanggal_str):
 
         # --- Tambah driver yg belum ada ---
         existing_drivers = df_merged['Driver'].unique().tolist()
-        mapping_df_filtered_drivers = mapping_df_filtered['Driver'].unique().tolist()
         missing_rows_df = mapping_df_filtered[~mapping_df_filtered['Driver'].isin(existing_drivers)].copy()
         
         # Hanya tambahkan jika memang ada driver yang tidak punya data perjalanan
@@ -365,36 +373,49 @@ def ambil_data(tanggal_str):
             f"Status Code: {response.status_code}\n{result['message']}"
         )
 
-
-
 def pilih_cabang_gui():
-    root = tk.Tk()
-    root.title("Pilih Cabang")
+    lokasi_dict = {
+        "01. Sidoarjo": "plsda", "02. Jakarta": "pljkt", "03. Bandung": "plbdg",
+        "04. Semarang": "plsmg", "05. Yogyakarta": "plygy", "06. Malang": "plmlg",
+        "07. Denpasar": "pldps", "08. Makasar": "plmks", "09. Jember": "pljbr"
+    }
+    config_path = os.path.join(get_base_path(), "config.json")
+    if os.path.exists(config_path):
+        try:
+            with open(config_path, "r") as f:
+                return json.load(f).get("lokasi")
+        except Exception:
+            pass
 
+    selected_value = None
+    def on_select():
+        nonlocal selected_value
+        selected = combo.get()
+        if selected in lokasi_dict:
+            selected_value = lokasi_dict[selected]
+            with open(config_path, "w") as f:
+                json.dump({"lokasi": selected_value}, f)
+            root.destroy()
+
+    root = tk.Tk()
+    root.title("Pilih Lokasi Cabang")
     lebar = 350
     tinggi = 180
     x = (root.winfo_screenwidth() - lebar) // 2
     y = (root.winfo_screenheight() - tinggi) // 2
     root.geometry(f"{lebar}x{tinggi}+{x}+{y}")
 
-    ttk.Label(root, text="Pilih Lokasi Cabang", font=("Helvetica", 12)).pack(pady=10)
-    cabang_var = tk.StringVar()
-    dropdown = ttk.Combobox(root, textvariable=cabang_var, values=list(CABANG_OPTIONS.keys()), font=("Helvetica", 12), state="readonly")
-    dropdown.current(0)
-    dropdown.pack(pady=10)
-
-    def simpan_dan_lanjut():
-        cabang_kode = CABANG_OPTIONS[cabang_var.get()]
-        simpan_config({"cabang": cabang_kode})
-        root.destroy()
-        buka_tanggal_gui()  # lanjut ke GUI tanggal
-
-    ttk.Button(root, text="Lanjut", command=simpan_dan_lanjut).pack(pady=10)
+    tk.Label(root, text="Pilih Lokasi Cabang:", font=("Arial", 14)).pack(pady=10)
+    combo = ttk.Combobox(root, values=list(lokasi_dict.keys()), font=("Arial", 12))
+    combo.pack(pady=10)
+    combo.current(0)
+    tk.Button(root, text="Pilih", command=on_select, font=("Arial", 12)).pack(pady=10)
     root.mainloop()
+    return selected_value
 
 def buka_tanggal_gui():
     config = load_config()
-    if not config or "cabang" not in config:
+    if not config or "lokasi" not in config:
         pilih_cabang_gui()
         return
 
@@ -408,7 +429,7 @@ def buka_tanggal_gui():
     root.geometry(f"{lebar}x{tinggi}+{x}+{y}")
 
     ttk.Label(root, text="Pilih Tanggal", font=("Helvetica", 14)).pack(pady=10)
-    cal = DateEntry(root, date_pattern='dd-MM-yyyy', font=("Helvetica", 14))
+    cal = DateEntry(root, date_pattern='dd-MM-yyyy', font=("Helvetica", 14), style='TButton')
     cal.pack(pady=10)
 
     def proses():
@@ -419,9 +440,12 @@ def buka_tanggal_gui():
     ttk.Button(root, text="Proses", command=proses).pack(pady=10)
     root.mainloop()
 
-if __name__ == "__main__":
+def main():
     config = load_config()
-    if config and "cabang" in config:
+    if config and "lokasi" in config:
         buka_tanggal_gui()
     else:
-        pilih_cabang_gui()
+        messagebox.showwarning("Dibatalkan", "Pilih lokasi cabang!")
+
+if __name__ == "__main__":
+    main()
