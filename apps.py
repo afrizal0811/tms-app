@@ -6,7 +6,6 @@ import subprocess
 import sys
 from openpyxl import load_workbook
 from openpyxl.utils import get_column_letter
-from geopy.distance import geodesic
 from openpyxl.styles import Alignment
 
 def convert_datetime_column(df, column_name, source_format=None, target_format='%H:%M'):
@@ -72,7 +71,7 @@ def baca_file_data():
 def main():
     root = Tk()
     root.withdraw()
-    messagebox.showinfo("Informasi", "Pilih Export Task (Custom 'RO vs Real')")
+    messagebox.showinfo("Informasi", "Pilih Export Task")
 
     try:
         file_path = filedialog.askopenfilename(title="Pilih File Excel", filetypes=[("Excel Files", "*.xlsx")])
@@ -81,6 +80,25 @@ def main():
             return
         df = pd.read_excel(file_path)
 
+        # Tentukan kolom yang ingin dipertahankan
+        columns_to_keep = [
+            'title',
+            'label',
+            'assignee',
+            'doneTime',
+            'assignedVehicleId',
+            'assignedVehicle',
+            'routePlannedOrder',
+            'Open Time',
+            'Close Time',
+            'Visit Time',
+            'Klik Jika Anda Sudah Sampai'
+        ]
+
+        # Filter DataFrame, hanya simpan kolom yang ada di daftar 'columns_to_keep'
+        # Ini akan menghapus semua kolom lain
+        existing_columns = [col for col in columns_to_keep if col in df.columns]
+        df = df[existing_columns]
 
         # Menggunakan fungsi baca_file_data() untuk membaca Master Driver.xlsx
         data_df = baca_file_data()
