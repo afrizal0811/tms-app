@@ -11,78 +11,86 @@ from Routing_Summary import apps as routing_summary
 from Start_Finish_Time import apps as start_finish_time
 from Delivery_Summary import apps as delivery_summary
 
+# Dictionary untuk memetakan nama lengkap lokasi ke kodenya
+lokasi_dict_nama_ke_kode = {
+    "Sidoarjo": "plsda", "Jakarta": "pljkt", "Bandung": "plbdg",
+    "Semarang": "plsmg", "Yogyakarta": "plygy", "Malang": "plmlg",
+    "Denpasar": "pldps", "Makasar": "plmks", "Jember": "pljbr"
+}
+# Dictionary terbalik untuk mencari nama dari kode (untuk judul)
+kode_ke_lokasi = {v: k for k, v in lokasi_dict_nama_ke_kode.items()}
+
+
 def get_base_path():
     """Mendapatkan path dasar (base path) baik untuk script maupun executable."""
     if getattr(sys, 'frozen', False):
         return os.path.dirname(sys.executable)
     else:
         return os.path.dirname(__file__)
-    
-def pilih_lokasi():
-    """Menampilkan GUI untuk memilih lokasi cabang."""
-    lokasi_dict = {
+
+def update_title(root_window):
+    """Membaca konfigurasi dan memperbarui judul window utama."""
+    config_path = os.path.join(get_base_path(), "config.json")
+    title = "TMS Data Processing"
+    try:
+        if os.path.exists(config_path):
+            with open(config_path, "r") as f:
+                data = json.load(f)
+                kode = data.get("lokasi")
+                if kode and kode in kode_ke_lokasi:
+                    nama_lokasi = kode_ke_lokasi[kode]
+                    title += f" - {nama_lokasi}"
+    except (json.JSONDecodeError, IOError):
+        pass
+    finally:
+        root_window.title(title)
+
+# --- PERBAIKAN 1: Modifikasi `pilih_lokasi` untuk menggunakan Toplevel modal ---
+def pilih_lokasi(parent_window):
+    """Menampilkan GUI modal untuk memilih lokasi cabang."""
+    lokasi_dict_display = {
         "01. Sidoarjo": "plsda", "02. Jakarta": "pljkt", "03. Bandung": "plbdg",
         "04. Semarang": "plsmg", "05. Yogyakarta": "plygy", "06. Malang": "plmlg",
         "07. Denpasar": "pldps", "08. Makasar": "plmks", "09. Jember": "pljbr"
     }
     config_path = os.path.join(get_base_path(), "config.json")
 
-    selected_value = None
+    # Gunakan Toplevel yang terikat pada jendela utama (parent_window)
+    dialog = tk.Toplevel(parent_window)
+    dialog.title("Pilih Lokasi Cabang")
+
     def on_select():
-        nonlocal selected_value
         selected = combo.get()
-        if selected in lokasi_dict:
-            selected_value = lokasi_dict[selected]
+        if selected in lokasi_dict_display:
+            selected_value = lokasi_dict_display[selected]
             with open(config_path, "w") as f:
                 json.dump({"lokasi": selected_value}, f)
-            root.destroy()
+            dialog.destroy() # Tutup dialog setelah memilih
 
-    root = tk.Tk()
-    root.title("Pilih Lokasi Cabang")
     lebar = 350
     tinggi = 180
-    x = (root.winfo_screenwidth() - lebar) // 2
-    y = (root.winfo_screenheight() - tinggi) // 2
-    root.geometry(f"{lebar}x{tinggi}+{x}+{y}")
+    x = (dialog.winfo_screenwidth() - lebar) // 2
+    y = (dialog.winfo_screenheight() - tinggi) // 2
+    dialog.geometry(f"{lebar}x{tinggi}+{x}+{y}")
 
-    tk.Label(root, text="Pilih Lokasi Cabang:", font=("Arial", 14)).pack(pady=10)
-    combo = ttk.Combobox(root, values=list(lokasi_dict.keys()), font=("Arial", 12))
+    tk.Label(dialog, text="Pilih Lokasi Cabang:", font=("Arial", 14)).pack(pady=10)
+    combo = ttk.Combobox(dialog, values=list(lokasi_dict_display.keys()), font=("Arial", 12))
     combo.pack(pady=10)
     combo.current(0)
-    tk.Button(root, text="Pilih", command=on_select, font=("Arial", 12)).pack(pady=10)
-    root.mainloop()
-    return selected_value
+    tk.Button(dialog, text="Pilih", command=on_select, font=("Arial", 12)).pack(pady=10)
 
-# Fungsi untuk tombol 1
-def button1_action():
-    routing_summary.main()
+    # --- PERBAIKAN 2: Jadikan dialog ini modal ---
+    dialog.transient(parent_window)  # Tampilkan di atas jendela utama
+    dialog.grab_set()                # Kunci interaksi hanya ke dialog ini
+    parent_window.wait_window(dialog) # Tunggu sampai dialog ini ditutup
 
-# Fungsi untuk tombol 2
-def button2_action():
-    delivery_summary.main()
-
-# Fungsi untuk tombol 3: Menjalankan truck_detail_routing.py
-def button3_action():
-    start_finish_time.main()
-
-# Fungsi untuk tombol 4: Menjalankan truck_detail_task.py
-def button4_action():
-    messagebox.showinfo("Info", "Tombol 4 di klik!")
-
-# Fungsi untuk tombol 5
-def button5_action():
-    messagebox.showinfo("Info", "Tombol 5 di klik!")
-
-# Fungsi untuk tombol 6
-def button6_action():
-    messagebox.showinfo("Info", "Tombol 6 di klik!")
-
-def resource_path(relative_path):
-    if hasattr(sys, '_MEIPASS'):
-        return os.path.join(sys._MEIPASS, relative_path)
-    return os.path.join(os.path.abspath("."), relative_path)
-
-has_closed = False  # Di atas, sebelum fungsi apa pun
+# ... (fungsi button_action tetap sama) ...
+def button1_action(): routing_summary.main()
+def button2_action(): delivery_summary.main()
+def button3_action(): start_finish_time.main()
+def button4_action(): messagebox.showinfo("Info", "Tombol 4 di klik!")
+def button5_action(): messagebox.showinfo("Info", "Tombol 5 di klik!")
+def button6_action(): messagebox.showinfo("Info", "Tombol 6 di klik!")
 
 def on_closing():
     try:
@@ -94,18 +102,14 @@ def check_update():
     try:
         response = requests.get(REMOTE_VERSION_URL)
         latest_version = response.text.strip()
-
         if latest_version > CURRENT_VERSION:
-            result = messagebox.askyesno(
-                "Update Tersedia",
-                f"Versi terbaru: {latest_version}\nVersi kamu: {CURRENT_VERSION}\n\nMau buka halaman update?"
-            )
-            if result:
+            if messagebox.askyesno("Update Tersedia", f"Versi terbaru: {latest_version}\nVersi kamu: {CURRENT_VERSION}\n\nMau buka halaman update?"):
                 webbrowser.open(DOWNLOAD_LINK)
     except Exception as e:
         messagebox.showerror("Gagal Cek Update", f"Gagal mengecek versi terbaru:\n{e}")
 
-def periksa_konfigurasi_awal():
+# --- PERBAIKAN 3: Modifikasi `periksa_konfigurasi_awal` ---
+def periksa_konfigurasi_awal(parent_window):
     """Memeriksa config.json saat startup. Jika tidak ada, panggil GUI pilih lokasi."""
     config_path = os.path.join(get_base_path(), "config.json")
     konfigurasi_valid = False
@@ -114,91 +118,67 @@ def periksa_konfigurasi_awal():
         try:
             with open(config_path, "r") as f:
                 data = json.load(f)
-                # Pastikan key 'lokasi' ada dan tidak kosong
                 if "lokasi" in data and data["lokasi"]:
                     konfigurasi_valid = True
         except (json.JSONDecodeError, IOError):
-            # Jika file rusak atau tidak bisa dibaca, anggap tidak valid
             konfigurasi_valid = False
 
-    # Jika setelah semua pengecekan konfigurasi tetap tidak valid,
-    # maka tampilkan paksa jendela pemilihan lokasi.
     if not konfigurasi_valid:
         messagebox.showinfo("Setup Awal", "Silakan pilih lokasi cabang Anda terlebih dahulu.")
-        pilih_lokasi()
+        # Panggil pilih_lokasi dengan parent_window
+        pilih_lokasi(parent_window)
 
-# Membuat jendela utama
+# --- Alur Utama Aplikasi ---
+# 1. Buat jendela utama
 root = tk.Tk()
-root.title("TMS Data Processing")
+root.withdraw() # Sembunyikan dulu jendela utama
 
-# Fungsi untuk menu "Ganti Lokasi Cabang"
+# --- PERBAIKAN 4: Modifikasi `ganti_lokasi` untuk memanggil dialog modal ---
 def ganti_lokasi():
-    pilih_lokasi()
+    pilih_lokasi(root)   # Panggil dialog dengan root sebagai parent
+    update_title(root)   # Perbarui judul SETELAH dialog ditutup
 
-# Membuat menu bar
+# 2. Setup Menu
 menu_bar = tk.Menu(root)
-
-# Menu 'Pengaturan'
 pengaturan_menu = tk.Menu(menu_bar, tearoff=0)
 pengaturan_menu.add_command(label="Ganti Lokasi Cabang", command=ganti_lokasi)
 menu_bar.add_cascade(label="Pengaturan", menu=pengaturan_menu)
-
-# Pasang menu bar ke window
 root.config(menu=menu_bar)
 
-# Cek update otomatis setelah 1 detik app dibuka
-root.after(10, check_update)
+# 3. Lakukan pemeriksaan konfigurasi awal
+periksa_konfigurasi_awal(root)
 
-# Menentukan ukuran jendela
+# 4. Atur judul berdasarkan konfigurasi yang ada
+update_title(root)
+
+# 5. Atur geometri dan tampilkan jendela utama
 window_width = 700
 window_height = 350
-
-# Mendapatkan ukuran layar
 screen_width = root.winfo_screenwidth()
 screen_height = root.winfo_screenheight()
-
-# Menentukan posisi tengah
 position_x = (screen_width // 2) - (window_width // 2)
 position_y = (screen_height // 2) - (window_height // 2)
-
-# Menentukan ukuran dan posisi jendela
 root.geometry(f"{window_width}x{window_height}+{position_x}+{position_y}")
 
-# Frame untuk menyusun tombol dalam grid
+# 6. Setup Frame dan Tombol
 frame = tk.Frame(root)
 frame.pack(expand=True)
-
-# Styling tombol
 button_font = ("Arial", 14, "bold")
+buttons_config = [
+    ("Routing Summary", button1_action, 0, 0, "normal"),
+    ("Delivery Summary", button2_action, 0, 1, "normal"),
+    ("Start-Finish Time", button3_action, 1, 0, "normal"),
+    ("Tombol Disabled", button4_action, 1, 1, "disabled"),
+    ("Tombol Disabled", button5_action, 2, 0, "disabled"),
+    ("Tombol Disabled", button6_action, 2, 1, "disabled"),
+]
+for text, command, row, col, state in buttons_config:
+    btn = tk.Button(frame, text=text, command=command, font=button_font, padx=20, pady=10, width=15, state=state)
+    btn.grid(row=row, column=col, padx=10, pady=10)
 
-# Membuat tombol 1
-button1 = tk.Button(frame, text="Routing Summary", command=button1_action, font=button_font, padx=20, pady=10, width=15)
-button1.grid(row=0, column=0, padx=10, pady=10)
-
-# Membuat tombol 2
-button2 = tk.Button(frame, text="Delivery Summary", command=button2_action, font=button_font, padx=20, pady=10, width=15)
-button2.grid(row=0, column=1, padx=10, pady=10)
-
-# Membuat tombol 3
-button3 = tk.Button(frame, text="Start-Finish Time", command=button3_action, font=button_font, padx=20, pady=10, width=15)
-button3.grid(row=1, column=0, padx=10, pady=10)
-
-# Membuat tombol 3
-button3 = tk.Button(frame, text="Tombol Disabled", command=button4_action, font=button_font, padx=20, pady=10, width=15, state="disabled")
-button3.grid(row=1, column=1, padx=10, pady=10)
-
-# Membuat tombol 4
-button5 = tk.Button(frame, text="Tombol Disabled", command=button5_action, font=button_font, padx=20, pady=10, width=15, state="disabled")
-button5.grid(row=2, column=0, padx=10, pady=10) 
-
-# Membuat tombol 6
-button6 = tk.Button(frame, text="Tombol Disabled", command=button6_action, font=button_font, padx=20, pady=10, width=15, state="disabled")
-button6.grid(row=2, column=1, padx=10, pady=10) 
-
-periksa_konfigurasi_awal()
-# Menjalankan loop utama aplikasi
-try:
-    root.protocol("WM_DELETE_WINDOW", on_closing)
-except tk.TclError:
-    pass  # Abaikan jika root sudah dihancurkan
+# 7. Tampilkan jendela utama dan jalankan aplikasi
+root.deiconify() # Tampilkan kembali jendela utama
+root.protocol("WM_DELETE_WINDOW", on_closing)
+# Cek update setelah jendela ditampilkan
+root.after(1000, check_update)
 root.mainloop()
