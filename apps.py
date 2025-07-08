@@ -258,6 +258,7 @@ def main():
             return
 
         combined_df = pd.concat(all_data, ignore_index=True)
+        
         # Cek kolom wajib
         required_columns = [
             "Vehicle Name", "Assignee", "Weight Percentage", "Volume Percentage",
@@ -268,9 +269,22 @@ def main():
             messagebox.showerror(
                 "Proses Gagal",
                 f"File tidak valid!\n" +
-                "\n Upload kembali file Routing yang benar"
+                "\n Upload kembali file Routing yang benar!"
             )
             return
+        
+        # Validasi kecocokan lokasi dengan email dalam kolom Assignee
+        email_prefixes = combined_df["Assignee"].dropna().str.extract(r'kendaraan\.([^.@]+)', expand=False)
+        email_prefixes = email_prefixes.dropna().str.lower().unique()
+
+        if not any(lokasi.lower() in prefix for prefix in email_prefixes):
+            messagebox.showerror(
+                "Proses Gagal",
+                f"File tidak valid!\n" +
+                "\n Lokasi cabang tidak sesuai dengan file Routing!"
+            )
+            return
+        
         # TAHAP 3: PROSES DATA GABUNGAN
         base_dir = get_base_path()
         master_path = os.path.join(base_dir, "Master_Driver.xlsx")
