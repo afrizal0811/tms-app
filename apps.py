@@ -47,25 +47,30 @@ def update_title(root_window):
 
 # --- PERBAIKAN 1: Modifikasi `pilih_lokasi` untuk menggunakan Toplevel modal ---
 def pilih_lokasi(parent_window):
-    """Menampilkan GUI modal untuk memilih lokasi cabang."""
+    """Menampilkan GUI modal untuk memilih lokasi cabang (default sesuai config)."""
     lokasi_dict_display = {
         "01. Sidoarjo": "plsda", "02. Jakarta": "pljkt", "03. Bandung": "plbdg",
         "04. Semarang": "plsmg", "05. Yogyakarta": "plygy", "06. Malang": "plmlg",
         "07. Denpasar": "pldps", "08. Makasar": "plmks", "09. Jember": "pljbr"
     }
+    reverse_dict = {v: k for k, v in lokasi_dict_display.items()}  # "plsda" -> "01. Sidoarjo"
     config_path = os.path.join(get_base_path(), "config.json")
 
-    # Gunakan Toplevel yang terikat pada jendela utama (parent_window)
+    # Ambil lokasi saat ini dari config.json
+    selected_display_name = list(lokasi_dict_display.keys())[0]  # default ke yang pertama
+    if os.path.exists(config_path):
+        try:
+            with open(config_path, "r") as f:
+                data = json.load(f)
+                kode_lokasi = data.get("lokasi", "")
+                if kode_lokasi in reverse_dict:
+                    selected_display_name = reverse_dict[kode_lokasi]
+        except (json.JSONDecodeError, IOError):
+            pass
+
+    # --- UI dialog ---
     dialog = tk.Toplevel(parent_window)
     dialog.title("Pilih Lokasi Cabang")
-
-    def on_select():
-        selected = combo.get()
-        if selected in lokasi_dict_display:
-            selected_value = lokasi_dict_display[selected]
-            with open(config_path, "w") as f:
-                json.dump({"lokasi": selected_value}, f)
-            dialog.destroy() # Tutup dialog setelah memilih
 
     lebar = 350
     tinggi = 180
@@ -74,23 +79,30 @@ def pilih_lokasi(parent_window):
     dialog.geometry(f"{lebar}x{tinggi}+{x}+{y}")
 
     tk.Label(dialog, text="Pilih Lokasi Cabang:", font=("Arial", 14)).pack(pady=10)
-    combo = ttk.Combobox(dialog, values=list(lokasi_dict_display.keys()), font=("Arial", 12))
+
+    selected_var = tk.StringVar(value=selected_display_name)
+    combo = ttk.Combobox(dialog, values=list(lokasi_dict_display.keys()), textvariable=selected_var, font=("Arial", 12), state="readonly")
     combo.pack(pady=10)
-    combo.current(0)
+    combo.set(selected_display_name)
+
+    def on_select():
+        selected = combo.get()
+        if selected in lokasi_dict_display:
+            kode = lokasi_dict_display[selected]
+            with open(config_path, "w") as f:
+                json.dump({"lokasi": kode}, f)
+            dialog.destroy()
+
     tk.Button(dialog, text="Pilih", command=on_select, font=("Arial", 12)).pack(pady=10)
 
-    # --- PERBAIKAN 2: Jadikan dialog ini modal ---
-    dialog.transient(parent_window)  # Tampilkan di atas jendela utama
-    dialog.grab_set()                # Kunci interaksi hanya ke dialog ini
-    parent_window.wait_window(dialog) # Tunggu sampai dialog ini ditutup
+    dialog.transient(parent_window)
+    dialog.grab_set()
+    parent_window.wait_window(dialog)
 
 # ... (fungsi button_action tetap sama) ...
 def button1_action(): routing_summary.main()
 def button2_action(): delivery_summary.main()
 def button3_action(): start_finish_time.main()
-def button4_action(): messagebox.showinfo("Info", "Tombol 4 di klik!")
-def button5_action(): messagebox.showinfo("Info", "Tombol 5 di klik!")
-def button6_action(): messagebox.showinfo("Info", "Tombol 6 di klik!")
 
 def on_closing():
     try:
@@ -152,8 +164,8 @@ periksa_konfigurasi_awal(root)
 update_title(root)
 
 # 5. Atur geometri dan tampilkan jendela utama
-window_width = 700
-window_height = 350
+window_width = 400
+window_height = 300
 screen_width = root.winfo_screenwidth()
 screen_height = root.winfo_screenheight()
 position_x = (screen_width // 2) - (window_width // 2)
@@ -166,11 +178,8 @@ frame.pack(expand=True)
 button_font = ("Arial", 14, "bold")
 buttons_config = [
     ("Routing Summary", button1_action, 0, 0, "normal"),
-    ("Delivery Summary", button2_action, 0, 1, "normal"),
-    ("Start-Finish Time", button3_action, 1, 0, "normal"),
-    ("Tombol Disabled", button4_action, 1, 1, "disabled"),
-    ("Tombol Disabled", button5_action, 2, 0, "disabled"),
-    ("Tombol Disabled", button6_action, 2, 1, "disabled"),
+    ("Delivery Summary", button2_action, 1, 0, "normal"),
+    ("Start-Finish Time", button3_action, 2, 0, "normal"),
 ]
 for text, command, row, col, state in buttons_config:
     btn = tk.Button(frame, text=text, command=command, font=button_font, padx=20, pady=10, width=15, state=state)
