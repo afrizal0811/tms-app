@@ -6,12 +6,12 @@ import traceback
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 import re
-
 import pandas as pd
 import openpyxl
 from openpyxl.styles import Alignment
 from openpyxl.utils import get_column_letter
 
+CONFIG_PATH = "config.json"
 #==============================================================================
 # FUNGSI-FUNGSI UTAMA (HELPER FUNCTIONS)
 #==============================================================================
@@ -74,44 +74,15 @@ def contains_capacity_constraint(file_path):
         return False
     return False
 
+def load_config():
+    if os.path.exists(CONFIG_PATH):
+        with open(CONFIG_PATH, 'r') as f:
+            return json.load(f)
+    return None
+
 #==============================================================================
 # FUNGSI-FUNGSI PEMROSESAN INTI
 #==============================================================================
-
-def pilih_lokasi():
-    """Menampilkan GUI untuk memilih lokasi cabang."""
-    lokasi_dict = {
-        "01. Sidoarjo": "plsda", "02. Jakarta": "pljkt", "03. Bandung": "plbdg",
-        "04. Semarang": "plsmg", "05. Yogyakarta": "plygy", "06. Malang": "plmlg",
-        "07. Denpasar": "pldps", "08. Makasar": "plmks", "09. Jember": "pljbr"
-    }
-    config_path = os.path.join(get_base_path(), "config.json")
-
-    selected_value = None
-    def on_select():
-        nonlocal selected_value
-        selected = combo.get()
-        if selected in lokasi_dict:
-            selected_value = lokasi_dict[selected]
-            with open(config_path, "w") as f:
-                json.dump({"lokasi": selected_value}, f)
-            root.destroy()
-
-    root = tk.Tk()
-    root.title("Pilih Lokasi Cabang")
-    lebar = 350
-    tinggi = 180
-    x = (root.winfo_screenwidth() - lebar) // 2
-    y = (root.winfo_screenheight() - tinggi) // 2
-    root.geometry(f"{lebar}x{tinggi}+{x}+{y}")
-
-    tk.Label(root, text="Pilih Lokasi Cabang:", font=("Arial", 14)).pack(pady=10)
-    combo = ttk.Combobox(root, values=list(lokasi_dict.keys()), font=("Arial", 12))
-    combo.pack(pady=10)
-    combo.current(0)
-    tk.Button(root, text="Pilih", command=on_select, font=("Arial", 12)).pack(pady=10)
-    root.mainloop()
-    return selected_value
 
 def buat_mapping_driver(master_path, lokasi_value):
     """Membuat mapping email ke nama driver dari file master berdasarkan lokasi."""
@@ -252,24 +223,14 @@ def proses_truck_usage(workbook, source_df, master_path):
 def main():
     """Fungsi controller yang menjalankan semua proses secara otomatis."""
     try:
-        # TAHAP 1: PENENTUAN LOKASI
-        config_path = os.path.join(get_base_path(), "config.json")
-        lokasi = None
-
-        # Cek apakah config sudah ada dan valid
-        if os.path.exists(config_path):
-            try:
-                with open(config_path, "r") as f:
-                    lokasi = json.load(f).get("lokasi")
-            except Exception:
-                # Jika file rusak atau kosong, anggap saja tidak ada
-                lokasi = None
-        
-        if not lokasi:
+        config = load_config()
+            
+        if config and "lokasi" in config:
+            lokasi = config["lokasi"]
+        else:
             messagebox.showwarning("Dibatalkan", "Pilih lokasi cabang!")
             return
         
-        # TAHAP 2: PENGUMPULAN FILE (Program akan lanjut ke sini tanpa menutup)
         all_data = []
         index = 1
         while True:
