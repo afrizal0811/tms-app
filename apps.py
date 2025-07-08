@@ -255,7 +255,11 @@ def main():
             if result_ro is not None and not result_ro.empty:
                 results_to_save['Hasil RO vs Real'] = result_ro
         if not results_to_save:
-            messagebox.showinfo("Tidak Ada Hasil", "Tidak ada data yang dapat diproses dari file yang dipilih.")
+            messagebox.showerror(
+                "Proses Gagal",
+                f"File tidak valid!\n" +
+                "\n Upload kembali file Delivery yang benar"
+            )
             return
             
         save_file_path = get_save_path()
