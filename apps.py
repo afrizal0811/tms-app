@@ -108,6 +108,7 @@ def proses_truck_detail(workbook, source_df, master_path, lokasi):
         "Volume Percentage": "", "Total Distance (m)": 0, "Total Visits": "",
         "Total Spent Time (mins)": 0
     }
+
     for col, default in required_cols.items():
         if col not in df.columns:
             df[col] = default
@@ -257,7 +258,19 @@ def main():
             return
 
         combined_df = pd.concat(all_data, ignore_index=True)
-
+        # Cek kolom wajib
+        required_columns = [
+            "Vehicle Name", "Assignee", "Weight Percentage", "Volume Percentage",
+            "Total Distance (m)", "Total Visits", "Total Spent Time (mins)"
+        ]
+        missing_columns = [col for col in required_columns if col not in combined_df.columns]
+        if missing_columns:
+            messagebox.showerror(
+                "Proses Gagal",
+                f"File tidak valid!\n" +
+                "\n Upload kembali file Routing yang benar"
+            )
+            return
         # TAHAP 3: PROSES DATA GABUNGAN
         base_dir = get_base_path()
         master_path = os.path.join(base_dir, "Master_Driver.xlsx")
@@ -266,7 +279,7 @@ def main():
 
         output_wb = openpyxl.Workbook()
         output_wb.remove(output_wb.active)
-
+    
         proses_truck_detail(output_wb, combined_df, master_path, lokasi)
         proses_truck_usage(output_wb, combined_df, master_path)
 
