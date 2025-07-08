@@ -8,9 +8,8 @@ import json
 from version import CURRENT_VERSION, REMOTE_VERSION_URL, DOWNLOAD_LINK
 
 from Routing_Summary import apps as routing_summary
-from RO_vs_Real import apps as ro_vs_real
-from Pending_SO import apps as pending_so
 from Start_Finish_Time import apps as start_finish_time
+from Delivery_Summary import apps as delivery_summary
 
 def get_base_path():
     """Mendapatkan path dasar (base path) baik untuk script maupun executable."""
@@ -60,15 +59,15 @@ def button1_action():
 
 # Fungsi untuk tombol 2
 def button2_action():
-    ro_vs_real.main()
+    delivery_summary.main()
 
 # Fungsi untuk tombol 3: Menjalankan truck_detail_routing.py
 def button3_action():
-    pending_so.main()
+    start_finish_time.main()
 
 # Fungsi untuk tombol 4: Menjalankan truck_detail_task.py
 def button4_action():
-    start_finish_time.main()
+    messagebox.showinfo("Info", "Tombol 4 di klik!")
 
 # Fungsi untuk tombol 5
 def button5_action():
@@ -86,20 +85,17 @@ def resource_path(relative_path):
 has_closed = False  # Di atas, sebelum fungsi apa pun
 
 def on_closing():
-    global has_closed
-    if not has_closed:
-        has_closed = True
-        try:
-            root.destroy()
-        except tk.TclError:
-            pass
+    try:
+        root.destroy()
+    finally:
+        os._exit(0)
 
 def check_update():
     try:
         response = requests.get(REMOTE_VERSION_URL)
         latest_version = response.text.strip()
 
-        if latest_version != CURRENT_VERSION:
+        if latest_version > CURRENT_VERSION:
             result = messagebox.askyesno(
                 "Update Tersedia",
                 f"Versi terbaru: {latest_version}\nVersi kamu: {CURRENT_VERSION}\n\nMau buka halaman update?"
@@ -138,7 +134,6 @@ root.title("TMS Data Processing")
 # Fungsi untuk menu "Ganti Lokasi Cabang"
 def ganti_lokasi():
     pilih_lokasi()
-    messagebox.showinfo("Informasi", "Lokasi cabang berhasil diperbarui.\nSilakan restart aplikasi untuk menerapkan perubahan.")
 
 # Membuat menu bar
 menu_bar = tk.Menu(root)
@@ -181,15 +176,15 @@ button1 = tk.Button(frame, text="Routing Summary", command=button1_action, font=
 button1.grid(row=0, column=0, padx=10, pady=10)
 
 # Membuat tombol 2
-button2 = tk.Button(frame, text="RO vs Real", command=button2_action, font=button_font, padx=20, pady=10, width=15)
+button2 = tk.Button(frame, text="Delivery Summary", command=button2_action, font=button_font, padx=20, pady=10, width=15)
 button2.grid(row=0, column=1, padx=10, pady=10)
 
 # Membuat tombol 3
-button3 = tk.Button(frame, text="Pending SO", command=button3_action, font=button_font, padx=20, pady=10, width=15)
+button3 = tk.Button(frame, text="Start-Finish Time", command=button3_action, font=button_font, padx=20, pady=10, width=15)
 button3.grid(row=1, column=0, padx=10, pady=10)
 
 # Membuat tombol 3
-button3 = tk.Button(frame, text="Start-Finish Time", command=button4_action, font=button_font, padx=20, pady=10, width=15)
+button3 = tk.Button(frame, text="Tombol Disabled", command=button4_action, font=button_font, padx=20, pady=10, width=15, state="disabled")
 button3.grid(row=1, column=1, padx=10, pady=10)
 
 # Membuat tombol 4
