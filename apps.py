@@ -150,20 +150,17 @@ def ganti_lokasi():
     pilih_lokasi(root)   # Panggil dialog dengan root sebagai parent
     update_title(root)   # Perbarui judul SETELAH dialog ditutup
 
-# 2. Setup Menu
+# 1. Setup Menu
 menu_bar = tk.Menu(root)
 pengaturan_menu = tk.Menu(menu_bar, tearoff=0)
 pengaturan_menu.add_command(label="Ganti Lokasi Cabang", command=ganti_lokasi)
 menu_bar.add_cascade(label="Pengaturan", menu=pengaturan_menu)
 root.config(menu=menu_bar)
 
-# 3. Lakukan pemeriksaan konfigurasi awal
-periksa_konfigurasi_awal(root)
-
-# 4. Atur judul berdasarkan konfigurasi yang ada
+# 2. Atur judul berdasarkan konfigurasi yang ada
 update_title(root)
 
-# 5. Atur geometri dan tampilkan jendela utama
+# 4. Atur geometri dan tampilkan jendela utama
 window_width = 400
 window_height = 300
 screen_width = root.winfo_screenwidth()
@@ -171,6 +168,12 @@ screen_height = root.winfo_screenheight()
 position_x = (screen_width // 2) - (window_width // 2)
 position_y = (screen_height // 2) - (window_height // 2)
 root.geometry(f"{window_width}x{window_height}+{position_x}+{position_y}")
+
+# 4. Tampilkan jendela utama terlebih dahulu
+root.deiconify()
+
+# 5. Lakukan pemeriksaan konfigurasi awal
+periksa_konfigurasi_awal(root)
 
 # 6. Setup Frame dan Tombol
 frame = tk.Frame(root)
@@ -186,7 +189,7 @@ for text, command, row, col, state in buttons_config:
     btn.grid(row=row, column=col, padx=10, pady=10)
 
 # 7. Tampilkan jendela utama dan jalankan aplikasi
-root.deiconify() # Tampilkan kembali jendela utama
+
 root.protocol("WM_DELETE_WINDOW", on_closing)
 # Cek update setelah jendela ditampilkan
 root.after(1000, check_update)
