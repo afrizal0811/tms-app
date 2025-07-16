@@ -191,21 +191,43 @@ def proses_truck_usage(workbook, source_df, master_path):
         return ""
     upload_df["Vehicle Tags"] = upload_df["Vehicle Name"].apply(find_vehicle_tag)
     
+    # Menangani kasus khusus untuk "HAVI" dan "KFC"
+    upload_df.loc[upload_df["Vehicle Tags"].str.contains("HAVI", na=False, case=False), "Vehicle Tags"] = "Fuso-DRY"
+    upload_df.loc[upload_df["Vehicle Tags"].str.contains("KFC", na=False, case=False), "Vehicle Tags"] = "CDD-Long-FROZEN"
+    
+    # Buat semua tag menjadi kapital
+    upload_df["Vehicle Tags"] = upload_df["Vehicle Tags"].str.upper()
+    
     dry_df = upload_df[upload_df["Vehicle Tags"].str.contains("DRY", na=False)]
     frozen_df = upload_df[upload_df["Vehicle Tags"].str.contains("FROZEN", na=False)]
     
-    vehicle_types = ["L300", "CDE-Long", "CDE", "CDD-Long", "CDD", "Fuso"]
+    # --- PERUBAHAN DI SINI ---
+    # Urutan untuk TAMPILAN di Excel
+    display_order = ["L300", "CDE", "CDE-LONG", "CDD", "CDD-LONG", "FUSO"]
+    # Urutan untuk PROSES HITUNG (dari paling spesifik ke umum)
+    counting_order = ["CDE-LONG", "CDD-LONG", "L300", "CDE", "CDD", "FUSO"]
+    # -------------------------
+
     def count_types(df_tags):
-        counts = {v_type: 0 for v_type in vehicle_types}
+        # Inisialisasi dictionary hasil berdasarkan urutan tampilan
+        counts = {v_type: 0 for v_type in display_order}
         tags_list = df_tags.tolist()
-        for v_type in vehicle_types:
-            found_count = 0; remaining_tags = []
+        
+        # Lakukan perulangan berdasarkan urutan perhitungan yang aman
+        for v_type in counting_order:
+            found_count = 0
+            remaining_tags = []
             for tag in tags_list:
-                if pd.notna(tag) and v_type in tag: found_count += 1
-                else: remaining_tags.append(tag)
+                if pd.notna(tag) and v_type in tag:
+                    found_count += 1
+                else:
+                    remaining_tags.append(tag)
+            # Simpan hasil hitung ke dictionary
             counts[v_type] = found_count
+            # Sisa tag yang belum terhitung akan diproses di iterasi selanjutnya
             tags_list = remaining_tags
         return counts
+        
     dry_counts = count_types(dry_df["Vehicle Tags"].astype(str))
     frozen_counts = count_types(frozen_df["Vehicle Tags"].astype(str))
 
@@ -213,7 +235,8 @@ def proses_truck_usage(workbook, source_df, master_path):
     sheet_usage["A1"] = "Tipe Kendaraan"
     sheet_usage["B1"] = "Jumlah (DRY)"; sheet_usage["C1"] = "Jumlah (FROZEN)"
     row = 2
-    for v_type in vehicle_types:
+    # Tulis hasil ke Excel berdasarkan urutan TAMPILAN
+    for v_type in display_order:
         sheet_usage[f"A{row}"] = v_type
         dry_count = dry_counts.get(v_type, 0)
         frozen_count = frozen_counts.get(v_type, 0)
@@ -307,7 +330,7 @@ def main():
             messagebox.showinfo("Selesai", "Tidak ada data yang diproses atau dihasilkan.")
             return
         
-        save_path = simpan_file_excel(output_wb, "Hasil Truck Summary")
+        save_path = simpan_file_excel(output_wb, "Routing Summary")
         if save_path:
             buka_file(save_path)
         else:
