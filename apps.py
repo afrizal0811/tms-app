@@ -2,14 +2,18 @@
 """
 Skrip Gabungan untuk memproses laporan "RO vs Real" dan "Pending SO".
 
-Versi 2.9:
-- Menambah pop-up instruksi di awal dan pop-up warning saat proses dibatalkan.
+Versi 4.1:
+- Menambahkan pembacaan file config.json untuk filter lokasi cabang.
+- Sheet "Total Delivered" diubah:
+  - Kolom "Total" menjadi "Total Visit".
+  - Menambahkan kolom "Total Delivered" (hanya untuk status "SUKSES").
 """
 
 import pandas as pd
 import os
 import sys
 import subprocess
+import json
 from datetime import datetime
 import tkinter as tk
 from tkinter import filedialog, messagebox
@@ -20,6 +24,50 @@ from openpyxl.styles import Alignment, PatternFill
 # BAGIAN 1: FUNGSI-FUNGSI BANTU (HELPER FUNCTIONS)
 # =============================================================================
 
+def baca_konfigurasi():
+    """Membaca file 'config.json' untuk mendapatkan kode lokasi cabang."""
+    try:
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        config_path = os.path.join(script_dir, 'config.json')
+        if not os.path.exists(config_path):
+            messagebox.showwarning("Dibatalkan", "Pilih lokasi cabang!")
+            return None
+        with open(config_path, 'r') as f:
+            config = json.load(f)
+        lokasi = config.get('lokasi')
+        if not lokasi or not isinstance(lokasi, str):
+            raise ValueError("Key 'lokasi' tidak ditemukan atau formatnya salah di config.json.")
+        return lokasi.lower()
+    except Exception as e:
+        messagebox.showerror("Error Baca Konfigurasi",
+                             f"Terjadi kesalahan saat membaca 'config.json':\n{e}")
+        return None
+
+def baca_master_driver(lokasi_cabang):
+    """Membaca file 'Master_Driver.xlsx' dan memfilternya berdasarkan lokasi cabang."""
+    try:
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        master_path = os.path.join(script_dir, 'Master_Driver.xlsx')
+        if not os.path.exists(master_path):
+            messagebox.showerror("File Tidak Ditemukan", "File 'Master_Driver.xlsx' tidak dapat ditemukan.")
+            return None
+        data_df = pd.read_excel(master_path)
+        data_df.columns = [col.strip() for col in data_df.columns]
+        if 'Email' not in data_df.columns or 'Driver' not in data_df.columns:
+            raise ValueError("Kolom 'Email' dan/atau 'Driver' tidak ditemukan di Master_Driver.xlsx.")
+        data_df['Email'] = data_df['Email'].astype(str).str.strip().str.lower()
+        data_df['Driver'] = data_df['Driver'].astype(str).str.strip()
+        if lokasi_cabang:
+            data_df = data_df[data_df['Email'].str.contains(lokasi_cabang, case=False, na=False)].copy()
+            if data_df.empty:
+                messagebox.showwarning("Tidak Ada Driver",
+                                     f"Tidak ada driver yang cocok dengan lokasi '{lokasi_cabang}' di Master_Driver.xlsx.")
+                return None
+        return data_df
+    except Exception as e:
+        messagebox.showerror("Error Baca Master Driver", f"Terjadi kesalahan saat membaca 'Master_Driver.xlsx':\n{e}")
+        return None
+
 def get_save_path(base_name="Laporan Gabungan"):
     """Membuka dialog untuk memilih folder dan menghasilkan path file penyimpanan yang unik."""
     root = tk.Tk()
@@ -27,7 +75,6 @@ def get_save_path(base_name="Laporan Gabungan"):
     folder = filedialog.askdirectory(title="Pilih Lokasi Untuk Menyimpan File Laporan")
     if not folder:
         return None
-    
     save_path = os.path.join(folder, base_name + ".xlsx")
     counter = 1
     while os.path.exists(save_path):
@@ -49,61 +96,35 @@ def apply_styles_and_formatting(writer):
     Menerapkan semua styling (alignment, warna, auto-size) ke semua sheet.
     """
     workbook = writer.book
-    
     center_align = Alignment(horizontal='center', vertical='center')
     left_align = Alignment(horizontal='left', vertical='center')
     red_fill = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
-
+    
+    # --- PERUBAHAN: Memperbarui nama kolom yang akan dirata-tengahkan ---
     cols_to_center = [
         'Open Time', 'Close Time', 'ETA', 'ETD', 'Actual Arrival', 
         'Actual Departure', 'Visit Time', 'Actual Visit Time', 
-        'Customer ID', 'ET Sequence', 'Real Sequence', 'Temperature'
+        'Customer ID', 'ET Sequence', 'Real Sequence', 'Temperature',
+        'Total Visit', 'Total Delivered'
     ]
-
     for sheet_name in workbook.sheetnames:
         worksheet = writer.sheets[sheet_name]
         header_map = {cell.value: cell.column for cell in worksheet[1]}
-
         for col_name, col_idx in header_map.items():
             col_letter = get_column_letter(col_idx)
             align = center_align if col_name in cols_to_center else left_align
-            
             for cell in worksheet[col_letter]:
                 cell.alignment = align
                 if col_name == ' ':
                     cell.fill = red_fill
-        
         if ' ' in header_map:
             sep_col_idx = header_map[' ']
             worksheet.cell(row=1, column=sep_col_idx).value = ""
-        
         for column_cells in worksheet.columns:
-            max_length = max(len(str(cell.value)) for cell in column_cells)
+            max_length = max(len(str(cell.value)) for cell in column_cells if cell.value is not None)
             adjusted_width = max_length + 2
             if adjusted_width > 50: adjusted_width = 50
             worksheet.column_dimensions[get_column_letter(column_cells[0].column)].width = adjusted_width
-
-def baca_master_driver():
-    """Membaca file 'Master_Driver.xlsx' dan mengembalikan DataFrame."""
-    try:
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        master_path = os.path.join(script_dir, 'Master_Driver.xlsx')
-        
-        if not os.path.exists(master_path):
-            messagebox.showerror("File Tidak Ditemukan", "File 'Master_Driver.xlsx' tidak dapat ditemukan.")
-            return None
-
-        data_df = pd.read_excel(master_path)
-        data_df.columns = [col.strip() for col in data_df.columns]
-        if 'Email' not in data_df.columns or 'Driver' not in data_df.columns:
-            raise ValueError("Kolom 'Email' dan/atau 'Driver' tidak ditemukan.")
-        
-        data_df['Email'] = data_df['Email'].astype(str).str.strip().str.lower()
-        data_df['Driver'] = data_df['Driver'].astype(str).str.strip()
-        return data_df
-    except Exception as e:
-        messagebox.showerror("Error Baca Master Driver", f"Terjadi kesalahan saat membaca 'Master_Driver.xlsx':\n{e}")
-        return None
 
 def convert_datetime_column(df, column_name, target_format='%H:%M'):
     """Mengonversi kolom datetime ke format string waktu."""
@@ -123,7 +144,6 @@ def insert_blank_rows(df, column):
     if df.empty: return df
     df.loc[:, column] = df[column].fillna('')
     df = df.sort_values(by=column, ascending=True)
-    
     new_rows = []
     prev_value = None
     for _, row in df.iterrows():
@@ -148,6 +168,45 @@ def calculate_actual_visit(start, end):
 # =============================================================================
 # BAGIAN 2: FUNGSI-FUNGSI PEMROSESAN UTAMA
 # =============================================================================
+
+# --- PERUBAHAN: Logika diperbarui untuk menghitung "Total Visit" dan "Total Delivered" ---
+def process_total_delivered(df, master_driver_df):
+    """Membuat ringkasan jumlah visit dan delivery, membiarkan total kosong untuk driver tanpa data."""
+    master_summary = master_driver_df[['Driver', 'Plat']].copy()
+    master_summary.rename(columns={'Plat': 'License Plat'}, inplace=True)
+    master_summary.drop_duplicates(subset=['Driver'], inplace=True)
+
+    if 'assignee' in df.columns and 'label' in df.columns:
+        df_proc = df.copy()
+        email_to_name = dict(zip(master_driver_df['Email'], master_driver_df['Driver']))
+        df_proc['Driver'] = df_proc['assignee'].str.lower().map(email_to_name)
+        df_proc.dropna(subset=['Driver'], inplace=True)
+
+        visit_counts = df_proc['Driver'].value_counts().reset_index()
+        visit_counts.columns = ['Driver', 'Total Visit']
+
+        delivered_df = df_proc[df_proc['label'].str.upper() == 'SUKSES'].copy()
+        delivered_counts = delivered_df['Driver'].value_counts().reset_index()
+        delivered_counts.columns = ['Driver', 'Total Delivered']
+
+        final_df = pd.merge(master_summary, visit_counts, on='Driver', how='left')
+        final_df = pd.merge(final_df, delivered_counts, on='Driver', how='left')
+    else:
+        final_df = master_summary
+        final_df['Total Visit'] = pd.NA
+        final_df['Total Delivered'] = pd.NA
+
+    final_df['License Plat'] = final_df['License Plat'].fillna('-')
+    final_df = final_df.sort_values(by='Driver', ascending=True).reset_index(drop=True)
+    
+    df_final = final_df[['License Plat', 'Driver', 'Total Visit', 'Total Delivered']]
+    
+    if 'Total Visit' in df_final.columns:
+        df_final['Total Visit'] = df_final['Total Visit'].astype('Int64')
+    if 'Total Delivered' in df_final.columns:
+        df_final['Total Delivered'] = df_final['Total Delivered'].astype('Int64')
+        
+    return df_final
 
 def process_ro_vs_real(df, master_driver_df):
     df_proc = df.copy()
@@ -232,12 +291,14 @@ def main():
     root = tk.Tk()
     root.withdraw()
     
-    # --- PERUBAHAN: Tambah pop-up instruksi di awal ---
+    lokasi_cabang = baca_konfigurasi()
+    if not lokasi_cabang:
+        return
+
     messagebox.showinfo("Informasi", "Pilih Export Task")
     
     input_file = filedialog.askopenfilename(title="Pilih File Excel yang Akan Diproses", filetypes=[("Excel Files", "*.xlsx *.xls")])
     
-    # --- PERUBAHAN: Tambah pop-up warning jika proses upload dibatalkan ---
     if not input_file:
         messagebox.showwarning("Proses Gagal", "Proses Dibatalkan")
         return
@@ -245,26 +306,32 @@ def main():
     try:
         df_original = pd.read_excel(input_file)
         results_to_save = {}
-        master_df = baca_master_driver()
-        if master_df is not None:
-            result_pending = process_pending_so(df_original, master_df)
-            if result_pending is not None and not result_pending.empty:
-                results_to_save['Hasil Pending SO'] = result_pending
-            
-            result_ro = process_ro_vs_real(df_original, master_df)
-            if result_ro is not None and not result_ro.empty:
-                results_to_save['Hasil RO vs Real'] = result_ro
+        
+        master_df = baca_master_driver(lokasi_cabang)
+        if master_df is None:
+            return
+
+        result_total = process_total_delivered(df_original, master_df)
+        if result_total is not None and not result_total.empty:
+            results_to_save['Total Delivered'] = result_total
+
+        result_pending = process_pending_so(df_original, master_df)
+        if result_pending is not None and not result_pending.empty:
+            results_to_save['Hasil Pending SO'] = result_pending
+        
+        result_ro = process_ro_vs_real(df_original, master_df)
+        if result_ro is not None and not result_ro.empty:
+            results_to_save['Hasil RO vs Real'] = result_ro
+                
         if not results_to_save:
             messagebox.showerror(
                 "Proses Gagal",
-                f"File tidak valid!\n" +
-                "\n Upload kembali file Delivery yang benar"
+                f"File tidak valid atau tidak ada data yang relevan untuk diproses."
             )
             return
-            
-        save_file_path = get_save_path()
         
-        # --- PERUBAHAN: Tambah pop-up warning jika proses penyimpanan dibatalkan ---
+        save_file_path = get_save_path("Delivery Summary")
+        
         if not save_file_path:
             messagebox.showwarning("Proses Gagal", "Proses Dibatalkan")
             return
