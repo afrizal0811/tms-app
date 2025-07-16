@@ -297,7 +297,7 @@ def main():
             messagebox.showerror(
                 "Proses Gagal",
                 f"File tidak valid!\n" +
-                "\n Upload kembali file Routing yang benar!"
+                "\nUpload kembali file Routing yang benar!"
             )
             return
         
@@ -309,7 +309,7 @@ def main():
             messagebox.showerror(
                 "Proses Gagal",
                 f"File tidak valid!\n" +
-                "\n Lokasi cabang tidak sesuai dengan file Routing!"
+                "\nLokasi cabang tidak sesuai dengan file Routing!"
             )
             return
         
