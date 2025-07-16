@@ -137,7 +137,12 @@ def proses_truck_detail(workbook, source_df, master_path, lokasi):
     df['Total Distance (m)'] = df['Total Distance (m)'].astype(str).str.replace(r'[^\d.]', '', regex=True)
     df['Total Distance (m)'] = pd.to_numeric(df['Total Distance (m)'], errors='coerce').fillna(0).astype(int)
     
+    # --- PERUBAHAN DI SINI ---
+    # Mengosongkan kolom 'Total Visits' dan 'Total Delivered' sesuai permintaan
+    df["Total Visits"] = ""
     df["Total Delivered"] = ""
+    # --------------------------
+
     df["Assignee"] = df["Assignee"].str.lower().map(email_to_name).fillna(df["Assignee"])
     
     existing_drivers = set(df["Assignee"].dropna())
