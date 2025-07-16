@@ -305,6 +305,37 @@ def main():
 
     try:
         df_original = pd.read_excel(input_file)
+        # ================== START: BLOK VALIDASI FILE ==================
+        
+        # 1. Cek apakah kolom yang dibutuhkan ada
+        #    Sesuaikan daftar kolom ini dengan yang wajib ada di file "Export Task" Anda.
+        required_columns = ['assignedVehicle', 'assignee', 'Alasan Tidak Bisa Dikunjungi', 'Alasan Batal','Open Time', 'Close Time', 'eta', 'etd', 'Klik Jika Anda Sudah Sampai', 'doneTime', 'Visit Time', 'routePlannedOrder']
+        missing_columns = [col for col in required_columns if col not in df_original.columns]
+        
+        if missing_columns:
+            messagebox.showerror(
+                "Proses Gagal",
+                f"File tidak valid!\n" +
+                "\nUpload kembali file Export Task yang benar!"
+            )
+            return
+            
+        # 2. Cek apakah lokasi cabang sesuai dengan data di file
+        #    Validasi ini mengasumsikan kolom 'Assignee' berisi email seperti 'kendaraan.jakartautara@...'
+        #    seperti pada Code 1.
+        email_prefixes = df_original["assignee"].dropna().astype(str).str.extract(r'kendaraan\.([^.@]+)', expand=False)
+        email_prefixes = email_prefixes.dropna().str.lower().unique()
+
+        if not any(lokasi_cabang.lower() in prefix for prefix in email_prefixes):
+            messagebox.showerror(
+                "Proses Gagal",
+                f"File tidak valid!\n" +
+                "\nLokasi cabang tidak sesuai dengan file Export Task!"
+            )
+            return
+
+        # =================== END: BLOK VALIDASI FILE ===================
+
         results_to_save = {}
         
         master_df = baca_master_driver(lokasi_cabang)
@@ -326,7 +357,7 @@ def main():
         if not results_to_save:
             messagebox.showerror(
                 "Proses Gagal",
-                f"File tidak valid atau tidak ada data yang relevan untuk diproses."
+                "File tidak valid atau tidak ada data yang relevan untuk diproses."
             )
             return
         
