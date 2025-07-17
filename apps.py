@@ -19,6 +19,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox
 from openpyxl.utils import get_column_letter
 from openpyxl.styles import Alignment, PatternFill
+from path_manager import MASTER_JSON_PATH
 
 # =============================================================================
 # BAGIAN 1: FUNGSI-FUNGSI BANTU (HELPER FUNCTIONS)
@@ -36,36 +37,47 @@ def baca_konfigurasi():
             config = json.load(f)
         lokasi = config.get('lokasi')
         if not lokasi or not isinstance(lokasi, str):
-            raise ValueError("Key 'lokasi' tidak ditemukan atau formatnya salah di config.json.")
+            raise ValueError("Key 'lokasi' tidak ditemukan atau formatnya salah di file konfigurasi.")
         return lokasi.lower()
     except Exception as e:
         messagebox.showerror("Error Baca Konfigurasi",
-                             f"Terjadi kesalahan saat membaca 'config.json':\n{e}")
+                             f"Terjadi kesalahan saat membaca konfigurasi:\n{e}")
         return None
 
 def baca_master_driver(lokasi_cabang):
-    """Membaca file 'Master_Driver.xlsx' dan memfilternya berdasarkan lokasi cabang."""
+    """Membaca file 'master.json' dan memfilternya berdasarkan lokasi cabang."""
     try:
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        master_path = os.path.join(script_dir, 'Master_Driver.xlsx')
-        if not os.path.exists(master_path):
-            messagebox.showerror("File Tidak Ditemukan", "File 'Master_Driver.xlsx' tidak dapat ditemukan.")
+        # Memeriksa keberadaan file
+        if not os.path.exists(MASTER_JSON_PATH):
+            messagebox.showerror("File Tidak Ditemukan", "Master data driver tidak dapat ditemukan.")
             return None
-        data_df = pd.read_excel(master_path)
+
+        # PERUBAHAN: Membaca file JSON menggunakan library json dan mengubahnya menjadi DataFrame pandas
+        with open(MASTER_JSON_PATH, 'r', encoding='utf-8') as f:
+            data_json = json.load(f)
+        data_df = pd.DataFrame(data_json)
+
+        # Membersihkan nama kolom (menghilangkan spasi di awal/akhir)
         data_df.columns = [col.strip() for col in data_df.columns]
+
+        # Validasi kolom/key yang wajib ada
         if 'Email' not in data_df.columns or 'Driver' not in data_df.columns:
-            raise ValueError("Kolom 'Email' dan/atau 'Driver' tidak ditemukan di Master_Driver.xlsx.")
+            raise ValueError("Key 'Email' dan/atau 'Driver' tidak ditemukan di master data driver")
+
+        # Membersihkan dan menstandarkan data pada kolom 'Email' dan 'Driver'
         data_df['Email'] = data_df['Email'].astype(str).str.strip().str.lower()
         data_df['Driver'] = data_df['Driver'].astype(str).str.strip()
+
+        # Memfilter data berdasarkan lokasi cabang jika ditentukan
         if lokasi_cabang:
             data_df = data_df[data_df['Email'].str.contains(lokasi_cabang, case=False, na=False)].copy()
             if data_df.empty:
-                messagebox.showwarning("Tidak Ada Driver",
-                                     f"Tidak ada driver yang cocok dengan lokasi '{lokasi_cabang}' di Master_Driver.xlsx.")
+                messagebox.showwarning("Tidak Ada Driver", f"Tidak ada driver yang cocok dengan lokasi '{lokasi_cabang}' di file master data")
                 return None
         return data_df
     except Exception as e:
-        messagebox.showerror("Error Baca Master Driver", f"Terjadi kesalahan saat membaca 'Master_Driver.xlsx':\n{e}")
+        # Menampilkan pesan error jika terjadi kesalahan saat membaca atau memproses file
+        messagebox.showerror("Error Baca Master Driver", f"Terjadi kesalahan saat membaca master data driver:\n{e}")
         return None
 
 def get_save_path(base_name="Laporan Gabungan"):
