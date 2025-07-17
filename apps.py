@@ -10,6 +10,7 @@ import pandas as pd
 import openpyxl
 from openpyxl.styles import Alignment
 from openpyxl.utils import get_column_letter
+from path_manager import MASTER_JSON_PATH
 
 CONFIG_PATH = "config.json"
 #==============================================================================
@@ -84,23 +85,26 @@ def load_config():
 # FUNGSI-FUNGSI PEMROSESAN INTI
 #==============================================================================
 
-def buat_mapping_driver(master_path, lokasi_value):
-    """Membuat mapping email ke nama driver dari file master berdasarkan lokasi."""
-    wb = openpyxl.load_workbook(master_path)
-    ws = wb.active
-    header = [str(cell.value).strip() for cell in ws[1]]
-    email_idx = header.index("Email")
-    driver_idx = header.index("Driver")
+def buat_mapping_driver(lokasi_value):
+    """Membuat mapping email ke nama driver dari file master.json berdasarkan lokasi."""
+    # PERUBAHAN: Menggunakan path terpusat dari path_manager
+    with open(MASTER_JSON_PATH, 'r') as f:
+        master_data = json.load(f)
+    
     mapping = {}
-    for row in ws.iter_rows(min_row=2, values_only=True):
-        email, driver = row[email_idx], row[driver_idx]
+    for row in master_data:
+        email = row.get("Email")
+        driver = row.get("Driver")
+        
         if email and driver and lokasi_value.lower() in str(email).lower():
             mapping[str(email).strip().lower()] = str(driver).strip()
+            
     return mapping
 
-def proses_truck_detail(workbook, source_df, master_path, lokasi):
+def proses_truck_detail(workbook, source_df, lokasi):
     """Memproses detail truk dari DataFrame sumber."""
-    email_to_name = buat_mapping_driver(master_path, lokasi)
+    # PERUBAHAN: Memanggil fungsi yang sudah diubah tanpa argumen path
+    email_to_name = buat_mapping_driver(lokasi)
     df = source_df.copy()
 
     required_cols = {
@@ -178,9 +182,10 @@ def proses_truck_detail(workbook, source_df, master_path, lokasi):
     sheet_dist["A2"] = round(distance_summary.get("DRY", 0), 2)
     sheet_dist["B2"] = round(distance_summary.get("FRZ", 0), 2)
 
-def proses_truck_usage(workbook, source_df, master_path):
+def proses_truck_usage(workbook, source_df):
     """Memproses ringkasan penggunaan truk dari DataFrame sumber."""
-    master_df = pd.read_excel(master_path)
+    # PERUBAHAN: Membaca file master menggunakan path terpusat
+    master_df = pd.read_json(MASTER_JSON_PATH)
     upload_df = source_df.copy()
 
     plat_type_map = dict(zip(master_df["Plat"].astype(str), master_df["Type"]))
@@ -191,29 +196,21 @@ def proses_truck_usage(workbook, source_df, master_path):
         return ""
     upload_df["Vehicle Tags"] = upload_df["Vehicle Name"].apply(find_vehicle_tag)
     
-    # Menangani kasus khusus untuk "HAVI" dan "KFC"
     upload_df.loc[upload_df["Vehicle Tags"].str.contains("HAVI", na=False, case=False), "Vehicle Tags"] = "Fuso-DRY"
     upload_df.loc[upload_df["Vehicle Tags"].str.contains("KFC", na=False, case=False), "Vehicle Tags"] = "CDD-Long-FROZEN"
     
-    # Buat semua tag menjadi kapital
     upload_df["Vehicle Tags"] = upload_df["Vehicle Tags"].str.upper()
     
     dry_df = upload_df[upload_df["Vehicle Tags"].str.contains("DRY", na=False)]
     frozen_df = upload_df[upload_df["Vehicle Tags"].str.contains("FROZEN", na=False)]
     
-    # --- PERUBAHAN DI SINI ---
-    # Urutan untuk TAMPILAN di Excel
     display_order = ["L300", "CDE", "CDE-LONG", "CDD", "CDD-LONG", "FUSO"]
-    # Urutan untuk PROSES HITUNG (dari paling spesifik ke umum)
     counting_order = ["CDE-LONG", "CDD-LONG", "L300", "CDE", "CDD", "FUSO"]
-    # -------------------------
 
     def count_types(df_tags):
-        # Inisialisasi dictionary hasil berdasarkan urutan tampilan
         counts = {v_type: 0 for v_type in display_order}
         tags_list = df_tags.tolist()
         
-        # Lakukan perulangan berdasarkan urutan perhitungan yang aman
         for v_type in counting_order:
             found_count = 0
             remaining_tags = []
@@ -222,9 +219,7 @@ def proses_truck_usage(workbook, source_df, master_path):
                     found_count += 1
                 else:
                     remaining_tags.append(tag)
-            # Simpan hasil hitung ke dictionary
             counts[v_type] = found_count
-            # Sisa tag yang belum terhitung akan diproses di iterasi selanjutnya
             tags_list = remaining_tags
         return counts
         
@@ -235,7 +230,6 @@ def proses_truck_usage(workbook, source_df, master_path):
     sheet_usage["A1"] = "Tipe Kendaraan"
     sheet_usage["B1"] = "Jumlah (DRY)"; sheet_usage["C1"] = "Jumlah (FROZEN)"
     row = 2
-    # Tulis hasil ke Excel berdasarkan urutan TAMPILAN
     for v_type in display_order:
         sheet_usage[f"A{row}"] = v_type
         dry_count = dry_counts.get(v_type, 0)
@@ -287,7 +281,6 @@ def main():
 
         combined_df = pd.concat(all_data, ignore_index=True)
         
-        # Cek kolom wajib
         required_columns = [
             "Vehicle Name", "Assignee", "Weight Percentage", "Volume Percentage",
             "Total Distance (m)", "Total Visits", "Total Spent Time (mins)"
@@ -301,7 +294,6 @@ def main():
             )
             return
         
-        # Validasi kecocokan lokasi dengan email dalam kolom Assignee
         email_prefixes = combined_df["Assignee"].dropna().str.extract(r'kendaraan\.([^.@]+)', expand=False)
         email_prefixes = email_prefixes.dropna().str.lower().unique()
 
@@ -313,19 +305,19 @@ def main():
             )
             return
         
-        # TAHAP 3: PROSES DATA GABUNGAN
         base_dir = get_base_path()
-        master_path = os.path.join(base_dir, "Master_Driver.xlsx")
-        if not os.path.exists(master_path):
-            raise FileNotFoundError(f"File 'Master_Driver.xlsx' tidak ditemukan di folder:\n{base_dir}")
+        # PERUBAHAN: Hapus logika path lama, gunakan path terpusat untuk validasi
+        if not os.path.exists(MASTER_JSON_PATH):
+            messagebox.showerror("File Tidak Ditemukan", "Master data driver tidak dapat ditemukan.")
+            return None
 
         output_wb = openpyxl.Workbook()
         output_wb.remove(output_wb.active)
     
-        proses_truck_detail(output_wb, combined_df, master_path, lokasi)
-        proses_truck_usage(output_wb, combined_df, master_path)
+        # PERUBAHAN: Panggil fungsi tanpa argumen master_path
+        proses_truck_detail(output_wb, combined_df, lokasi)
+        proses_truck_usage(output_wb, combined_df)
 
-        # TAHAP 4: SIMPAN DAN BUKA HASIL
         if not output_wb.sheetnames:
             messagebox.showinfo("Selesai", "Tidak ada data yang diproses atau dihasilkan.")
             return
