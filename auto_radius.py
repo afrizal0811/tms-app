@@ -38,8 +38,8 @@ def wait_for_image(image_path, timeout=15):
         except pyautogui.ImageNotFoundException:
             pass
         if time.time() - start_time > timeout:
-            raise Exception(f"TIMEOUT: Tidak dapat menemukan gambar '{image_path}'")
-        time.sleep(0.5)
+            raise Exception(f"Tidak dapat menemukan gambar")
+        time.sleep(0.2)
 
 def find_and_click(image_path, timeout=10):
     location = wait_for_image(image_path, timeout=timeout)
@@ -52,7 +52,14 @@ def run_automation(radius_value):
         # 1. Buka URL
         chrome_path = 'C:/Program Files/Google/Chrome/Application/chrome.exe'
         url = 'https://web.mile.app/setting/permission'
-        subprocess.Popen([chrome_path, '-new-window', url])
+        subprocess.Popen([chrome_path, '--start-maximized', '-new-window', url])
+
+        # Beri waktu 1 detik agar jendela baru muncul dan menjadi aktif
+        time.sleep(1)
+        # Kirim keyboard shortcut untuk memaksa maximize (Win + Panah Atas)
+        pyautogui.hotkey('win', 'up')
+
+
         wait_for_image(DRIVER_OPTION_IMG, timeout=20)
 
         # 2. Pilih role "DRIVER"
@@ -69,14 +76,14 @@ def run_automation(radius_value):
         click_x_radius = start_radius_area.left + start_radius_area.width * 0.5
         click_y_radius = start_radius_area.top + start_radius_area.height * 0.75
         pyautogui.click(click_x_radius, click_y_radius)
-        time.sleep(0.5)
+        time.sleep(0.2)
         pyautogui.hotkey('ctrl', 'a')
         pyautogui.press('backspace')
         pyautogui.write(str(radius_value)) # Menggunakan nilai dari parameter
 
         # 5. Scroll ke atas
         pyautogui.scroll(20000)
-        time.sleep(0.5)
+        time.sleep(0.2)
 
         # 6. Klik tombol Save dengan metode presisi
         save_button_box = wait_for_image(SAVE_BUTTON_IMG)
