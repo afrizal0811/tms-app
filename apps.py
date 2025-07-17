@@ -7,9 +7,9 @@ import webbrowser
 import json
 from version import CURRENT_VERSION, REMOTE_VERSION_URL, DOWNLOAD_LINK
 
-from Routing_Summary import apps as routing_summary
-from Start_Finish_Time import apps as start_finish_time
-from Delivery_Summary import apps as delivery_summary
+from modules.Routing_Summary import apps as routing_summary
+from modules.Delivery_Summary import apps as delivery_summary
+from modules.Start_Finish_Time import apps as start_finish_time
 
 # Dictionary untuk memetakan nama lengkap lokasi ke kodenya
 lokasi_dict_nama_ke_kode = {
