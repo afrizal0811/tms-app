@@ -300,7 +300,7 @@ def main():
         if not any(lokasi.lower() in prefix for prefix in email_prefixes):
             messagebox.showerror(
                 "Proses Gagal",
-                f"File tidak valid!\n" +
+                f"Lokasi cabang tidak valid!\n" +
                 "\nLokasi cabang tidak sesuai dengan file Routing!"
             )
             return
