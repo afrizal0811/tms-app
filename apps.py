@@ -112,13 +112,14 @@ def apply_styles_and_formatting(writer):
     left_align = Alignment(horizontal='left', vertical='center')
     red_fill = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
     
-    # --- PERUBAHAN: Memperbarui nama kolom yang akan dirata-tengahkan ---
+    # --- PERUBAHAN: Menambahkan 'Status Delivery' dan 'Is Same Sequence' ---
     cols_to_center = [
         'Open Time', 'Close Time', 'ETA', 'ETD', 'Actual Arrival', 
         'Actual Departure', 'Visit Time', 'Actual Visit Time', 
         'Customer ID', 'ET Sequence', 'Real Sequence', 'Temperature',
-        'Total Visit', 'Total Delivered'
+        'Total Visit', 'Total Delivered', 'Status Delivery', 'Is Same Sequence'
     ]
+
     for sheet_name in workbook.sheetnames:
         worksheet = writer.sheets[sheet_name]
         header_map = {cell.value: cell.column for cell in worksheet[1]}
@@ -238,16 +239,45 @@ def process_ro_vs_real(df, master_driver_df):
         df_proc['doneTime_parsed'] = pd.to_datetime(df_proc['doneTime'], format='%H:%M', errors='coerce')
         df_proc['Real Seq'] = df_proc.groupby('assignee')['doneTime_parsed'].rank(method='dense').astype('Int64')
         df_proc.drop(columns=['doneTime_parsed'], inplace=True)
-    rename_dict = {'assignedVehicle': 'License Plat', 'assignee': 'Driver', 'title': 'Customer', 'label': 'Status Delivery', 'Klik Jika Anda Sudah Sampai': 'Actual Time Arrived', 'doneTime': 'Actual Time Depatured', 'Visit Time': 'Planned Visit Time', 'routePlannedOrder': 'Planned Sequence', 'Real Seq': 'Actual Sequence'}
+        
+    # --- PERUBAHAN: Penyesuaian nama kolom agar sesuai dengan format styling ---
+    rename_dict = {
+        'assignedVehicle': 'License Plat', 
+        'assignee': 'Driver', 
+        'title': 'Customer', 
+        'label': 'Status Delivery', 
+        'Klik Jika Anda Sudah Sampai': 'Actual Arrival', # Diubah dari 'Actual Time Arrived'
+        'doneTime': 'Actual Departure', # Diubah dari 'Actual Time Depatured'
+        # 'Visit Time' tidak diubah namanya agar tetap 'Visit Time'
+        'routePlannedOrder': 'ET Sequence', # Diubah dari 'Planned Sequence'
+        'Real Seq': 'Real Sequence' # Diubah dari 'Actual Sequence'
+    }
     df_proc.rename(columns=rename_dict, inplace=True)
     df_proc = df_proc.loc[:,~df_proc.columns.duplicated()]
-    if 'Planned Sequence' in df_proc.columns and 'Actual Sequence' in df_proc.columns:
-        df_proc['Is Same Sequence'] = (pd.to_numeric(df_proc['Planned Sequence'], errors='coerce') == pd.to_numeric(df_proc['Actual Sequence'], errors='coerce'))
-        df_proc['Is Same Sequence'] = df_proc['Is Same Sequence'].map({True: 'SAMA', False: 'TIDAK SAMA', pd.NA: ''})
-    desired_columns = ['License Plat', 'Driver', 'Customer', 'Status Delivery', 'Open Time', 'Close Time', 'Actual Time Arrived', 'Actual Time Depatured', 'Planned Visit Time', 'Actual Visit Time', 'Planned Sequence', 'Actual Sequence', 'Is Same Sequence']
+
+    # Nama kolom di sini menggunakan nama setelah diubah oleh rename_dict
+    if 'ET Sequence' in df_proc.columns and 'Real Sequence' in df_proc.columns:
+        df_proc['Is Same Sequence'] = (pd.to_numeric(df_proc['ET Sequence'], errors='coerce') == pd.to_numeric(df_proc['Real Sequence'], errors='coerce'))
+        df_proc['Is Same Sequence'] = df_proc['Is Same Sequence'].map({True: 'SAMA', False: 'BEDA', pd.NA: ''})
+
+    # --- PERUBAHAN: Mengganti nama kolom pada daftar kolom yang akan ditampilkan ---
+    desired_columns = [
+        'License Plat', 'Driver', 'Customer', 'Status Delivery', 'Open Time', 
+        'Close Time', 'Actual Arrival', 'Actual Departure', 'Visit Time', 
+        'Actual Visit Time', 'ET Sequence', 'Real Sequence', 'Is Same Sequence'
+    ]
     final_cols = [col for col in desired_columns if col in df_proc.columns]
     df_final = df_proc[final_cols].copy()
-    if 'Driver' in df_final.columns: df_final = insert_blank_rows(df_final, 'Driver')
+
+    if 'Driver' in df_final.columns:
+        # --- PERUBAHAN: Sorting berdasarkan Driver, lalu Real Sequence (ascending) ---
+        # Pastikan kolom untuk sorting ada dan tipenya numerik jika perlu
+        if 'Real Sequence' in df_final.columns:
+            df_final['Real Sequence'] = pd.to_numeric(df_final['Real Sequence'], errors='coerce')
+            df_final = df_final.sort_values(by=['Driver', 'Real Sequence'], ascending=True)
+
+        df_final = insert_blank_rows(df_final, 'Driver')
+        
     return df_final
 
 def process_pending_so(df, master_driver_df):
@@ -380,8 +410,14 @@ def main():
             return
             
         with pd.ExcelWriter(save_file_path, engine='openpyxl') as writer:
-            for sheet_name, result_df in results_to_save.items():
-                result_df.to_excel(writer, sheet_name=sheet_name, index=False)
+            # Tentukan urutan sheet yang diinginkan secara manual
+            sheet_order = ['Total Delivered', 'Hasil Pending SO', 'Hasil RO vs Real']
+            
+            # Tulis sheet ke Excel sesuai urutan yang telah ditentukan
+            for sheet_name in sheet_order:
+                if sheet_name in results_to_save:
+                    results_to_save[sheet_name].to_excel(writer, sheet_name=sheet_name, index=False)
+            
             apply_styles_and_formatting(writer)
         
         open_file(save_file_path)
