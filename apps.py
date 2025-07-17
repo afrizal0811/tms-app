@@ -12,6 +12,7 @@ import requests
 import subprocess
 import tkinter as tk
 import sys
+from path_manager import MASTER_JSON_PATH
 
 CONFIG_PATH = "config.json"
 
@@ -211,39 +212,29 @@ def ambil_data(tanggal_str):
 
     url = "https://apiweb.mile.app/api/v3/location-histories"
     params = {
-        "limit": 150,
-        "startFinish": "true",
-        "fields": "finish,startTime",
-        "timeTo": f"{tanggal_input} 23:59:59",
-        "timeFrom": f"{tanggal_from} 00:00:00",
+        "limit": 150, "startFinish": "true", "fields": "finish,startTime",
+        "timeTo": f"{tanggal_input} 23:59:59", "timeFrom": f"{tanggal_from} 00:00:00",
         "timeBy": "createdTime"
     }
-    headers = {
-        "Authorization": API_TOKEN
-    }
+    headers = {"Authorization": API_TOKEN}
 
     response = requests.get(url, params=params, headers=headers)
 
     if response.status_code == 200:
-         # Cek jika data mentah dari API sudah kosong
-        if response.json()["tasks"]["data"] == []:
-            tk.messagebox.showerror("Error", "Data tidak ditemukan.") 
+        if not response.json().get("tasks", {}).get("data"):
+            tk.messagebox.showerror("Error", "Data tidak ditemukan dari API.") 
             return
     
         result = response.json()
         items = result.get("tasks", {}).get("data", [])
 
-        # Filter awal berdasarkan trackedTime dan totalDistance
         filtered_items = []
         for item in items:
-            if item.get("trackedTime") not in [None, 0] \
-               and item.get("trackedTime", 0) >= 10 \
-               and item.get("finish", {}).get("totalDistance", float('inf')) > 5:
-                # Lakukan transformasi data di sini untuk item yang lolos filter
+            if item.get("trackedTime") not in [None, 0] and item.get("trackedTime", 0) >= 10 and item.get("finish", {}).get("totalDistance", float('inf')) > 5:
                 item_copy = item.copy() 
                 item_copy["_id"] = extract_email_from_id(item_copy["_id"])
                 item_copy["startTime"] = tambah_7_jam(item_copy["startTime"])
-                if "finish" in item_copy and item_copy["finish"]:
+                if item_copy.get("finish"):
                     item_copy["finish"]["finishTime"] = tambah_7_jam(item_copy["finish"]["finishTime"])
                     if "totalDuration" in item_copy["finish"]:
                         item_copy["finish"]["totalDuration"] = convert_to_jam(item_copy["finish"]["totalDuration"])
@@ -254,46 +245,39 @@ def ambil_data(tanggal_str):
         df_api_data = pd.json_normalize(filtered_items)
         df_api_data.rename(columns={"_id": "Email"}, inplace=True) 
 
-        # Filter startTime sesuai tanggal input (setelah ditambah 7 jam)
         if 'startTime' in df_api_data.columns:
             df_api_data['startTime'] = pd.to_datetime(df_api_data['startTime'])
             df_api_data = df_api_data[df_api_data['startTime'].dt.strftime("%Y-%m-%d") == tanggal_input]
 
-        # --- START FILTER & MAPPING DRIVER ---
         try:
             config = load_config()
-            # Ganti "cabang" menjadi "lokasi" di kedua tempat
-            nama_lokasi = config["lokasi"].lower() if config and "lokasi" in config else ""
+            nama_lokasi = config.get("lokasi", "").lower()
 
-            # Filter data API berdasarkan lokasi
             if 'Email' in df_api_data.columns:
-                # Ganti variabelnya agar lebih jelas
                 df_api_data = df_api_data[df_api_data['Email'].str.contains(nama_lokasi, na=False, case=False)]
 
-            # --- CEK KRITIS DI SINI: Jika setelah semua filter data API kosong, tampilkan pesan dan berhenti ---
             if df_api_data.empty:
-                tk.messagebox.showerror("Error", "Data tidak ditemukan")
+                tk.messagebox.showerror("Error", "Data tidak ditemukan untuk lokasi yang dipilih.")
                 return
-            # --- AKHIR CEK KRITIS ---
 
+            # --- PERUBAHAN UTAMA DI SINI ---
             try:
-                mapping_df = pd.read_excel("Master_Driver.xlsx")
+                # 1. Menggunakan path terpusat untuk membaca master.json
+                mapping_df = pd.read_json(MASTER_JSON_PATH)
             except FileNotFoundError:
-                messagebox.showerror("", "File 'Master_Driver.xlsx' tidak ditemukan.")
+                # 2. Memperbarui pesan error
+                messagebox.showerror("File Tidak Ditemukan", "Master data driver tidak dapat ditemukan.")
                 return
+            # --- AKHIR PERUBAHAN ---
             
-            # Pastikan kolom 'Plat' ada di Master_Driver.xlsx
             required_master_cols = {'Email', 'Driver', 'Plat'}
             if not required_master_cols.issubset(mapping_df.columns):
-                raise ValueError(f"File Master_Driver.xlsx harus ada kolom: {', '.join(required_master_cols)}")
+                # 3. Memperbarui pesan error
+                raise ValueError(f"Master data driver harus ada key: {', '.join(required_master_cols)}")
 
             mapping_df_filtered = mapping_df[mapping_df['Email'].str.contains(nama_lokasi, na=False, case=False)]
-
-            # Lakukan VLOOKUP, sekarang sertakan 'Plat'
-            # Merging df_api_data (yang sudah dipastikan tidak kosong) dengan mapping_df_filtered
             df_merged = df_api_data.merge(mapping_df_filtered[['Email', 'Driver', 'Plat']], on='Email', how='left')
             
-            # Jika Driver atau Plat kosong setelah merge, isi dengan Email atau string kosong
             df_merged['Driver'] = df_merged['Driver'].fillna(df_merged['Email']) 
             df_merged['Plat'] = df_merged['Plat'].fillna('') 
 
@@ -301,46 +285,37 @@ def ambil_data(tanggal_str):
             df_merged = df_merged.sort_values(by='Driver', ascending=True)
 
         except Exception as e:
-            messagebox.showerror("Error", f"Gagal load atau mapping file Master_Driver.xlsx:\n{e}")
+            messagebox.showerror("Error", f"Gagal memproses master data driver:\n{e}")
             return
 
-        # --- Tambah driver yg belum ada ---
+        # Sisa kode fungsi untuk menggabungkan driver yang hilang dan filter duplikat tetap sama
+        # ... (kode dari "existing_drivers = ..." hingga akhir) ...
         existing_drivers = df_merged['Driver'].unique().tolist()
         missing_rows_df = mapping_df_filtered[~mapping_df_filtered['Driver'].isin(existing_drivers)].copy()
         
-        # Hanya tambahkan jika memang ada driver yang tidak punya data perjalanan
         if not missing_rows_df.empty:
-            # Buat DataFrame baru hanya dengan kolom 'Driver' dan 'Plat' dari missing_rows
             missing_drivers_df_processed = missing_rows_df[['Driver', 'Plat']].copy()
-            
-            # Pastikan missing_drivers_df_processed memiliki kolom yang sama dengan df_merged
             for col in df_merged.columns:
                 if col not in missing_drivers_df_processed.columns:
                     missing_drivers_df_processed[col] = "" 
-
-            # Pastikan urutan kolom sesuai dengan df_merged utama sebelum concatenating
             missing_drivers_df_processed = missing_drivers_df_processed[df_merged.columns]
-            
             final_df = pd.concat([df_merged, missing_drivers_df_processed], ignore_index=True)
-            
-        else: # Jika tidak ada missing_rows, final_df adalah df_merged
+        else:
             final_df = df_merged.copy()
 
-        # --- Filter duplikat ---
         def durasi_ke_menit(durasi_str):
             try:
                 jam, menit = map(int, durasi_str.split(':'))
                 return jam * 60 + menit
-            except:
+            except (ValueError, AttributeError):
                 return 0
 
         final_df['finish.totalDuration_menit'] = final_df['finish.totalDuration'].apply(durasi_ke_menit)
         final_df['finish.totalDistance'] = pd.to_numeric(final_df['finish.totalDistance'], errors='coerce').fillna(0)
-
         final_df = final_df.sort_values(by='Driver') 
 
         def filter_duplikat(grup):
-            idx_to_drop = []
+            idx_to_drop = set()
             for i in range(len(grup)):
                 for j in range(len(grup)):
                     if i != j:
@@ -348,20 +323,16 @@ def ambil_data(tanggal_str):
                         row_j = grup.iloc[j]
                         if (row_i['finish.totalDuration_menit'] < row_j['finish.totalDuration_menit'] and
                             row_i['finish.totalDistance'] < row_j['finish.totalDistance']):
-                            idx_to_drop.append(grup.index[i])
-                            break
-            return grup.drop(idx_to_drop)
+                            idx_to_drop.add(grup.index[i])
+            return grup.drop(list(idx_to_drop))
 
-        groups = [filter_duplikat(group) for _, group in final_df[final_df['finish.totalDuration_menit'] > 0].groupby('Driver')] 
+        non_empty_df = final_df[final_df['finish.totalDuration_menit'] > 0]
+        groups = [filter_duplikat(group) for _, group in non_empty_df.groupby('Driver')]
         filtered_df_final = pd.concat(groups, ignore_index=True) if groups else pd.DataFrame()
 
-        # Gabung lagi dengan driver kosong tadi di akhir
         kosong_df = final_df[final_df['finish.totalDuration_menit'] == 0]
         final_df = pd.concat([filtered_df_final, kosong_df], ignore_index=True)
-
         final_df.drop(columns=['finish.totalDuration_menit'], inplace=True)
-
-        # Urutkan final_df berdasarkan kolom 'Driver' secara ascending
         final_df = final_df.sort_values(by='Driver', ascending=True)
 
         simpan_file_excel(final_df)
