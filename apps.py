@@ -21,28 +21,16 @@ from openpyxl.utils import get_column_letter
 from openpyxl.styles import Alignment, PatternFill
 from path_manager import MASTER_JSON_PATH
 
+CONFIG_PATH = "config.json"
 # =============================================================================
 # BAGIAN 1: FUNGSI-FUNGSI BANTU (HELPER FUNCTIONS)
 # =============================================================================
 
-def baca_konfigurasi():
-    """Membaca file 'config.json' untuk mendapatkan kode lokasi cabang."""
-    try:
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        config_path = os.path.join(script_dir, 'config.json')
-        if not os.path.exists(config_path):
-            messagebox.showwarning("Dibatalkan", "Pilih lokasi cabang!")
-            return None
-        with open(config_path, 'r') as f:
-            config = json.load(f)
-        lokasi = config.get('lokasi')
-        if not lokasi or not isinstance(lokasi, str):
-            raise ValueError("Key 'lokasi' tidak ditemukan atau formatnya salah di file konfigurasi.")
-        return lokasi.lower()
-    except Exception as e:
-        messagebox.showerror("Error Baca Konfigurasi",
-                             f"Terjadi kesalahan saat membaca konfigurasi:\n{e}")
-        return None
+def load_config():
+    if os.path.exists(CONFIG_PATH):
+        with open(CONFIG_PATH, 'r') as f:
+            return json.load(f)
+    return None
 
 def baca_master_driver(lokasi_cabang):
     """Membaca file 'master.json' dan memfilternya berdasarkan lokasi cabang."""
@@ -239,45 +227,54 @@ def process_ro_vs_real(df, master_driver_df):
         df_proc['doneTime_parsed'] = pd.to_datetime(df_proc['doneTime'], format='%H:%M', errors='coerce')
         df_proc['Real Seq'] = df_proc.groupby('assignee')['doneTime_parsed'].rank(method='dense').astype('Int64')
         df_proc.drop(columns=['doneTime_parsed'], inplace=True)
-        
-    # --- PERUBAHAN: Penyesuaian nama kolom agar sesuai dengan format styling ---
+
     rename_dict = {
-        'assignedVehicle': 'License Plat', 
-        'assignee': 'Driver', 
-        'title': 'Customer', 
-        'label': 'Status Delivery', 
-        'Klik Jika Anda Sudah Sampai': 'Actual Arrival', # Diubah dari 'Actual Time Arrived'
-        'doneTime': 'Actual Departure', # Diubah dari 'Actual Time Depatured'
-        # 'Visit Time' tidak diubah namanya agar tetap 'Visit Time'
-        'routePlannedOrder': 'ET Sequence', # Diubah dari 'Planned Sequence'
-        'Real Seq': 'Real Sequence' # Diubah dari 'Actual Sequence'
+        'assignedVehicle': 'License Plat',
+        'assignee': 'Driver',
+        'title': 'Customer',
+        'label': 'Status Delivery',
+        'Klik Jika Anda Sudah Sampai': 'Actual Arrival',
+        'doneTime': 'Actual Departure',
+        'routePlannedOrder': 'ET Sequence',
+        'Real Seq': 'Real Sequence'
     }
     df_proc.rename(columns=rename_dict, inplace=True)
     df_proc = df_proc.loc[:,~df_proc.columns.duplicated()]
 
-    # Nama kolom di sini menggunakan nama setelah diubah oleh rename_dict
     if 'ET Sequence' in df_proc.columns and 'Real Sequence' in df_proc.columns:
         df_proc['Is Same Sequence'] = (pd.to_numeric(df_proc['ET Sequence'], errors='coerce') == pd.to_numeric(df_proc['Real Sequence'], errors='coerce'))
-        df_proc['Is Same Sequence'] = df_proc['Is Same Sequence'].map({True: 'SAMA', False: 'BEDA', pd.NA: ''})
+        df_proc['Is Same Sequence'] = df_proc['Is Same Sequence'].map({True: 'SAMA', False: 'TIDAK SAMA', pd.NA: ''})
 
-    # --- PERUBAHAN: Mengganti nama kolom pada daftar kolom yang akan ditampilkan ---
     desired_columns = [
-        'License Plat', 'Driver', 'Customer', 'Status Delivery', 'Open Time', 
-        'Close Time', 'Actual Arrival', 'Actual Departure', 'Visit Time', 
+        'License Plat', 'Driver', 'Customer', 'Status Delivery', 'Open Time',
+        'Close Time', 'Actual Arrival', 'Actual Departure', 'Visit Time',
         'Actual Visit Time', 'ET Sequence', 'Real Sequence', 'Is Same Sequence'
     ]
     final_cols = [col for col in desired_columns if col in df_proc.columns]
     df_final = df_proc[final_cols].copy()
 
-    if 'Driver' in df_final.columns:
-        # --- PERUBAHAN: Sorting berdasarkan Driver, lalu Real Sequence (ascending) ---
-        # Pastikan kolom untuk sorting ada dan tipenya numerik jika perlu
-        if 'Real Sequence' in df_final.columns:
-            df_final['Real Sequence'] = pd.to_numeric(df_final['Real Sequence'], errors='coerce')
-            df_final = df_final.sort_values(by=['Driver', 'Real Sequence'], ascending=True)
+    # --- PERUBAHAN UTAMA: Logika sorting dan penyisipan baris kosong ---
+    if 'Driver' in df_final.columns and 'Real Sequence' in df_final.columns and not df_final.empty:
+        # 1. Lakukan sorting yang benar terlebih dahulu.
+        #    Urutkan berdasarkan Driver, lalu berdasarkan Real Sequence (ascending).
+        df_final['Real Sequence'] = pd.to_numeric(df_final['Real Sequence'], errors='coerce')
+        df_final.sort_values(by=['Driver', 'Real Sequence'], ascending=True, inplace=True)
 
-        df_final = insert_blank_rows(df_final, 'Driver')
-        
+        # 2. Buat daftar baru untuk menampung hasil dengan baris kosong.
+        #    Ini menggantikan fungsi insert_blank_rows() untuk menghindari sorting ulang yang salah.
+        all_drivers_data = []
+        # Kelompokkan berdasarkan 'Driver'. `sort=False` penting untuk menjaga urutan yang sudah kita buat.
+        for _, group in df_final.groupby('Driver', sort=False):
+            all_drivers_data.append(group)
+            # Tambahkan baris kosong sebagai pemisah setelah setiap grup driver.
+            blank_row = pd.DataFrame([[None] * len(df_final.columns)], columns=df_final.columns)
+            all_drivers_data.append(blank_row)
+
+        # 3. Gabungkan semua grup dan baris kosong menjadi satu DataFrame.
+        #    Hapus baris kosong terakhir yang tidak perlu di akhir file.
+        if all_drivers_data:
+            df_final = pd.concat(all_drivers_data[:-1], ignore_index=True)
+
     return df_final
 
 def process_pending_so(df, master_driver_df):
@@ -333,8 +330,12 @@ def main():
     root = tk.Tk()
     root.withdraw()
     
-    lokasi_cabang = baca_konfigurasi()
-    if not lokasi_cabang:
+    config = load_config()
+        
+    if config and "lokasi" in config:
+        lokasi = config["lokasi"]
+    else:
+        messagebox.showwarning("Dibatalkan", "Pilih lokasi cabang!")
         return
 
     messagebox.showinfo("Informasi", "Pilih Export Task")
@@ -367,11 +368,10 @@ def main():
         #    seperti pada Code 1.
         email_prefixes = df_original["assignee"].dropna().astype(str).str.extract(r'kendaraan\.([^.@]+)', expand=False)
         email_prefixes = email_prefixes.dropna().str.lower().unique()
-
-        if not any(lokasi_cabang.lower() in prefix for prefix in email_prefixes):
+        if not any(lokasi.lower() in prefix for prefix in email_prefixes):
             messagebox.showerror(
                 "Proses Gagal",
-                f"File tidak valid!\n" +
+                f"Lokasi cabang tidak valid!\n" +
                 "\nLokasi cabang tidak sesuai dengan file Export Task!"
             )
             return
@@ -380,7 +380,7 @@ def main():
 
         results_to_save = {}
         
-        master_df = baca_master_driver(lokasi_cabang)
+        master_df = baca_master_driver(lokasi)
         if master_df is None:
             return
 
