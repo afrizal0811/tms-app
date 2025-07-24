@@ -1,4 +1,5 @@
-[{
+[
+    {
         "Email": "kendaraan.plsda01@panganlestari.com",
         "Driver": "'DRY' Agung Setiawan",
         "Plat": "W 8261 QA",
@@ -109,7 +110,7 @@
     {
         "Email": "kendaraan.plsda19@panganlestari.com",
         "Driver": "'FRZ' Usman",
-        "Plat": "W 8796 NY",
+        "Plat": "W 8212 QH",
         "Type": "FROZEN-CDE-LONG-2000"
     },
     {
@@ -163,7 +164,7 @@
     {
         "Email": "kendaraan.plsda28@panganlestari.com",
         "Driver": "'DRY' Moch Kariyo Slamet",
-        "Plat": "W 8059 QH",
+        "Plat": "W 8059 QH",
         "Type": "DRY-CDD-LONG-5000"
     },
     {
@@ -175,7 +176,7 @@
     {
         "Email": "kendaraan.plsda31@panganlestari.com",
         "Driver": "'DRY' Mochammad Choirul Ni'am",
-        "Plat": "W 9732 NX",
+        "Plat": "W 8081 QH",
         "Type": "DRY-CDE-LONG-2000"
     },
     {
@@ -235,7 +236,7 @@
     {
         "Email": "kendaraan.plsmg10@panganlestari.com",
         "Driver": "'FRZ' Agus Rubiyanto",
-        "Plat": "H 8144 PQ",
+        "Plat": "H 8144 PQ",
         "Type": "FROZEN-CDE-2000"
     }
 ]
