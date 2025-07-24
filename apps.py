@@ -359,7 +359,7 @@ def main():
             messagebox.showerror(
                 "Proses Gagal",
                 f"File tidak valid!\n" +
-                "\nUpload kembali file Export Task yang benar!"
+                "\nUpload file Export Task dengan benar!"
             )
             return
             
