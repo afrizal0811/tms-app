@@ -21,6 +21,16 @@
         "07. Denpasar": "pldps",
         "08. Makasar": "plmks",
         "09. Jember": "pljbr"
+    },
+    "hub_ids": {
+        "plsda": "670369a8a5d2d4b5ee0b020d",
+        "pljkt": "GANTI_DENGAN_HUB_ID_JAKARTA",
+        "plbdg": "GANTI_DENGAN_HUB_ID_BANDUNG",
+        "plsmg": "67a41cb1480d2d3b580fc61c",
+        "plygy": "GANTI_DENGAN_HUB_ID_YOGYAKARTA",
+        "plmlg": "GANTI_DENGAN_HUB_ID_MALANG",
+        "pldps": "GANTI_DENGAN_HUB_ID_DENPASAR",
+        "plmks": "GANTI_DENGAN_HUB_ID_MAKASAR",
+        "pljbr": "GANTI_DENGAN_HUB_ID_JEMBER"
     }
-
 }
