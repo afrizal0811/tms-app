@@ -214,12 +214,12 @@ def simpan_file_excel(dataframe):
         subprocess.run(['open', filename], check=True)
 
 def get_constant_file_path(base_path):
-    # Cek di bundle (PyInstaller)
-    bundle_path = os.path.join(base_path, "modules", "constant.json")
+    # 1. Cek di bundle (PyInstaller)
+    bundle_path = resource_path("modules/constant.json")
     if os.path.exists(bundle_path):
         return bundle_path
 
-    # Cek di root project
+    # 2. Cek di root project (development)
     dev_path = os.path.join(base_path, "constant.json")
     if os.path.exists(dev_path):
         return dev_path
@@ -233,15 +233,15 @@ def ambil_data(tanggal_str, base_path):
         with open(constants_path, "r", encoding="utf-8") as f:
             constants = json.load(f)
     except FileNotFoundError:
-        messagebox.showerror("File Tidak Ditemukan", "constant.json tidak ditemukan di bundle atau folder project. \n \n Hubungi Admin.")
+        messagebox.showerror("File Tidak Ditemukan", "constant.json tidak ditemukan di bundle atau folder project. \n\nHubungi Admin.")
         return
     except json.JSONDecodeError:
-        messagebox.showerror("File Tidak Ditemukan", "constant.json tidak valid. \n \n Hubungi Admin.")
+        messagebox.showerror("File Tidak Ditemukan", "constant.json tidak valid. \n\nHubungi Admin.")
         return
     
     api_token = constants.get("token")
     if not api_token:
-        messagebox.showerror("Data Tidak Ditemukan", "Token tidak ditemukan. \n \n Hubungi Admin.")
+        messagebox.showerror("Data Tidak Ditemukan", "Token tidak ditemukan. \n\nHubungi Admin.")
         return
     
     # --- Proses tanggal & API request seperti sebelumnya ---
