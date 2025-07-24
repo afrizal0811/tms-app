@@ -44,32 +44,32 @@ def main(base_path):
     # Muat semua konstanta
     constants = load_json_data(constant_file)
     if not constants:
-        messagebox.showerror("File Tidak Ditemukan", "File constant gagal dimuat. \n \n Hubungi Admin.")
+        messagebox.showerror("File Tidak Ditemukan", "File constant gagal dimuat. \n\nHubungi Admin.")
         return
     # Muat config untuk mendapatkan kode lokasi
     config = load_json_data(config_file)
     if not config:
-        messagebox.showerror("File Tidak Ditemukan", "File config gagal dimuat. \n \n Hubungi Admin.")
+        messagebox.showerror("File Tidak Ditemukan", "File config gagal dimuat. \n\nHubungi Admin.")
         return
     lokasi_kode = config.get('lokasi')
     if not lokasi_kode:
-        messagebox.showerror("Data Tidak Ditemukan", "Kode lokasi tidak ditemukan. \n \n Hubungi Admin.")
+        messagebox.showerror("Data Tidak Ditemukan", "Kode lokasi tidak ditemukan. \n\nHubungi Admin.")
         return
 
     # Ambil token dan hubId dari konstanta
     api_token = constants.get('token')
-    hub_ids_map = config.get('hub_ids', {})
+    hub_ids_map = constants.get('hub_ids', {})
     lokasi_mapping = constants.get('lokasi_mapping', {})
     hub_id = hub_ids_map.get(lokasi_kode)
     lokasi_nama = get_lokasi_nama_by_kode(lokasi_mapping, lokasi_kode)
     
     if not api_token:
-        messagebox.showerror("Data Tidak Ditemukan", "Token tidak ditemukan. \n \n Hubungi Admin.")
+        messagebox.showerror("Data Tidak Ditemukan", "Token tidak ditemukan. \n\nHubungi Admin.")
         return
     if not hub_id:
         messagebox.showerror(
             "Data Tidak Ditemukan",
-            f"Hub ID untuk lokasi '{lokasi_nama}' tidak ditemukan. \n \n Hubungi Admin."
+            f"Hub ID tidak ditemukan. \n\nHubungi Admin."
         )
         return
     
@@ -109,7 +109,7 @@ def fetch_and_process_vehicle_data(token, api_url, hub_id, lokasi_nama):
         if not vehicle_data:
             messagebox.showerror(
                 "Data Tidak Ditemukan",
-                f"Hub ID untuk lokasi '{lokasi_nama}' tidak ditemukan. \n \n Hubungi Admin."
+                f"Hub ID untuk lokasi '{lokasi_nama}' tidak ditemukan. \n\nHubungi Admin."
             )
 
         processed_data = [{'Email': v.get('assignee'), 'Plat': v.get('name')} for v in vehicle_data if v.get('assignee') and v.get('name')]
