@@ -207,7 +207,6 @@ def ganti_lokasi():
 menu_bar = tk.Menu(root)
 pengaturan_menu = tk.Menu(menu_bar, tearoff=0)
 pengaturan_menu.add_command(label="Ganti Lokasi Cabang", command=ganti_lokasi)
-pengaturan_menu.add_separator()
 pengaturan_menu.add_command(label="Sinkronisasi Driver", command=lambda: run_sync_in_background(root))
 menu_bar.add_cascade(label="Pengaturan", menu=pengaturan_menu)
 root.config(menu=menu_bar)
@@ -221,6 +220,17 @@ root.geometry(f"{window_width}x{window_height}+{position_x}+{position_y}")
 
 root.deiconify()
 periksa_konfigurasi_awal(root)
+
+def show_about():
+    messagebox.showinfo(
+        "Tentang Aplikasi",
+        "TMS Data Processing\nVersi: " + CURRENT_VERSION +
+        "\n\nDibuat oleh: Afrizal Maulana - EDP © 2025"
+    )
+
+help_menu = tk.Menu(menu_bar, tearoff=0)
+help_menu.add_command(label="Tentang", command=show_about)
+menu_bar.add_cascade(label="Bantuan", menu=help_menu)
 
 frame = tk.Frame(root)
 frame.pack(expand=True)
@@ -236,7 +246,16 @@ for text, command, row, col, state in buttons_config:
     btn.grid(row=row, column=col, padx=10, pady=10)
     main_buttons.append(btn)
 
+# Footer / Informasi Developer
+footer_label = tk.Label(
+    root,
+    text="Dibuat oleh: Afrizal Maulana - EDP © 2025",
+    font=("Arial", 8),
+    fg="gray"
+)
+footer_label.pack(side="bottom", pady=5)
+
 root.after(1000, lambda: run_sync_in_background(root))
 root.protocol("WM_DELETE_WINDOW", on_closing)
-root.after(2000, check_update)
+root.after(1000, check_update)
 root.mainloop()
