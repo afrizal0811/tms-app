@@ -1,4 +1,3 @@
-from .config import API_TOKEN
 from datetime import datetime, timedelta
 from openpyxl.styles import PatternFill, Alignment 
 from openpyxl.utils import get_column_letter 
@@ -15,6 +14,15 @@ import sys
 from path_manager import MASTER_JSON_PATH
 
 CONFIG_PATH = "config.json"
+CONSTANTS = {}
+
+def resource_path(relative_path):
+    """Mendapatkan path absolut ke resource dalam bundle atau development."""
+    if getattr(sys, 'frozen', False):
+        base_path = sys._MEIPASS
+    else:
+        base_path = os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(base_path, relative_path)
 
 def get_base_path():
     if getattr(sys, 'frozen', False):
@@ -205,7 +213,38 @@ def simpan_file_excel(dataframe):
     except AttributeError:
         subprocess.run(['open', filename], check=True)
 
-def ambil_data(tanggal_str):
+def get_constant_file_path(base_path):
+    # Cek di bundle (PyInstaller)
+    bundle_path = os.path.join(base_path, "modules", "constant.json")
+    if os.path.exists(bundle_path):
+        return bundle_path
+
+    # Cek di root project
+    dev_path = os.path.join(base_path, "constant.json")
+    if os.path.exists(dev_path):
+        return dev_path
+
+    raise FileNotFoundError("File constant.json tidak ditemukan di bundle maupun root project.")
+
+def ambil_data(tanggal_str, base_path):
+    # --- Load token dari constant.json ---
+    try:
+        constants_path = get_constant_file_path(base_path)
+        with open(constants_path, "r", encoding="utf-8") as f:
+            constants = json.load(f)
+    except FileNotFoundError:
+        messagebox.showerror("File Tidak Ditemukan", "constant.json tidak ditemukan di bundle atau folder project. \n \n Hubungi Admin.")
+        return
+    except json.JSONDecodeError:
+        messagebox.showerror("File Tidak Ditemukan", "constant.json tidak valid. \n \n Hubungi Admin.")
+        return
+    
+    api_token = constants.get("token")
+    if not api_token:
+        messagebox.showerror("Data Tidak Ditemukan", "Token tidak ditemukan. \n \n Hubungi Admin.")
+        return
+    
+    # --- Proses tanggal & API request seperti sebelumnya ---
     tanggal_obj = datetime.strptime(tanggal_str, "%d-%m-%Y")
     tanggal_input = tanggal_obj.strftime("%Y-%m-%d")
     tanggal_from = (tanggal_obj - timedelta(days=1)).strftime("%Y-%m-%d")
@@ -216,10 +255,9 @@ def ambil_data(tanggal_str):
         "timeTo": f"{tanggal_input} 23:59:59", "timeFrom": f"{tanggal_from} 00:00:00",
         "timeBy": "createdTime"
     }
-    headers = {"Authorization": API_TOKEN}
-
+    headers = {"Authorization": f"Bearer {api_token}"}
+    
     response = requests.get(url, params=params, headers=headers)
-
     if response.status_code == 200:
         if not response.json().get("tasks", {}).get("data"):
             tk.messagebox.showerror("Error", "Data tidak ditemukan dari API.") 
@@ -384,7 +422,7 @@ def pilih_cabang_gui():
     root.mainloop()
     return selected_value
 
-def buka_tanggal_gui():
+def buka_tanggal_gui(base_path):
     config = load_config()
     if not config or "lokasi" not in config:
         pilih_cabang_gui()
@@ -405,16 +443,17 @@ def buka_tanggal_gui():
 
     def proses():
         tanggal = cal.get()
-        ambil_data(tanggal)
+        ambil_data(tanggal, base_path)
         root.destroy()
 
     ttk.Button(root, text="Proses", command=proses).pack(pady=10)
     root.mainloop()
 
 def main():
+    base_path = os.path.dirname(sys.executable) if getattr(sys, 'frozen', False) else os.path.dirname(__file__)
     config = load_config()
     if config and "lokasi" in config:
-        buka_tanggal_gui()
+        buka_tanggal_gui(base_path)
     else:
         messagebox.showwarning("Dibatalkan", "Pilih lokasi cabang!")
 
