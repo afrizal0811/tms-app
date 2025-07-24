@@ -4,7 +4,7 @@ import json
 import subprocess
 import traceback
 import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, messagebox
 import re
 import pandas as pd
 import openpyxl
@@ -290,7 +290,7 @@ def main():
             messagebox.showerror(
                 "Proses Gagal",
                 f"File tidak valid!\n" +
-                "\nUpload kembali file Routing yang benar!"
+                "\nUpload file Export Routing dengan benar!"
             )
             return
         
