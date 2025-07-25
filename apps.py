@@ -64,7 +64,10 @@ def buat_mapping_driver(lokasi_value):
     return mapping
 
 def proses_truck_detail(workbook, source_df, lokasi):
-    """Memproses detail truk dari DataFrame sumber."""
+    """
+    Memproses detail truk dari DataFrame sumber, dengan mengakumulasi data
+    untuk entri duplikat (Vehicle Name + Assignee).
+    """
     email_to_name = buat_mapping_driver(lokasi)
     df = source_df.copy()
 
@@ -77,7 +80,43 @@ def proses_truck_detail(workbook, source_df, lokasi):
     for col, default in required_cols.items():
         if col not in df.columns:
             df[col] = default
-            
+
+    # --- AWAL PERUBAHAN ---
+    # Fungsi bantuan untuk mengubah kolom menjadi numerik sebelum agregasi
+    def parse_to_numeric(value, is_percentage=False):
+        try:
+            val_str = str(value).strip()
+            if is_percentage:
+                val_str = val_str.replace('%', '')
+            # Menghapus koma sebagai pemisah ribuan
+            return float(val_str.replace(',', ''))
+        except (ValueError, TypeError):
+            return 0.0
+
+    # Konversi kolom yang akan diakumulasi menjadi tipe data numerik
+    df['Weight Percentage'] = df['Weight Percentage'].apply(lambda x: parse_to_numeric(x, is_percentage=True))
+    df['Volume Percentage'] = df['Volume Percentage'].apply(lambda x: parse_to_numeric(x, is_percentage=True))
+    df['Total Distance (m)'] = df['Total Distance (m)'].apply(parse_to_numeric)
+    df['Total Spent Time (mins)'] = df['Total Spent Time (mins)'].apply(parse_to_numeric)
+    
+    # Tentukan aturan agregasi
+    agg_rules = {
+        'Weight Percentage': 'sum',
+        'Volume Percentage': 'sum',
+        'Total Distance (m)': 'sum',
+        'Total Spent Time (mins)': 'sum'
+    }
+    
+    # Kelompokkan berdasarkan 'Vehicle Name' dan 'Assignee', lalu agregasi
+    # Hanya baris di mana kedua kolom ini tidak kosong yang akan dikelompokkan
+    df_grouped = df.dropna(subset=['Vehicle Name', 'Assignee'])
+    df_agg = df_grouped.groupby(['Vehicle Name', 'Assignee']).agg(agg_rules).reset_index()
+    
+    # Gabungkan kembali dengan baris yang tidak memiliki 'Vehicle Name' atau 'Assignee'
+    df_others = df[df['Vehicle Name'].isna() | df['Assignee'].isna()]
+    df = pd.concat([df_agg, df_others], ignore_index=True)
+    # --- AKHIR PERUBAHAN ---
+
     def to_h_mm(minutes):
         try:
             minutes = float(str(minutes).replace(",", "").strip())
@@ -88,10 +127,8 @@ def proses_truck_detail(workbook, source_df, lokasi):
 
     def format_percentage(value):
         try:
-            val_str = str(value).strip()
-            if not val_str: return ""
-            val_float = float(val_str.replace('%', '').replace(',', '').strip())
-            if '%' not in val_str and val_float <= 1.0: val_float *= 100
+            # Nilai sudah berupa numerik hasil penjumlahan, tinggal format
+            val_float = float(value)
             return f"{val_float:.1f}%"
         except (ValueError, TypeError): return ""
 
@@ -99,12 +136,14 @@ def proses_truck_detail(workbook, source_df, lokasi):
     df['Weight Percentage'] = df['Weight Percentage'].apply(format_percentage)
     df['Volume Percentage'] = df['Volume Percentage'].apply(format_percentage)
     
-    df['Total Distance (m)'] = df['Total Distance (m)'].astype(str).str.replace(r'[^\d.]', '', regex=True)
-    df['Total Distance (m)'] = pd.to_numeric(df['Total Distance (m)'], errors='coerce').fillna(0).astype(int)
-    
+    df['Total Distance (m)'] = df['Total Distance (m)'].astype(int)
+
     # Mengosongkan kolom 'Total Visits' dan 'Total Delivered' sesuai permintaan
     df["Total Visits"] = ""
-    df["Total Delivered"] = ""
+    if "Total Delivered" not in df.columns:
+        df["Total Delivered"] = ""
+    else:
+        df["Total Delivered"] = ""
     
     df["Assignee"] = df["Assignee"].str.lower().map(email_to_name).fillna(df["Assignee"])
     
@@ -120,6 +159,12 @@ def proses_truck_detail(workbook, source_df, lokasi):
     final_cols = ["Vehicle Name", "Assignee", "Weight Percentage", "Volume Percentage", "Total Distance (m)", "Total Visits", "Total Delivered", "Ship Duration"]
     sheet_detail = workbook.create_sheet(title="Truck Detail")
     sheet_detail.append(final_cols)
+
+    # Pastikan semua kolom final ada di DataFrame sebelum diakses
+    for col in final_cols:
+        if col not in df.columns:
+            df[col] = ""
+
     for r in df[final_cols].to_records(index=False):
         sheet_detail.append(list(r))
             
@@ -143,10 +188,18 @@ def proses_truck_detail(workbook, source_df, lokasi):
 
 
 def proses_truck_usage(workbook, source_df):
-    """Memproses ringkasan penggunaan truk dari DataFrame sumber."""
-    # PERUBAHAN: Membaca file master menggunakan path terpusat
+    """
+    Memproses ringkasan penggunaan truk dari DataFrame sumber.
+    Setiap truk (kombinasi Vehicle Name + Assignee) dihitung sekali.
+    """
     master_df = load_master_data()
     upload_df = source_df.copy()
+
+    # --- AWAL PERUBAHAN ---
+    # Hapus duplikat berdasarkan 'Vehicle Name' dan 'Assignee' untuk memastikan
+    # setiap truk dihitung hanya satu kali.
+    upload_df.drop_duplicates(subset=['Vehicle Name', 'Assignee'], inplace=True, ignore_index=True)
+    # --- AKHIR PERUBAHAN ---
 
     plat_type_map = dict(zip(master_df["Plat"].astype(str), master_df["Type"]))
     def find_vehicle_tag(vehicle_name):
