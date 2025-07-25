@@ -1,7 +1,5 @@
-import os
-import sys
-import json
-import subprocess
+# modules/Routing_Summary/apps.py (KODE BARU)
+
 import traceback
 import tkinter as tk
 from tkinter import filedialog, messagebox
@@ -10,13 +8,19 @@ import pandas as pd
 import openpyxl
 from openpyxl.styles import Alignment
 from openpyxl.utils import get_column_letter
-from path_manager import MASTER_JSON_PATH
 
-CONFIG_PATH = "config.json"
-#==============================================================================
+# 1. Impor dirapikan, fungsi bantuan kini dipanggil dari shared_utils
+from ..shared_utils import load_config, load_master_data, get_save_path, open_file_externally
+
+
+# ==============================================================================
 # FUNGSI-FUNGSI UTAMA (HELPER FUNCTIONS)
-#==============================================================================
+# ==============================================================================
 
+# Fungsi yang duplikat (simpan_file_excel, buka_file, get_base_path, load_config)
+# TELAH DIHAPUS DARI SINI.
+
+# Fungsi spesifik untuk modul ini bisa tetap di sini.
 def pilih_file_excel(prompt="Pilih file Excel"):
     """Membuka dialog untuk memilih satu file Excel."""
     root = tk.Tk()
@@ -28,43 +32,8 @@ def pilih_file_excel(prompt="Pilih file Excel"):
     )
     return file_path
 
-def simpan_file_excel(wb, base_filename="Hasil_Proses"):
-    """Membuka dialog untuk memilih lokasi penyimpanan file Excel."""
-    root = tk.Tk()
-    root.withdraw()
-    folder_path = filedialog.askdirectory(title="Pilih lokasi untuk menyimpan file")
-    if not folder_path:
-        return None
-
-    filename = f"{base_filename}.xlsx"
-    full_path = os.path.join(folder_path, filename)
-    counter = 1
-    while os.path.exists(full_path):
-        filename = f"{base_filename}_{counter}.xlsx"
-        full_path = os.path.join(folder_path, filename)
-        counter += 1
-
-    wb.save(full_path)
-    return full_path
-
-def buka_file(path):
-    """Membuka file dengan aplikasi default sistem operasi."""
-    if sys.platform.startswith('darwin'): # macOS
-        subprocess.call(('open', path))
-    elif os.name == 'nt': # Windows
-        os.startfile(path)
-    elif os.name == 'posix': # Linux
-        subprocess.call(('xdg-open', path))
-
-def get_base_path():
-    """Mendapatkan path dasar (base path) baik untuk script maupun executable."""
-    if getattr(sys, 'frozen', False):
-        return os.path.dirname(sys.executable)
-    else:
-        return os.path.dirname(__file__)
-
 def contains_capacity_constraint(file_path):
-    """Mengecek apakah 10 baris pertama file Excel mengandung 'capacity constraint'."""
+    """Mengecek apakah baris-baris awal file Excel mengandung 'capacity constraint'."""
     try:
         wb = openpyxl.load_workbook(file_path, read_only=True)
         ws = wb.active
@@ -75,35 +44,27 @@ def contains_capacity_constraint(file_path):
         return False
     return False
 
-def load_config():
-    if os.path.exists(CONFIG_PATH):
-        with open(CONFIG_PATH, 'r') as f:
-            return json.load(f)
-    return None
 
-#==============================================================================
+# ==============================================================================
 # FUNGSI-FUNGSI PEMROSESAN INTI
-#==============================================================================
+# ==============================================================================
 
 def buat_mapping_driver(lokasi_value):
-    """Membuat mapping email ke nama driver dari file master.json berdasarkan lokasi."""
-    # PERUBAHAN: Menggunakan path terpusat dari path_manager
-    with open(MASTER_JSON_PATH, 'r') as f:
-        master_data = json.load(f)
+    """
+    Membuat mapping email ke nama driver dari master data berdasarkan lokasi.
+    Kini menggunakan shared_utils.
+    """
+    # 2. Menggunakan fungsi terpusat untuk memuat data master
+    master_df = load_master_data(lokasi_value)
+    if master_df is None or master_df.empty:
+        return {}
     
-    mapping = {}
-    for row in master_data:
-        email = row.get("Email")
-        driver = row.get("Driver")
-        
-        if email and driver and lokasi_value.lower() in str(email).lower():
-            mapping[str(email).strip().lower()] = str(driver).strip()
-            
+    # Membuat dictionary dari DataFrame
+    mapping = pd.Series(master_df.Driver.values, index=master_df.Email).to_dict()
     return mapping
 
 def proses_truck_detail(workbook, source_df, lokasi):
     """Memproses detail truk dari DataFrame sumber."""
-    # PERUBAHAN: Memanggil fungsi yang sudah diubah tanpa argumen path
     email_to_name = buat_mapping_driver(lokasi)
     df = source_df.copy()
 
@@ -141,12 +102,10 @@ def proses_truck_detail(workbook, source_df, lokasi):
     df['Total Distance (m)'] = df['Total Distance (m)'].astype(str).str.replace(r'[^\d.]', '', regex=True)
     df['Total Distance (m)'] = pd.to_numeric(df['Total Distance (m)'], errors='coerce').fillna(0).astype(int)
     
-    # --- PERUBAHAN DI SINI ---
     # Mengosongkan kolom 'Total Visits' dan 'Total Delivered' sesuai permintaan
     df["Total Visits"] = ""
     df["Total Delivered"] = ""
-    # --------------------------
-
+    
     df["Assignee"] = df["Assignee"].str.lower().map(email_to_name).fillna(df["Assignee"])
     
     existing_drivers = set(df["Assignee"].dropna())
@@ -182,10 +141,11 @@ def proses_truck_detail(workbook, source_df, lokasi):
     sheet_dist["A2"] = round(distance_summary.get("DRY", 0), 2)
     sheet_dist["B2"] = round(distance_summary.get("FRZ", 0), 2)
 
+
 def proses_truck_usage(workbook, source_df):
     """Memproses ringkasan penggunaan truk dari DataFrame sumber."""
     # PERUBAHAN: Membaca file master menggunakan path terpusat
-    master_df = pd.read_json(MASTER_JSON_PATH)
+    master_df = load_master_data()
     upload_df = source_df.copy()
 
     plat_type_map = dict(zip(master_df["Plat"].astype(str), master_df["Type"]))
@@ -239,13 +199,15 @@ def proses_truck_usage(workbook, source_df):
         row += 1
     for col_letter in ["A", "B", "C"]: sheet_usage.column_dimensions[col_letter].width = 25
 
-#==============================================================================
+
+# ==============================================================================
 # FUNGSI UTAMA (MAIN CONTROLLER)
-#==============================================================================
+# ==============================================================================
 
 def main():
     """Fungsi controller yang menjalankan semua proses secara otomatis."""
     try:
+        # 4. Pemanggilan fungsi diperbarui
         config = load_config()
             
         if config and "lokasi" in config:
@@ -288,9 +250,7 @@ def main():
         missing_columns = [col for col in required_columns if col not in combined_df.columns]
         if missing_columns:
             messagebox.showerror(
-                "Proses Gagal",
-                f"File tidak valid!\n" +
-                "\nUpload file Export Routing dengan benar!"
+                "Proses Gagal", "File tidak valid!\n\nUpload file Export Routing dengan benar!"
             )
             return
         
@@ -299,22 +259,15 @@ def main():
 
         if not any(lokasi.lower() in prefix for prefix in email_prefixes):
             messagebox.showerror(
-                "Proses Gagal",
-                f"Lokasi cabang tidak valid!\n" +
-                "\nLokasi cabang tidak sesuai dengan file Routing!"
+                "Proses Gagal", "Lokasi cabang tidak valid!\n\nLokasi cabang tidak sesuai dengan file Routing!"
             )
             return
         
-        base_dir = get_base_path()
-        # PERUBAHAN: Hapus logika path lama, gunakan path terpusat untuk validasi
-        if not os.path.exists(MASTER_JSON_PATH):
-            messagebox.showerror("File Tidak Ditemukan", "Master data driver tidak dapat ditemukan.")
-            return None
-
+        # Pengecekan path manual sudah tidak diperlukan lagi, karena ditangani oleh load_master_data
+        
         output_wb = openpyxl.Workbook()
         output_wb.remove(output_wb.active)
     
-        # PERUBAHAN: Panggil fungsi tanpa argumen master_path
         proses_truck_detail(output_wb, combined_df, lokasi)
         proses_truck_usage(output_wb, combined_df)
 
@@ -322,9 +275,11 @@ def main():
             messagebox.showinfo("Selesai", "Tidak ada data yang diproses atau dihasilkan.")
             return
         
-        save_path = simpan_file_excel(output_wb, "Routing Summary")
+        # 5. Logika penyimpanan dan pembukaan file diubah
+        save_path = get_save_path("Routing Summary")
         if save_path:
-            buka_file(save_path)
+            output_wb.save(save_path)
+            open_file_externally(save_path)
         else:
             messagebox.showwarning("Proses Gagal", "Penyimpanan file dibatalkan.")
 
