@@ -1,96 +1,30 @@
+# modules/Delivery_Summary/apps.py (KODE BARU)
+
 # -*- coding: utf-8 -*-
 """
 Skrip Gabungan untuk memproses laporan "RO vs Real" dan "Pending SO".
-
-Versi 4.1:
-- Menambahkan pembacaan file config.json untuk filter lokasi cabang.
-- Sheet "Total Delivered" diubah:
-  - Kolom "Total" menjadi "Total Visit".
-  - Menambahkan kolom "Total Delivered" (hanya untuk status "SUKSES").
 """
 
+# 1. Impor yang dibutuhkan sudah dirapikan
 import pandas as pd
-import os
-import sys
-import subprocess
-import json
 from datetime import datetime
-import tkinter as tk
 from tkinter import filedialog, messagebox
 from openpyxl.utils import get_column_letter
 from openpyxl.styles import Alignment, PatternFill
-from path_manager import MASTER_JSON_PATH
 
-CONFIG_PATH = "config.json"
+# 2. Impor semua fungsi bantuan dari shared_utils
+from ..shared_utils import load_config, load_master_data, get_save_path, open_file_externally
+
+
 # =============================================================================
 # BAGIAN 1: FUNGSI-FUNGSI BANTU (HELPER FUNCTIONS)
 # =============================================================================
 
-def load_config():
-    if os.path.exists(CONFIG_PATH):
-        with open(CONFIG_PATH, 'r') as f:
-            return json.load(f)
-    return None
+# SEMUA FUNGSI LAMA (load_config, baca_master_driver, get_save_path, open_file)
+# SUDAH DIHAPUS DARI SINI KARENA KITA MENGGUNAKAN VERSI DARI shared_utils.py
 
-def baca_master_driver(lokasi_cabang):
-    """Membaca file 'master.json' dan memfilternya berdasarkan lokasi cabang."""
-    try:
-        # Memeriksa keberadaan file
-        if not os.path.exists(MASTER_JSON_PATH):
-            messagebox.showerror("File Tidak Ditemukan", "Master data driver tidak dapat ditemukan.")
-            return None
 
-        # PERUBAHAN: Membaca file JSON menggunakan library json dan mengubahnya menjadi DataFrame pandas
-        with open(MASTER_JSON_PATH, 'r', encoding='utf-8') as f:
-            data_json = json.load(f)
-        data_df = pd.DataFrame(data_json)
-
-        # Membersihkan nama kolom (menghilangkan spasi di awal/akhir)
-        data_df.columns = [col.strip() for col in data_df.columns]
-
-        # Validasi kolom/key yang wajib ada
-        if 'Email' not in data_df.columns or 'Driver' not in data_df.columns:
-            raise ValueError("Key 'Email' dan/atau 'Driver' tidak ditemukan di master data driver")
-
-        # Membersihkan dan menstandarkan data pada kolom 'Email' dan 'Driver'
-        data_df['Email'] = data_df['Email'].astype(str).str.strip().str.lower()
-        data_df['Driver'] = data_df['Driver'].astype(str).str.strip()
-
-        # Memfilter data berdasarkan lokasi cabang jika ditentukan
-        if lokasi_cabang:
-            data_df = data_df[data_df['Email'].str.contains(lokasi_cabang, case=False, na=False)].copy()
-            if data_df.empty:
-                messagebox.showwarning("Tidak Ada Driver", f"Tidak ada driver yang cocok dengan lokasi '{lokasi_cabang}' di file master data")
-                return None
-        return data_df
-    except Exception as e:
-        # Menampilkan pesan error jika terjadi kesalahan saat membaca atau memproses file
-        messagebox.showerror("Error Baca Master Driver", f"Terjadi kesalahan saat membaca master data driver:\n{e}")
-        return None
-
-def get_save_path(base_name="Laporan Gabungan"):
-    """Membuka dialog untuk memilih folder dan menghasilkan path file penyimpanan yang unik."""
-    root = tk.Tk()
-    root.withdraw()
-    folder = filedialog.askdirectory(title="Pilih Lokasi Untuk Menyimpan File Laporan")
-    if not folder:
-        return None
-    save_path = os.path.join(folder, base_name + ".xlsx")
-    counter = 1
-    while os.path.exists(save_path):
-        save_path = os.path.join(folder, f"{base_name} ({counter}).xlsx")
-        counter += 1
-    return save_path
-
-def open_file(filename):
-    """Membuka file dengan aplikasi default sistem operasi."""
-    if sys.platform == "win32" or os.name == 'nt':
-        os.startfile(filename)
-    elif sys.platform == "darwin":
-        subprocess.call(["open", filename])
-    else:
-        subprocess.call(["xdg-open", filename])
-
+# Fungsi-fungsi yang spesifik untuk modul ini tetap ada di sini
 def apply_styles_and_formatting(writer):
     """
     Menerapkan semua styling (alignment, warna, auto-size) ke semua sheet.
@@ -100,7 +34,6 @@ def apply_styles_and_formatting(writer):
     left_align = Alignment(horizontal='left', vertical='center')
     red_fill = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
     
-    # --- PERUBAHAN: Menambahkan 'Status Delivery' dan 'Is Same Sequence' ---
     cols_to_center = [
         'Open Time', 'Close Time', 'ETA', 'ETD', 'Actual Arrival', 
         'Actual Departure', 'Visit Time', 'Actual Visit Time', 
@@ -122,10 +55,15 @@ def apply_styles_and_formatting(writer):
             sep_col_idx = header_map[' ']
             worksheet.cell(row=1, column=sep_col_idx).value = ""
         for column_cells in worksheet.columns:
-            max_length = max(len(str(cell.value)) for cell in column_cells if cell.value is not None)
-            adjusted_width = max_length + 2
-            if adjusted_width > 50: adjusted_width = 50
-            worksheet.column_dimensions[get_column_letter(column_cells[0].column)].width = adjusted_width
+            # Menghindari error jika kolom kosong
+            try:
+                max_length = max(len(str(cell.value)) for cell in column_cells if cell.value is not None)
+                adjusted_width = max_length + 2
+                if adjusted_width > 50: adjusted_width = 50
+                worksheet.column_dimensions[get_column_letter(column_cells[0].column)].width = adjusted_width
+            except ValueError:
+                # Lewati jika kolom benar-benar kosong
+                pass
 
 def convert_datetime_column(df, column_name, target_format='%H:%M'):
     """Mengonversi kolom datetime ke format string waktu."""
@@ -166,11 +104,10 @@ def calculate_actual_visit(start, end):
         return int(delta // 60)
     except (ValueError, TypeError): return ""
 
-# =============================================================================
-# BAGIAN 2: FUNGSI-FUNGSI PEMROSESAN UTAMA
-# =============================================================================
 
-# --- PERUBAHAN: Logika diperbarui untuk menghitung "Total Visit" dan "Total Delivered" ---
+# =============================================================================
+# BAGIAN 2: FUNGSI-FUNGSI PEMROSESAN UTAMA (TIDAK ADA PERUBAHAN DI SINI)
+# =============================================================================
 def process_total_delivered(df, master_driver_df):
     """Membuat ringkasan jumlah visit dan delivery, membiarkan total kosong untuk driver tanpa data."""
     master_summary = master_driver_df[['Driver', 'Plat']].copy()
@@ -229,13 +166,9 @@ def process_ro_vs_real(df, master_driver_df):
         df_proc.drop(columns=['doneTime_parsed'], inplace=True)
 
     rename_dict = {
-        'assignedVehicle': 'License Plat',
-        'assignee': 'Driver',
-        'title': 'Customer',
-        'label': 'Status Delivery',
-        'Klik Jika Anda Sudah Sampai': 'Actual Arrival',
-        'doneTime': 'Actual Departure',
-        'routePlannedOrder': 'ET Sequence',
+        'assignedVehicle': 'License Plat', 'assignee': 'Driver', 'title': 'Customer',
+        'label': 'Status Delivery', 'Klik Jika Anda Sudah Sampai': 'Actual Arrival',
+        'doneTime': 'Actual Departure', 'routePlannedOrder': 'ET Sequence',
         'Real Seq': 'Real Sequence'
     }
     df_proc.rename(columns=rename_dict, inplace=True)
@@ -253,25 +186,14 @@ def process_ro_vs_real(df, master_driver_df):
     final_cols = [col for col in desired_columns if col in df_proc.columns]
     df_final = df_proc[final_cols].copy()
 
-    # --- PERUBAHAN UTAMA: Logika sorting dan penyisipan baris kosong ---
     if 'Driver' in df_final.columns and 'Real Sequence' in df_final.columns and not df_final.empty:
-        # 1. Lakukan sorting yang benar terlebih dahulu.
-        #    Urutkan berdasarkan Driver, lalu berdasarkan Real Sequence (ascending).
         df_final['Real Sequence'] = pd.to_numeric(df_final['Real Sequence'], errors='coerce')
         df_final.sort_values(by=['Driver', 'Real Sequence'], ascending=True, inplace=True)
-
-        # 2. Buat daftar baru untuk menampung hasil dengan baris kosong.
-        #    Ini menggantikan fungsi insert_blank_rows() untuk menghindari sorting ulang yang salah.
         all_drivers_data = []
-        # Kelompokkan berdasarkan 'Driver'. `sort=False` penting untuk menjaga urutan yang sudah kita buat.
         for _, group in df_final.groupby('Driver', sort=False):
             all_drivers_data.append(group)
-            # Tambahkan baris kosong sebagai pemisah setelah setiap grup driver.
             blank_row = pd.DataFrame([[None] * len(df_final.columns)], columns=df_final.columns)
             all_drivers_data.append(blank_row)
-
-        # 3. Gabungkan semua grup dan baris kosong menjadi satu DataFrame.
-        #    Hapus baris kosong terakhir yang tidak perlu di akhir file.
         if all_drivers_data:
             df_final = pd.concat(all_drivers_data[:-1], ignore_index=True)
 
@@ -322,14 +244,13 @@ def process_pending_so(df, master_driver_df):
     if 'Driver' in df_final.columns: df_final = df_final.sort_values(by='Driver', ascending=True).reset_index(drop=True)
     return df_final
 
+
 # =============================================================================
 # BAGIAN 3: FUNGSI EKSEKUSI UTAMA
 # =============================================================================
 
 def main():
-    root = tk.Tk()
-    root.withdraw()
-    
+    # 3. Ganti pemanggilan fungsi dengan versi dari shared_utils
     config = load_config()
         
     if config and "lokasi" in config:
@@ -348,39 +269,24 @@ def main():
 
     try:
         df_original = pd.read_excel(input_file)
-        # ================== START: BLOK VALIDASI FILE ==================
         
-        # 1. Cek apakah kolom yang dibutuhkan ada
-        #    Sesuaikan daftar kolom ini dengan yang wajib ada di file "Export Task" Anda.
+        # Blok Validasi File (TIDAK BERUBAH)
         required_columns = ['assignedVehicle', 'assignee', 'Alasan Tidak Bisa Dikunjungi', 'Alasan Batal','Open Time', 'Close Time', 'eta', 'etd', 'Klik Jika Anda Sudah Sampai', 'doneTime', 'Visit Time', 'routePlannedOrder']
         missing_columns = [col for col in required_columns if col not in df_original.columns]
-        
         if missing_columns:
-            messagebox.showerror(
-                "Proses Gagal",
-                f"File tidak valid!\n" +
-                "\nUpload file Export Task dengan benar!"
-            )
+            messagebox.showerror("Proses Gagal", f"File tidak valid!\n\nUpload file Export Task dengan benar!")
             return
             
-        # 2. Cek apakah lokasi cabang sesuai dengan data di file
-        #    Validasi ini mengasumsikan kolom 'Assignee' berisi email seperti 'kendaraan.jakartautara@...'
-        #    seperti pada Code 1.
         email_prefixes = df_original["assignee"].dropna().astype(str).str.extract(r'kendaraan\.([^.@]+)', expand=False)
         email_prefixes = email_prefixes.dropna().str.lower().unique()
         if not any(lokasi.lower() in prefix for prefix in email_prefixes):
-            messagebox.showerror(
-                "Proses Gagal",
-                f"Lokasi cabang tidak valid!\n" +
-                "\nLokasi cabang tidak sesuai dengan file Export Task!"
-            )
+            messagebox.showerror("Proses Gagal", f"Lokasi cabang tidak valid!\n\nLokasi cabang tidak sesuai dengan file Export Task!")
             return
-
-        # =================== END: BLOK VALIDASI FILE ===================
 
         results_to_save = {}
         
-        master_df = baca_master_driver(lokasi)
+        # Panggil fungsi terpusat untuk memuat data master
+        master_df = load_master_data(lokasi)
         if master_df is None:
             return
 
@@ -397,12 +303,10 @@ def main():
             results_to_save['Hasil RO vs Real'] = result_ro
                 
         if not results_to_save:
-            messagebox.showerror(
-                "Proses Gagal",
-                "File tidak valid atau tidak ada data yang relevan untuk diproses."
-            )
+            messagebox.showerror("Proses Gagal", "File tidak valid atau tidak ada data yang relevan untuk diproses.")
             return
         
+        # Panggil fungsi terpusat untuk mendapatkan path penyimpanan
         save_file_path = get_save_path("Delivery Summary")
         
         if not save_file_path:
@@ -410,17 +314,16 @@ def main():
             return
             
         with pd.ExcelWriter(save_file_path, engine='openpyxl') as writer:
-            # Tentukan urutan sheet yang diinginkan secara manual
             sheet_order = ['Total Delivered', 'Hasil Pending SO', 'Hasil RO vs Real']
-            
-            # Tulis sheet ke Excel sesuai urutan yang telah ditentukan
             for sheet_name in sheet_order:
                 if sheet_name in results_to_save:
                     results_to_save[sheet_name].to_excel(writer, sheet_name=sheet_name, index=False)
             
             apply_styles_and_formatting(writer)
         
-        open_file(save_file_path)
+        # Panggil fungsi terpusat untuk membuka file
+        open_file_externally(save_file_path)
+        
     except Exception as e:
         messagebox.showerror("Terjadi Error", f"Sebuah kesalahan tak terduga terjadi:\n{e}")
 
