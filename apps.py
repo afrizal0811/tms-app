@@ -1,4 +1,4 @@
-# @GUI/apps.py (KODE BARU)
+# @GUI/apps.py (KODE YANG DIMODIFIKASI)
 
 import tkinter as tk
 from tkinter import messagebox, ttk
@@ -21,18 +21,29 @@ from modules.shared_utils import (
 )
 
 # --- Impor Modul Aplikasi ---
-# Pastikan setiap file apps.py di dalam modul memiliki fungsi main()
+# Fungsi 'main' dari modul manual yang akan dipanggil dari menu
 from modules.Routing_Summary.apps import main as routing_summary_main
 from modules.Delivery_Summary.apps import main as delivery_summary_main
+
+# Fungsi 'main' untuk tombol di halaman utama
+# === PERUBAHAN DIMULAI DI SINI ===
+# from modules.Auto_Routing_Summary.apps import main as auto_routing_summary_main # Baris ini dinonaktifkan
+# === AKHIR DARI PERUBAHAN ===
+from modules.Auto_Delivery_Summary.apps import main as auto_delivery_summary_main
 from modules.Start_Finish_Time.apps import main as start_finish_time_main
 from modules.Sync_Driver.apps import main as sync_driver_main
+
 
 ensure_config_exists()
 # ==============================================================================
 # FUNGSI BANTUAN LOKAL DAN KONfigurasi AWAL
 # ==============================================================================
 
-# 2. Fungsi get_base_path, resource_path, dan load_constants LAMA Dihapus.
+# === PERUBAHAN DIMULAI DI SINI ===
+def show_wip_popup():
+    """Menampilkan pop-up bahwa fitur masih dalam pengembangan."""
+    messagebox.showinfo("Segera Hadir", "Fitur ini masih dalam tahap pengembangan dan akan segera tersedia.")
+# === AKHIR DARI PERUBAHAN ===
 
 # Muat konstanta di awal menggunakan shared_utils
 CONSTANTS = load_constants()
@@ -50,7 +61,6 @@ def update_title(root_window):
     config = load_config()
     title = "TMS Data Processing"
     
-    # TAMBAHKAN PEMERIKSAAN 'if config:' DI SINI
     if config:
         kode = config.get("lokasi")
         if kode and kode in KODE_KE_LOKASI:
@@ -64,14 +74,12 @@ def pilih_lokasi(parent_window):
     reverse_dict = {v: k for k, v in LOKASI_DISPLAY.items()}
     selected_display_name = list(LOKASI_DISPLAY.keys())[0]
     
-    # 3. Menggunakan fungsi terpusat untuk memuat config
     config_data = load_config() or {}
     kode_lokasi = config_data.get("lokasi", "")
     if kode_lokasi in reverse_dict:
         selected_display_name = reverse_dict[kode_lokasi]
 
     dialog = tk.Toplevel(parent_window)
-    # ... (Logika GUI untuk dialog tidak berubah)
     dialog.title("Pilih Lokasi Cabang")
     lebar, tinggi = 350, 180
     x, y = (dialog.winfo_screenwidth() - lebar) // 2, (dialog.winfo_screenheight() - tinggi) // 2
@@ -87,7 +95,6 @@ def pilih_lokasi(parent_window):
         if selected in LOKASI_DISPLAY:
             kode = LOKASI_DISPLAY[selected]
             config_data['lokasi'] = kode
-            # 4. Menggunakan fungsi terpusat untuk menyimpan config
             save_json_data(config_data, CONFIG_PATH)
             dialog.destroy()
 
@@ -101,7 +108,6 @@ def on_closing():
     try:
         root.destroy()
     finally:
-        # Gunakan os._exit(0) untuk memastikan semua thread berhenti
         import os
         os._exit(0)
 
@@ -115,24 +121,18 @@ def check_update():
             if messagebox.askyesno("Update Tersedia", f"Versi baru: {latest_version}\nVersi Anda: {CURRENT_VERSION}\n\nBuka halaman update?"):
                 webbrowser.open(DOWNLOAD_LINK)
     except requests.exceptions.RequestException:
-        # Gagal cek update tidak perlu menampilkan error, cukup lewati
         pass
 
 def periksa_konfigurasi_awal(parent_window):
     """Memeriksa apakah lokasi sudah diatur saat pertama kali membuka aplikasi."""
     config = load_config()
-
-    # KUNCI UTAMA ADA DI SINI:
-    # Cek 'if not config' PERTAMA KALI sebelum mencoba mengakses isinya.
-    # Jika config adalah None, kondisi pertama langsung terpenuhi dan program tidak akan error.
     if not config or not config.get("lokasi"):
         messagebox.showinfo("Setup Awal", "Selamat datang! Silakan pilih lokasi cabang Anda terlebih dahulu.")
         pilih_lokasi(parent_window)
-        update_title(parent_window) # Perbarui judul setelah lokasi dipilih
+        update_title(parent_window) 
 
 def run_sync_in_background(root_window):
     """Menjalankan proses sinkronisasi driver di background thread."""
-    # ... (Logika GUI untuk loading window tidak berubah)
     loading_window = tk.Toplevel(root_window)
     loading_window.title("Loading")
     loading_window.geometry("300x100")
@@ -147,18 +147,20 @@ def run_sync_in_background(root_window):
     
     for button in main_buttons: button.config(state='disabled')
     pengaturan_menu.entryconfig("Sinkronisasi Driver", state="disabled")
+    manual_menu.entryconfig("Routing Summary", state="disabled")
+    manual_menu.entryconfig("Delivery Summary", state="disabled")
 
     def on_sync_complete():
         if loading_window.winfo_exists(): loading_window.destroy()
         for button in main_buttons: button.config(state='normal')
         pengaturan_menu.entryconfig("Sinkronisasi Driver", state="normal")
+        manual_menu.entryconfig("Routing Summary", state="normal")
+        manual_menu.entryconfig("Delivery Summary", state="normal")
 
     def thread_target():
         try:
-            # 5. Memanggil fungsi main dari modul sync_driver tanpa argumen
             sync_driver_main()
         finally:
-            # Pastikan jendela loading selalu ditutup
             root_window.after(0, on_sync_complete)
             
     sync_thread = threading.Thread(target=thread_target, daemon=True)
@@ -171,7 +173,7 @@ def run_sync_in_background(root_window):
 
 # --- Setup Window Utama ---
 root = tk.Tk()
-root.withdraw() # Sembunyikan dulu sampai semua siap
+root.withdraw() 
 
 def ganti_lokasi():
     pilih_lokasi(root)
@@ -179,6 +181,14 @@ def ganti_lokasi():
 
 # --- Setup Menu Bar ---
 menu_bar = tk.Menu(root)
+
+# Menu "Manual"
+manual_menu = tk.Menu(menu_bar, tearoff=0)
+manual_menu.add_command(label="Routing Summary", command=routing_summary_main)
+manual_menu.add_command(label="Delivery Summary", command=delivery_summary_main)
+menu_bar.add_cascade(label="Manual", menu=manual_menu)
+
+# Menu Pengaturan
 pengaturan_menu = tk.Menu(menu_bar, tearoff=0)
 pengaturan_menu.add_command(label="Ganti Lokasi Cabang", command=ganti_lokasi)
 pengaturan_menu.add_command(label="Sinkronisasi Driver", command=lambda: run_sync_in_background(root))
@@ -212,15 +222,18 @@ frame = tk.Frame(root)
 frame.pack(expand=True)
 button_font = ("Arial", 14, "bold")
 
-# Definisikan tombol dan panggil fungsi main dari setiap modul
+# === PERUBAHAN DIMULAI DI SINI ===
+# Definisikan ulang tombol untuk memanggil pop-up untuk Auto Routing
 buttons_config = [
-    ("Routing Summary", routing_summary_main),
-    ("Delivery Summary", delivery_summary_main),
+    ("Auto Routing Summary", show_wip_popup), # Menggunakan fungsi pop-up
+    ("Auto Delivery Summary", auto_delivery_summary_main),
     ("Start-Finish Time", start_finish_time_main),
 ]
+# === AKHIR DARI PERUBAHAN ===
+
 main_buttons = []
 for i, (text, command) in enumerate(buttons_config):
-    btn = tk.Button(frame, text=text, command=command, font=button_font, padx=20, pady=10, width=15)
+    btn = tk.Button(frame, text=text, command=command, font=button_font, padx=20, pady=10, width=20)
     btn.grid(row=i, column=0, padx=10, pady=10)
     main_buttons.append(btn)
 
@@ -228,11 +241,11 @@ footer_label = tk.Label(root, text="Dibuat oleh: Afrizal Maulana - EDP © 2025",
 footer_label.pack(side="bottom", pady=5)
 
 # --- Tampilkan Window dan Jalankan Proses Latar Belakang ---
-root.deiconify() # Tampilkan window
+root.deiconify() 
 periksa_konfigurasi_awal(root)
 
 root.protocol("WM_DELETE_WINDOW", on_closing)
-root.after(500, check_update) # Cek update setelah 0.5 detik
-root.after(1500, lambda: run_sync_in_background(root)) # Sync setelah 1.5 detik
+root.after(500, check_update) 
+root.after(1500, lambda: run_sync_in_background(root))
 
 root.mainloop()
