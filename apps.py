@@ -19,7 +19,7 @@ from ..shared_utils import (
     open_file_externally,
     CONFIG_PATH  # Impor juga path konstanta jika diperlukan
 )
-
+from ..gui_utils import create_date_picker_window
 
 # =============================================================================
 # BAGIAN 1: FUNGSI-FUNGSI BANTU (HELPER FUNCTIONS)
@@ -141,8 +141,17 @@ def simpan_file_excel(dataframe):
 # =============================================================================
 
 # 3. Fungsi ambil_data diubah untuk menggunakan shared_utils
-def ambil_data(tanggal_str):
-    # --- Load token dari constant.json ---
+def ambil_data(dates, app_instance=None): # app_instance opsional
+    """
+    Fungsi utama untuk mengambil data start-finish time dari API.
+    """
+    # Gunakan format tanggal yang sesuai
+    tanggal_str = dates["dmy"] 
+    
+    # Update status jika app_instance tersedia
+    if app_instance:
+        app_instance.update_status("Mengambil data dari API...")
+
     constants = load_constants()
     if not constants:
         return # Pesan error sudah ditangani di dalam shared_utils
@@ -285,7 +294,9 @@ def ambil_data(tanggal_str):
     final_df = final_df.sort_values(by='Driver', ascending=True)
 
     simpan_file_excel(final_df)
-
+    # Beri tahu user jika proses selesai
+    if app_instance:
+        app_instance.update_status("Proses selesai.")
 
 # =============================================================================
 # BAGIAN 3: FUNGSI GUI DAN EKSEKUSI
@@ -337,7 +348,6 @@ def buka_tanggal_gui():
     """GUI utama untuk memilih tanggal."""
     config = load_config()
     if not config or "lokasi" not in config:
-        messagebox.showinfo("Setup Awal", "Lokasi cabang belum diatur. Silakan pilih lokasi Anda.")
         pilih_cabang_gui()
         # Cek lagi setelah pemilihan
         config = load_config()
@@ -367,8 +377,20 @@ def buka_tanggal_gui():
     root.mainloop()
 
 def main():
-    # 4. Logika eksekusi utama disederhanakan
-    buka_tanggal_gui()
+    """Fungsi utama untuk modul Start Finish Time."""
+    # Pengecekan config awal bisa dilakukan di sini sebelum memanggil GUI
+    config = load_config()
+    if not config:
+        messagebox.showinfo("Setup Awal", "Lokasi cabang belum diatur. Silakan atur melalui menu Pengaturan > Ganti Lokasi Cabang.")
+        # panggil fungsi pilih lokasi jika masih mau ada popup dari sini
+        # atau return agar user mengaturnya dari menu utama
+        return
+
+    # Definisikan fungsi wrapper yang akan dijalankan oleh GUI
+    def process_wrapper(dates, app_instance):
+        ambil_data(dates, app_instance)
+
+    create_date_picker_window("Start-Finish Time", process_wrapper)
 
 if __name__ == "__main__":
     main()
