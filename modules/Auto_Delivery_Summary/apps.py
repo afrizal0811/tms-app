@@ -1,40 +1,23 @@
 import requests
-import json
 import pandas as pd
 import os
 import re
 from openpyxl.styles import Alignment, PatternFill
-from datetime import datetime
-import tkinter as tk
-from tkinter import ttk, messagebox
-from tkcalendar import DateEntry
-import threading
+from tkinter import messagebox
 
-def load_json_file(filename):
-    """Membaca file JSON dan mengembalikan datanya."""
-    if not os.path.exists(filename):
-        messagebox.showerror("File Tidak Ditemukan", f"KESALAHAN: File '{filename}' tidak ditemukan.")
-        return None
-    try:
-        with open(filename, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except (json.JSONDecodeError, Exception) as e:
-        messagebox.showerror("Gagal Membaca File", f"KESALAHAN saat membaca '{filename}': {e}")
-        return None
-
-def get_unique_filename(base_name, extension):
-    """Membuat nama file unik dengan menambahkan angka jika sudah ada."""
-    filename = f"{base_name}.{extension}"
-    counter = 1
-    while os.path.exists(filename):
-        filename = f"{base_name} - {counter}.{extension}"
-        counter += 1
-    return filename
+# Impor fungsi terpusat dari shared_utils
+from ..shared_utils import (
+    load_config,
+    load_constants,
+    load_master_data,
+    open_file_externally,
+    get_save_path 
+)
+from ..gui_utils import create_date_picker_window
 
 def process_task_data(task, master_map, real_sequence_map):
     """
     Memproses satu data 'task' dan mengekstrak semua informasi yang dibutuhkan.
-    Ini untuk menghindari ekstraksi data yang berulang.
     """
     vehicle_assignee_email = (task.get('assignedVehicle') or {}).get('assignee')
     if not vehicle_assignee_email:
@@ -107,30 +90,29 @@ def format_excel_sheet(writer, df, sheet_name, centered_cols, colored_cols=None)
             for cell in worksheet[col_letter]:
                 cell.fill = fill
 
-def panggil_api_dan_simpan(selected_date, app_instance):
+def panggil_api_dan_simpan(dates, app_instance):
     """
     Fungsi utama untuk memanggil API, memproses data, dan menyimpan ke Excel.
     """
-    # --- PENGATURAN ---
-    configs = {
-        'constants': load_json_file('constant.json'),
-        'config': load_json_file('config.json'),
-        'master_data': load_json_file('master.json')
-    }
-    if any(v is None for v in configs.values()): return False
+    selected_date = dates["ymd"] 
+    # --- PENGATURAN MENGGUNAKAN SHARED UTILS ---
+    constants = load_constants()
+    config = load_config()
+    master_df = load_master_data() 
+    
+    if any(v is None for v in [constants, config, master_df]): 
+        return False
+        
+    master_data_list = master_df.to_dict('records')
 
-    API_TOKEN = configs['constants'].get('token') 
-    LOKASI_FILTER = configs['config'].get('lokasi')
-    HUB_ID = configs['constants'].get('hub_ids', {}).get(LOKASI_FILTER) 
+    API_TOKEN = constants.get('token') 
+    LOKASI_FILTER = config.get('lokasi')
+    HUB_ID = constants.get('hub_ids', {}).get(LOKASI_FILTER) 
 
     if not API_TOKEN or not LOKASI_FILTER or not HUB_ID:
         messagebox.showerror("Konfigurasi Salah", "KESALAHAN: 'token', 'lokasi', atau hubId tidak ditemukan di file konfigurasi.")
         return False
 
-    base_filename = "Delivery Summary"
-    NAMA_FILE_OUTPUT = get_unique_filename(base_filename, "xlsx")
-    master_map = {item['Email']: item for item in configs['master_data']}
-    
     # --- API Call ---
     api_url = "https://apiweb.mile.app/api/v3/tasks"
     params = {
@@ -153,11 +135,10 @@ def panggil_api_dan_simpan(selected_date, app_instance):
             return False
         app_instance.update_status(f"✅ Ditemukan total {len(tasks_data)} data tugas.")
     except requests.exceptions.HTTPError as errh:
-        # PERBAIKAN: Penanganan error server dan otentikasi yang lebih baik
         status_code = errh.response.status_code
         if status_code == 401:
             messagebox.showerror("Akses Ditolak (401)", "KESALAHAN: Unauthorized. Token API mungkin salah atau sudah kedaluwarsa.")
-        elif status_code >= 500: # Error 500, 502, 503, dll.
+        elif status_code >= 500:
             messagebox.showerror("Masalah Server API", f"KESALAHAN: Terjadi masalah pada server API (Status Code: {status_code}). Coba lagi nanti.")
         else:
             messagebox.showerror("Kesalahan HTTP", f"KESALAHAN HTTP: {errh}")
@@ -169,7 +150,8 @@ def panggil_api_dan_simpan(selected_date, app_instance):
         messagebox.showerror("Kesalahan API", f"KESALAHAN REQUEST API: {e}")
         return False
     
-    # --- Pre-processing Real Sequence ---
+    # --- Data Processing (No changes in this part) ---
+    master_map = {item['Email']: item for item in master_data_list}
     tasks_by_assignee = {}
     for task in tasks_data:
         assignee_email = (task.get('assignedVehicle') or {}).get('assignee')
@@ -182,7 +164,6 @@ def panggil_api_dan_simpan(selected_date, app_instance):
         for i, task in enumerate(sorted_tasks):
             real_sequence_map[task['_id']] = i + 1
 
-    # --- Data Aggregation ---
     app_instance.update_status("\n📊 Memulai agregasi data untuk laporan Excel...")
     summary_data = {email: {'License Plat': record.get('Plat', 'N/A'), 'Driver': record.get('Driver', email), 'Total Visit': pd.NA, 'Total Delivered': pd.NA} for email, record in master_map.items() if LOKASI_FILTER in email}
     pending_so_data, ro_vs_real_data = [], []
@@ -193,7 +174,6 @@ def panggil_api_dan_simpan(selected_date, app_instance):
         if not processed or LOKASI_FILTER not in processed['assignee_email']:
             continue
         
-        # Sheet 1 Data
         if processed['assignee_email'] in summary_data:
             if pd.isna(summary_data[processed['assignee_email']]['Total Visit']):
                 summary_data[processed['assignee_email']]['Total Visit'] = 0
@@ -202,7 +182,6 @@ def panggil_api_dan_simpan(selected_date, app_instance):
             if not any(label in undelivered_labels for label in processed['labels']):
                 summary_data[processed['assignee_email']]['Total Delivered'] += 1
 
-        # Sheet 2 Data
         if any(label in undelivered_labels for label in processed['labels']):
             match = re.search(r'(C0[0-9]+)', processed['customer_name'])
             reason = ''
@@ -222,7 +201,6 @@ def panggil_api_dan_simpan(selected_date, app_instance):
                 'Real Sequence': processed['real_sequence'], 'Temperature': 'DRY' if processed['driver_name'].startswith("'DRY'") else ('FRZ' if processed['driver_name'].startswith("'FRZ'") else 'N/A')
             })
 
-        # Sheet 3 Data
         ro_vs_real_data.append({
             'License Plat': processed['license_plat'], 'Driver': processed['driver_name'], 'Customer': processed['customer_name'],
             'Status Delivery': processed['status_delivery'], 'Open Time': processed['open_time'], 'Close Time': processed['close_time'],
@@ -231,9 +209,7 @@ def panggil_api_dan_simpan(selected_date, app_instance):
             'ET Sequence': processed['et_sequence'], 'Real Sequence': processed['real_sequence'], 'Is Same Sequence': processed['is_same_sequence']
         })
 
-    # --- DataFrame Creation and Formatting ---
     df_delivered = pd.DataFrame(list(summary_data.values())).sort_values(by='Driver', ascending=True)
-    
     df_pending = pd.DataFrame(pending_so_data)
     if not df_pending.empty:
         df_pending.insert(df_pending.columns.get_loc('Reason') + 1, ' ', '')
@@ -252,7 +228,14 @@ def panggil_api_dan_simpan(selected_date, app_instance):
         df_ro_vs_real = pd.DataFrame(final_ro_rows)
 
     # --- Excel Writing ---
-    app_instance.update_status("💾 Menyimpan data ke file Excel...")
+    app_instance.update_status("💾 Meminta lokasi penyimpanan file...")
+    
+    NAMA_FILE_OUTPUT = get_save_path("Delivery Summary")
+    
+    if not NAMA_FILE_OUTPUT:
+        messagebox.showwarning("Dibatalkan", "Proses penyimpanan dibatalkan oleh pengguna.")
+        return False
+        
     try:
         with pd.ExcelWriter(NAMA_FILE_OUTPUT, engine='openpyxl') as writer:
             format_excel_sheet(writer, df_delivered, 'Total Delivered', centered_cols=['Total Visit', 'Total Delivered'])
@@ -262,94 +245,38 @@ def panggil_api_dan_simpan(selected_date, app_instance):
             format_excel_sheet(writer, df_ro_vs_real, 'Hasil RO vs Real', 
                                centered_cols=['Status Delivery', 'Open Time', 'Close Time', 'Actual Arrival', 'Actual Departure', 'Visit Time', 'Actual Visit Time', 'ET Sequence', 'Real Sequence', 'Is Same Sequence'])
         
-        app_instance.update_status(f"✅ Laporan berhasil disimpan sebagai '{NAMA_FILE_OUTPUT}'")
-        os.startfile(os.path.realpath(NAMA_FILE_OUTPUT))
+        # DIHAPUS: Pesan berhasil disimpan dihapus sesuai permintaan
+        # messagebox.showinfo("Berhasil", f"Laporan berhasil disimpan sebagai:\n{os.path.basename(NAMA_FILE_OUTPUT)}")
+        
+        open_file_externally(NAMA_FILE_OUTPUT)
         return True
     except Exception as e:
         messagebox.showerror("Gagal Menyimpan", f"GAGAL MENYIMPAN FILE EXCEL: {e}")
         return False
 
-class App(tk.Tk):
-    def __init__(self):
-        super().__init__()
-        self.title("Pilih Tanggal")
-        
-        window_width = 350
-        window_height = 220
-        screen_width = self.winfo_screenwidth()
-        screen_height = self.winfo_screenheight()
-        center_x = int(screen_width/2 - window_width / 2)
-        center_y = int(screen_height/2 - window_height / 2)
-        self.geometry(f'{window_width}x{window_height}+{center_x}+{center_y}')
-        self.config(bg='SystemButtonFace')
-
-        style = ttk.Style(self)
-        style.theme_use('clam')
-        style.configure("TButton", font=("Helvetica", 12), padding=5)
-        style.configure("TLabel", background='SystemButtonFace', font=("Helvetica", 16, "bold"))
-        style.configure("TProgressbar", thickness=20)
-        
-        main_frame = tk.Frame(self, bg='SystemButtonFace')
-        main_frame.pack(expand=True, pady=20)
-
-        label = ttk.Label(main_frame, text="Pilih Tanggal")
-        label.pack(pady=(0, 10))
-
-        # PERBAIKAN: Menggunakan style 'TEntry' agar tidak ada dropdown
-        self.cal = DateEntry(main_frame, date_pattern='dd-MM-yyyy', font=("Helvetica", 16), 
-                             width=12, justify='center', borderwidth=2, relief="solid",
-                             style='TEntry') # Mengubah style
-        self.cal.pack(pady=10, ipady=5)
-        # PERBAIKAN: Bind event klik ke seluruh widget DateEntry
-        self.cal.bind("<Button-1>", self._on_date_click)
-
-        self.run_button = ttk.Button(main_frame, text="Proses", command=self.run_report_thread, style="TButton")
-        self.run_button.pack(pady=10)
-
-        self.progress = ttk.Progressbar(main_frame, orient="horizontal", length=300, mode="indeterminate")
-
-        self.status_label = ttk.Label(main_frame, text="", foreground="blue", font=("Helvetica", 10))
-        self.status_label.pack(pady=5)
-
-    def _on_date_click(self, event):
-        """Secara programatis membuka kalender dropdown saat widget diklik."""
-        # DateEntry menyimpan kalender di _top_cal, kita panggil metode drop_down
-        self.cal.drop_down()
-
-    def run_report_thread(self):
-        """Menjalankan proses utama di thread terpisah agar GUI tidak freeze."""
-        self.run_button.pack_forget()
-        self.progress.pack(pady=10)
-        self.progress.start(10)
-        
-        selected_date_obj = self.cal.get_date()
-        selected_date_str = selected_date_obj.strftime('%Y-%m-%d')
-        
-        self.process_thread = threading.Thread(
-            target=panggil_api_dan_simpan,
-            args=(selected_date_str, self)
-        )
-        self.process_thread.start()
-        self.after(100, self.check_thread)
-
-    def check_thread(self):
-        """Memeriksa apakah thread sudah selesai."""
-        if self.process_thread.is_alive():
-            self.after(100, self.check_thread)
-        else:
-            self.progress.stop()
-            self.progress.pack_forget()
-            self.status_label.config(text="")
-            self.run_button.pack(pady=10)
-
-    def update_status(self, message):
-        """Fungsi untuk update status label dari thread lain."""
-        self.status_label.config(text=message)
-
 def main():
-    """Initializes and runs the Tkinter application."""
-    app = App()
-    app.mainloop()
+    """Fungsi utama untuk modul Auto Delivery Summary."""
+    def process_wrapper(dates, app_instance):
+        
+        # Buat fungsi untuk menutup GUI dengan aman
+        def safe_close():
+            # Pastikan window masih ada sebelum melakukan apapun
+            if app_instance and app_instance.winfo_exists():
+                # 1. Hentikan animasi progress bar terlebih dahulu
+                app_instance.progress.stop()
+                # 2. Baru hancurkan window
+                app_instance.destroy()
+
+        try:
+            # Panggil fungsi pemrosesan utama seperti biasa
+            panggil_api_dan_simpan(dates, app_instance)
+        finally:
+            # Apapun hasilnya, jadwalkan fungsi penutupan aman 
+            # untuk berjalan di thread utama GUI.
+            if app_instance and app_instance.winfo_exists():
+                app_instance.after(100, safe_close) # Diberi jeda sedikit (100ms)
+                
+    create_date_picker_window("Auto Delivery Summary", process_wrapper)
 
 if __name__ == "__main__":
     main()
