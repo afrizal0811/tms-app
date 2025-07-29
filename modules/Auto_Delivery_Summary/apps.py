@@ -1,6 +1,5 @@
 import requests
 import pandas as pd
-import os
 import re
 from openpyxl.styles import Alignment, PatternFill
 from tkinter import messagebox
