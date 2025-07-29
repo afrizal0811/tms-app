@@ -25,10 +25,10 @@ from modules.shared_utils import (
 from modules.Routing_Summary.apps import main as routing_summary_main
 from modules.Delivery_Summary.apps import main as delivery_summary_main
 
+# --- Impor Modul untuk Setup Awal ---
+from modules.Check_User.apps import ApiGuiApp
+
 # Fungsi 'main' untuk tombol di halaman utama
-# === PERUBAHAN DIMULAI DI SINI ===
-# from modules.Auto_Routing_Summary.apps import main as auto_routing_summary_main # Baris ini dinonaktifkan
-# === AKHIR DARI PERUBAHAN ===
 from modules.Auto_Delivery_Summary.apps import main as auto_delivery_summary_main
 from modules.Start_Finish_Time.apps import main as start_finish_time_main
 from modules.Sync_Driver.apps import main as sync_driver_main
@@ -36,14 +36,12 @@ from modules.Sync_Driver.apps import main as sync_driver_main
 
 ensure_config_exists()
 # ==============================================================================
-# FUNGSI BANTUAN LOKAL DAN KONfigurasi AWAL
+# FUNGSI BANTUAN LOKAL DAN KONFIGURASI AWAL
 # ==============================================================================
 
-# === PERUBAHAN DIMULAI DI SINI ===
 def show_wip_popup():
     """Menampilkan pop-up bahwa fitur masih dalam pengembangan."""
     messagebox.showinfo("Segera Hadir", "Fitur ini masih dalam tahap pengembangan dan akan segera tersedia.")
-# === AKHIR DARI PERUBAHAN ===
 
 # Muat konstanta di awal menggunakan shared_utils
 CONSTANTS = load_constants()
@@ -84,6 +82,7 @@ def pilih_lokasi(parent_window):
     lebar, tinggi = 350, 180
     x, y = (dialog.winfo_screenwidth() - lebar) // 2, (dialog.winfo_screenheight() - tinggi) // 2
     dialog.geometry(f"{lebar}x{tinggi}+{x}+{y}")
+    dialog.resizable(False, False)
     tk.Label(dialog, text="Pilih Lokasi Cabang:", font=("Arial", 14)).pack(pady=10)
     selected_var = tk.StringVar(value=selected_display_name)
     combo = ttk.Combobox(dialog, values=list(LOKASI_DISPLAY.keys()), textvariable=selected_var, font=("Arial", 12), state="readonly")
@@ -103,6 +102,14 @@ def pilih_lokasi(parent_window):
     dialog.grab_set()
     parent_window.wait_window(dialog)
 
+def pilih_pengguna_awal(parent_window):
+    """Menampilkan GUI modal untuk memilih pengguna awal dari modul Check_User."""
+    dialog = tk.Toplevel(parent_window)
+    # Class ApiGuiApp akan mengatur judul, ukuran, dan posisinya sendiri
+    app = ApiGuiApp(dialog) # Pass the Toplevel window as the master
+    dialog.transient(parent_window)
+    dialog.grab_set()
+    parent_window.wait_window(dialog)
 
 def on_closing():
     try:
@@ -124,12 +131,51 @@ def check_update():
         pass
 
 def periksa_konfigurasi_awal(parent_window):
-    """Memeriksa apakah lokasi sudah diatur saat pertama kali membuka aplikasi."""
+    """
+    Memeriksa apakah lokasi dan pengguna sudah diatur.
+    Proses ini hanya berjalan jika konfigurasi belum lengkap.
+    """
+    # 1. Periksa Konfigurasi Lokasi dan Pengguna dari config.json
     config = load_config()
     if not config or not config.get("lokasi"):
         messagebox.showinfo("Setup Awal", "Selamat datang! Silakan pilih lokasi cabang Anda terlebih dahulu.")
         pilih_lokasi(parent_window)
-        update_title(parent_window) 
+        update_title(parent_window)
+        config = load_config() # Muat ulang config setelah lokasi dipilih
+    
+    # 2. Periksa Konfigurasi Pengguna (setelah lokasi ada)
+    if not config or not config.get("user_checked"):
+        messagebox.showinfo("Setup Akun", "Selanjutnya, silakan cari dan pilih akun pengguna Anda untuk aplikasi ini.")
+        pilih_pengguna_awal(parent_window)
+        # Setelah pemilihan, periksa lagi apakah user_checked sudah ada di config.
+        if not (load_config() or {}).get("user_checked"):
+            messagebox.showerror("Setup Tidak Lengkap", "Pemilihan akun pengguna dibatalkan. Aplikasi akan ditutup.")
+            on_closing()
+
+def atur_visibilitas_menu(menu_bar):
+    """Mengatur visibilitas item menu berdasarkan role pengguna."""
+    config = load_config()
+    constants = load_constants()
+
+    user_info = config.get("user_checked", {})
+    user_role_id = user_info.get("role_id")
+    
+    restricted_roles = constants.get("restricted_role_ids", {})
+    
+    # Dapatkan daftar ID role yang dibatasi dari dictionary
+    restricted_role_id_list = list(restricted_roles.values())
+
+    # Periksa apakah menu Pengaturan ada
+    try:
+        if user_role_id and user_role_id in restricted_role_id_list:
+            # Hapus menu "Ganti Lokasi Cabang" jika role dibatasi
+            pengaturan_menu.delete("Ganti Lokasi Cabang")
+        # Jika tidak, tidak perlu melakukan apa-apa karena menu sudah dibuat secara default
+            
+    except tk.TclError:
+        # Menu "Ganti Lokasi Cabang" mungkin sudah dihapus atau tidak ada, abaikan error.
+        pass
+
 
 def run_sync_in_background(root_window):
     """Menjalankan proses sinkronisasi driver di background thread."""
@@ -178,6 +224,7 @@ root.withdraw()
 def ganti_lokasi():
     pilih_lokasi(root)
     update_title(root)
+    # Tidak perlu memanggil atur_visibilitas_menu di sini karena role tidak berubah
 
 # --- Setup Menu Bar ---
 menu_bar = tk.Menu(root)
@@ -192,7 +239,6 @@ menu_bar.add_cascade(label="Manual", menu=manual_menu)
 pengaturan_menu = tk.Menu(menu_bar, tearoff=0)
 pengaturan_menu.add_command(label="Ganti Lokasi Cabang", command=ganti_lokasi)
 pengaturan_menu.add_command(label="Sinkronisasi Driver", command=lambda: run_sync_in_background(root))
-menu_bar.add_cascade(label="Pengaturan", menu=pengaturan_menu)
 
 def show_about():
     messagebox.showinfo(
@@ -200,9 +246,11 @@ def show_about():
         f"TMS Data Processing\nVersi: {CURRENT_VERSION}\n\nDibuat oleh: Afrizal Maulana - EDP © 2025"
     )
 
-help_menu = tk.Menu(menu_bar, tearoff=0)
-help_menu.add_command(label="Tentang", command=show_about)
-menu_bar.add_cascade(label="Bantuan", menu=help_menu)
+# Tambahkan separator dan item "Tentang" ke menu Pengaturan
+pengaturan_menu.add_separator()
+pengaturan_menu.add_command(label="Tentang", command=show_about)
+menu_bar.add_cascade(label="Pengaturan", menu=pengaturan_menu)
+
 root.config(menu=menu_bar)
 
 # --- Setup Tampilan Utama ---
@@ -216,20 +264,17 @@ root.resizable(False, False)
 try:
     root.iconbitmap(resource_path("icon.ico"))
 except tk.TclError:
-    None
+    pass
     
 frame = tk.Frame(root)
 frame.pack(expand=True)
 button_font = ("Arial", 14, "bold")
 
-# === PERUBAHAN DIMULAI DI SINI ===
-# Definisikan ulang tombol untuk memanggil pop-up untuk Auto Routing
 buttons_config = [
-    ("Auto Routing Summary", show_wip_popup), # Menggunakan fungsi pop-up
+    ("Auto Routing Summary", show_wip_popup),
     ("Auto Delivery Summary", auto_delivery_summary_main),
     ("Start-Finish Time", start_finish_time_main),
 ]
-# === AKHIR DARI PERUBAHAN ===
 
 main_buttons = []
 for i, (text, command) in enumerate(buttons_config):
@@ -243,6 +288,7 @@ footer_label.pack(side="bottom", pady=5)
 # --- Tampilkan Window dan Jalankan Proses Latar Belakang ---
 root.deiconify() 
 periksa_konfigurasi_awal(root)
+atur_visibilitas_menu(menu_bar) # Panggil fungsi untuk mengatur menu saat aplikasi pertama kali jalan
 
 root.protocol("WM_DELETE_WINDOW", on_closing)
 root.after(500, check_update) 

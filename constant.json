@@ -32,5 +32,9 @@
         "pldps": "GANTI_DENGAN_HUB_ID_DENPASAR",
         "plmks": "GANTI_DENGAN_HUB_ID_MAKASAR",
         "pljbr": "GANTI_DENGAN_HUB_ID_JEMBER"
+    },
+    "restricted_role_ids": {
+        "planner": "6703410af6be892f3208ecdd",
+        "checker": "675a95be8fbcd91803047cc2"
     }
 }
