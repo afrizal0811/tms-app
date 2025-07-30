@@ -24,15 +24,10 @@ from modules.shared_utils import (
 # Fungsi 'main' dari modul manual yang akan dipanggil dari menu
 from modules.Routing_Summary.apps import main as routing_summary_main
 from modules.Delivery_Summary.apps import main as delivery_summary_main
-
-# --- Impor Modul untuk Setup Awal ---
-from modules.Check_User.apps import ApiGuiApp
-
-# Fungsi 'main' untuk tombol di halaman utama
 from modules.Auto_Delivery_Summary.apps import main as auto_delivery_summary_main
 from modules.Start_Finish_Time.apps import main as start_finish_time_main
 from modules.Sync_Driver.apps import main as sync_driver_main
-
+from modules.Check_User.apps import main as check_user_main
 
 ensure_config_exists()
 # ==============================================================================
@@ -103,13 +98,10 @@ def pilih_lokasi(parent_window):
     parent_window.wait_window(dialog)
 
 def pilih_pengguna_awal(parent_window):
-    """Menampilkan GUI modal untuk memilih pengguna awal dari modul Check_User."""
-    dialog = tk.Toplevel(parent_window)
-    # Class ApiGuiApp akan mengatur judul, ukuran, dan posisinya sendiri
-    app = ApiGuiApp(dialog) # Pass the Toplevel window as the master
-    dialog.transient(parent_window)
-    dialog.grab_set()
-    parent_window.wait_window(dialog)
+    """Menjalankan proses pemilihan pengguna menggunakan modul Check_User."""
+    # Tetap menerima parent_window untuk kompatibilitas pemanggilan,
+    # meskipun saat ini fungsi check_user_main tidak memanfaatkannya langsung.
+    check_user_main(parent_window)
 
 def on_closing():
     try:
