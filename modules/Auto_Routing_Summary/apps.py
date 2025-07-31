@@ -1,59 +1,26 @@
+# auto_routing.py (Final)
+
 import sys
 import os
-import subprocess
-import platform
 from datetime import datetime
-import tkinter as tk
-from tkinter import messagebox, filedialog
+from tkinter import messagebox
 import requests
-import json
-import threading
 import pandas as pd
 from openpyxl import load_workbook
 from openpyxl.styles import Alignment
 from openpyxl.utils import get_column_letter
 
-# --- Perbaikan untuk ModuleNotFoundError ---
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.append(project_root)
-# --- Akhir Perbaikan ---
 
-# --- Impor dari shared_utils dan gui_utils ---
 from modules.shared_utils import (
     load_config,
     load_constants,
-    load_master_data as shared_load_master_data 
+    load_master_data as shared_load_master_data,
+    get_save_path,
+    open_file_externally
 )
 from modules.gui_utils import create_date_picker_window
-
-def get_save_directory():
-    """Membuka dialog untuk memilih direktori penyimpanan."""
-    root = tk.Tk()
-    root.withdraw()
-    folder_selected = filedialog.askdirectory(parent=root)
-    root.destroy()
-    return folder_selected
-
-def get_unique_filepath(directory, basename, extension):
-    """Mencari path file yang unik dengan menambahkan angka jika sudah ada."""
-    counter = 1
-    file_path = os.path.join(directory, f"{basename}{extension}")
-    while os.path.exists(file_path):
-        file_path = os.path.join(directory, f"{basename} ({counter}){extension}")
-        counter += 1
-    return file_path
-
-def open_file(filepath):
-    """Membuka file dengan aplikasi default sistem operasi."""
-    try:
-        if platform.system() == 'Darwin':       # macOS
-            subprocess.call(('open', filepath))
-        elif platform.system() == 'Windows':    # Windows
-            os.startfile(filepath)
-        else:                                   # linux variants
-            subprocess.call(('xdg-open', filepath))
-    except Exception as e:
-        messagebox.showwarning("Gagal Membuka File", f"Tidak dapat membuka file secara otomatis:\n{e}")
 
 def style_excel(file_path):
     """Menerapkan style pada file Excel yang sudah ada."""
@@ -82,21 +49,6 @@ def style_excel(file_path):
                 cell.alignment = center_align
     workbook.save(file_path)
 
-
-def load_master_data(project_root, lokasi_code):
-    """Memuat data master dan memfilternya berdasarkan kode lokasi."""
-    master_path = os.path.join(project_root, 'master.json')
-    try:
-        with open(master_path, 'r', encoding='utf-8') as f:
-            master_data = json.load(f)
-            return {item['Email']: item['Driver'] for item in master_data if lokasi_code in item.get('Email', '')}
-    except FileNotFoundError:
-        messagebox.showerror("Error", "File master.json tidak ditemukan di direktori root.")
-        return None
-    except (json.JSONDecodeError, KeyError) as e:
-        messagebox.showerror("Error", f"Gagal membaca atau memproses master.json: {e}")
-        return None
-
 def process_routing_data(date_formats, gui_instance):
     """
     Fungsi callback yang dipanggil oleh gui_utils untuk memproses data.
@@ -116,16 +68,13 @@ def process_routing_data(date_formats, gui_instance):
         constants = load_constants()
         lokasi_code = config.get('lokasi')
         
-        # Panggil fungsi yang diperbarui
         master_data_df = shared_load_master_data(lokasi_cabang=lokasi_code)
 
-        # Periksa apakah DataFrame kosong atau variabel lain tidak valid
         if not config or not constants or master_data_df is None or master_data_df.empty:
             if master_data_df is not None and master_data_df.empty:
                 messagebox.showwarning("Data Master", f"Tidak ada data driver yang ditemukan untuk lokasi '{lokasi_code}'.")
             return
         
-        # Konversi DataFrame menjadi dictionary seperti yang diharapkan
         master_data_map = dict(zip(master_data_df['Email'], master_data_df['Driver']))
         
         api_token = constants.get('token')
@@ -238,11 +187,11 @@ def process_routing_data(date_formats, gui_instance):
         df_usage = pd.DataFrame(usage_data_for_df)
 
         gui_instance.update_status("Memilih direktori penyimpanan...")
-        save_dir = get_save_directory()
-        if not save_dir: return
-
-        file_basename = f"Routing {lokasi_name} - {selected_date_for_filename}"
-        save_path = get_unique_filepath(save_dir, file_basename, ".xlsx")
+        
+        file_basename = f"Routing Summary {lokasi_name} - {selected_date_for_filename}"
+        save_path = get_save_path(base_name=file_basename, extension=".xlsx")
+        
+        if not save_path: return
 
         gui_instance.update_status(f"Menyimpan ke {os.path.basename(save_path)}...")
         with pd.ExcelWriter(save_path, engine='openpyxl') as writer:
@@ -254,36 +203,27 @@ def process_routing_data(date_formats, gui_instance):
         style_excel(save_path)
         
         gui_instance.update_status("Membuka file...")
-        open_file(save_path)
+        open_file_externally(save_path) # Menggunakan fungsi open_file_externally dari shared_utils
         
         gui_instance.update_status("Selesai.")
 
     except Exception as e:
         import traceback
         messagebox.showerror("Error Tak Terduga", f"Terjadi kesalahan: {e}\n\n{traceback.format_exc()}")
-    # --- BLOK FINALLY DIHAPUS DARI SINI ---
-    # Tanggung jawab menutup jendela sekarang ada di dalam 'main'
 
-
-# --- [FUNGSI MAIN YANG DIPERBARUI] ---
 def main():
     """Fungsi utama untuk modul Auto Routing Summary."""
     
     def process_wrapper(dates, gui_instance):
         """Wrapper untuk menjalankan proses utama dan menangani penutupan GUI dengan aman."""
         
-        # Fungsi untuk menutup GUI dengan aman
         def safe_close():
-            # Pastikan window masih ada sebelum mencoba menutupnya
             if gui_instance and gui_instance.winfo_exists():
                 gui_instance.destroy()
 
         try:
-            # Panggil fungsi pemrosesan utama seperti biasa
             process_routing_data(dates, gui_instance)
         finally:
-            # Apapun hasilnya, jadwalkan fungsi penutupan aman 
-            # untuk berjalan di thread utama GUI setelah jeda singkat.
             if gui_instance and gui_instance.winfo_exists():
                 gui_instance.after(100, safe_close)
                 

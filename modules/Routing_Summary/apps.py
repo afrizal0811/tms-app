@@ -1,4 +1,4 @@
-# modules/Routing_Summary/apps.py (KODE BARU)
+# modules/Routing_Summary/apps.py (KODE AKHIR)
 
 import traceback
 import tkinter as tk
@@ -8,17 +8,14 @@ import pandas as pd
 import openpyxl
 from openpyxl.styles import Alignment
 from openpyxl.utils import get_column_letter
-from ..shared_utils import load_config, load_master_data, get_save_path, open_file_externally
+from datetime import datetime
+from ..shared_utils import load_config, load_master_data, get_save_path, open_file_externally, load_constants
 
 
 # ==============================================================================
 # FUNGSI-FUNGSI UTAMA (HELPER FUNCTIONS)
 # ==============================================================================
 
-# Fungsi yang duplikat (simpan_file_excel, buka_file, get_base_path, load_config)
-# TELAH DIHAPUS DARI SINI.
-
-# Fungsi spesifik untuk modul ini bisa tetap di sini.
 def pilih_file_excel(prompt="Pilih file Excel"):
     """Membuka dialog untuk memilih satu file Excel."""
     root = tk.Tk()
@@ -52,12 +49,10 @@ def buat_mapping_driver(lokasi_value):
     Membuat mapping email ke nama driver dari master data berdasarkan lokasi.
     Kini menggunakan shared_utils.
     """
-    # 2. Menggunakan fungsi terpusat untuk memuat data master
     master_df = load_master_data(lokasi_value)
     if master_df is None or master_df.empty:
         return {}
     
-    # Membuat dictionary dari DataFrame
     mapping = pd.Series(master_df.Driver.values, index=master_df.Email).to_dict()
     return mapping
 
@@ -79,25 +74,20 @@ def proses_truck_detail(workbook, source_df, lokasi):
         if col not in df.columns:
             df[col] = default
 
-    # --- AWAL PERUBAHAN ---
-    # Fungsi bantuan untuk mengubah kolom menjadi numerik sebelum agregasi
     def parse_to_numeric(value, is_percentage=False):
         try:
             val_str = str(value).strip()
             if is_percentage:
                 val_str = val_str.replace('%', '')
-            # Menghapus koma sebagai pemisah ribuan
             return float(val_str.replace(',', ''))
         except (ValueError, TypeError):
             return 0.0
 
-    # Konversi kolom yang akan diakumulasi menjadi tipe data numerik
     df['Weight Percentage'] = df['Weight Percentage'].apply(lambda x: parse_to_numeric(x, is_percentage=True))
     df['Volume Percentage'] = df['Volume Percentage'].apply(lambda x: parse_to_numeric(x, is_percentage=True))
     df['Total Distance (m)'] = df['Total Distance (m)'].apply(parse_to_numeric)
     df['Total Spent Time (mins)'] = df['Total Spent Time (mins)'].apply(parse_to_numeric)
     
-    # Tentukan aturan agregasi
     agg_rules = {
         'Weight Percentage': 'sum',
         'Volume Percentage': 'sum',
@@ -105,15 +95,11 @@ def proses_truck_detail(workbook, source_df, lokasi):
         'Total Spent Time (mins)': 'sum'
     }
     
-    # Kelompokkan berdasarkan 'Vehicle Name' dan 'Assignee', lalu agregasi
-    # Hanya baris di mana kedua kolom ini tidak kosong yang akan dikelompokkan
     df_grouped = df.dropna(subset=['Vehicle Name', 'Assignee'])
     df_agg = df_grouped.groupby(['Vehicle Name', 'Assignee']).agg(agg_rules).reset_index()
     
-    # Gabungkan kembali dengan baris yang tidak memiliki 'Vehicle Name' atau 'Assignee'
     df_others = df[df['Vehicle Name'].isna() | df['Assignee'].isna()]
     df = pd.concat([df_agg, df_others], ignore_index=True)
-    # --- AKHIR PERUBAHAN ---
 
     def to_h_mm(minutes):
         try:
@@ -125,7 +111,6 @@ def proses_truck_detail(workbook, source_df, lokasi):
 
     def format_percentage(value):
         try:
-            # Nilai sudah berupa numerik hasil penjumlahan, tinggal format
             val_float = float(value)
             return f"{val_float:.1f}%"
         except (ValueError, TypeError): return ""
@@ -136,7 +121,6 @@ def proses_truck_detail(workbook, source_df, lokasi):
     
     df['Total Distance (m)'] = df['Total Distance (m)'].astype(int)
 
-    # Mengosongkan kolom 'Total Visits' dan 'Total Delivered' sesuai permintaan
     df["Total Visits"] = ""
     if "Total Delivered" not in df.columns:
         df["Total Delivered"] = ""
@@ -158,7 +142,6 @@ def proses_truck_detail(workbook, source_df, lokasi):
     sheet_detail = workbook.create_sheet(title="Truck Detail")
     sheet_detail.append(final_cols)
 
-    # Pastikan semua kolom final ada di DataFrame sebelum diakses
     for col in final_cols:
         if col not in df.columns:
             df[col] = ""
@@ -193,11 +176,7 @@ def proses_truck_usage(workbook, source_df):
     master_df = load_master_data()
     upload_df = source_df.copy()
 
-    # --- AWAL PERUBAHAN ---
-    # Hapus duplikat berdasarkan 'Vehicle Name' dan 'Assignee' untuk memastikan
-    # setiap truk dihitung hanya satu kali.
     upload_df.drop_duplicates(subset=['Vehicle Name', 'Assignee'], inplace=True, ignore_index=True)
-    # --- AKHIR PERUBAHAN ---
 
     plat_type_map = dict(zip(master_df["Plat"].astype(str), master_df["Type"]))
     def find_vehicle_tag(vehicle_name):
@@ -258,7 +237,6 @@ def proses_truck_usage(workbook, source_df):
 def main():
     """Fungsi controller yang menjalankan semua proses secara otomatis."""
     try:
-        # 4. Pemanggilan fungsi diperbarui
         config = load_config()
             
         if config and "lokasi" in config:
@@ -314,8 +292,6 @@ def main():
             )
             return
         
-        # Pengecekan path manual sudah tidak diperlukan lagi, karena ditangani oleh load_master_data
-        
         output_wb = openpyxl.Workbook()
         output_wb.remove(output_wb.active)
     
@@ -326,8 +302,15 @@ def main():
             messagebox.showinfo("Selesai", "Tidak ada data yang diproses atau dihasilkan.")
             return
         
-        # 5. Logika penyimpanan dan pembukaan file diubah
-        save_path = get_save_path("Routing Summary")
+        # --- PERUBAHAN UNTUK NAMA FILE DINAMIS ---
+        constants = load_constants()
+        lokasi_mapping = constants.get('lokasi_mapping', {})
+        lokasi_name = next((name for name, code in lokasi_mapping.items() if code == lokasi), lokasi)
+        
+        tanggal_str = datetime.now().strftime("%d.%m.%Y")
+        file_basename = f"Routing Summary {lokasi_name} - {tanggal_str}"
+
+        save_path = get_save_path(file_basename)
         if save_path:
             output_wb.save(save_path)
             open_file_externally(save_path)

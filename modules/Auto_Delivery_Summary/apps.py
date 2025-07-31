@@ -107,6 +107,7 @@ def panggil_api_dan_simpan(dates, app_instance):
     API_TOKEN = constants.get('token') 
     LOKASI_FILTER = config.get('lokasi')
     HUB_ID = constants.get('hub_ids', {}).get(LOKASI_FILTER) 
+    LOKASI_MAPPING = constants.get('lokasi_mapping', {})
 
     if not API_TOKEN or not LOKASI_FILTER or not HUB_ID:
         messagebox.showerror("Konfigurasi Salah", "KESALAHAN: 'token', 'lokasi', atau hubId tidak ditemukan di file konfigurasi.")
@@ -229,7 +230,12 @@ def panggil_api_dan_simpan(dates, app_instance):
     # --- Excel Writing ---
     app_instance.update_status("💾 Meminta lokasi penyimpanan file...")
     
-    NAMA_FILE_OUTPUT = get_save_path("Delivery Summary")
+    # Mendapatkan nama lokasi dari mapping
+    lokasi_name = next((name for name, code in LOKASI_MAPPING.items() if code == LOKASI_FILTER), LOKASI_FILTER)
+    selected_date_for_filename = dates["dmy"].replace("-", ".")
+    base_name = f"Delivery Summary {lokasi_name} - {selected_date_for_filename}"
+    
+    NAMA_FILE_OUTPUT = get_save_path(base_name)
     
     if not NAMA_FILE_OUTPUT:
         messagebox.showwarning("Dibatalkan", "Proses penyimpanan dibatalkan oleh pengguna.")
@@ -243,9 +249,6 @@ def panggil_api_dan_simpan(dates, app_instance):
                                colored_cols={' ': "FFC0CB"})
             format_excel_sheet(writer, df_ro_vs_real, 'Hasil RO vs Real', 
                                centered_cols=['Status Delivery', 'Open Time', 'Close Time', 'Actual Arrival', 'Actual Departure', 'Visit Time', 'Actual Visit Time', 'ET Sequence', 'Real Sequence', 'Is Same Sequence'])
-        
-        # DIHAPUS: Pesan berhasil disimpan dihapus sesuai permintaan
-        # messagebox.showinfo("Berhasil", f"Laporan berhasil disimpan sebagai:\n{os.path.basename(NAMA_FILE_OUTPUT)}")
         
         open_file_externally(NAMA_FILE_OUTPUT)
         return True

@@ -1,23 +1,21 @@
-# modules/Start_Finish_Time/apps.py (KODE BARU)
+# modules/Start_Finish_Time/apps.py (KODE AKHIR)
 
 from datetime import datetime, timedelta
 from openpyxl.styles import PatternFill, Alignment
 from openpyxl.utils import get_column_letter
-from tkcalendar import DateEntry
-from tkinter import ttk, messagebox, filedialog
+from tkinter import ttk, messagebox
 import openpyxl
 import pandas as pd
 import requests
 import tkinter as tk
 
-# 1. Impor fungsi bantuan dari shared_utils
+# Impor fungsi bantuan dari shared_utils dan gui_utils
 from ..shared_utils import (
     load_config,
     load_constants,
     load_master_data,
     get_save_path,
-    open_file_externally,
-    CONFIG_PATH  # Impor juga path konstanta jika diperlukan
+    open_file_externally
 )
 from ..gui_utils import create_date_picker_window
 
@@ -25,25 +23,31 @@ from ..gui_utils import create_date_picker_window
 # BAGIAN 1: FUNGSI-FUNGSI BANTU (HELPER FUNCTIONS)
 # =============================================================================
 
-# Fungsi-fungsi duplikat (resource_path, get_base_path, simpan_config, load_config,
-# get_constant_file_path) TELAH DIHAPUS.
-
-# Fungsi spesifik untuk modul ini tetap dipertahankan.
 def extract_email_from_id(_id):
+    """Mengekstrak email dari ID MileApp."""
     parts = _id.split('_')
     return parts[1] if len(parts) > 1 else _id
 
 def convert_to_jam(menit):
+    """Mengonversi durasi dalam menit ke format jam:menit."""
     jam = menit // 60
     sisa_menit = menit % 60
     return f"{jam}:{sisa_menit:02}"
 
 def tambah_7_jam(waktu_str):
+    """Menambahkan 7 jam ke waktu string untuk penyesuaian zona waktu."""
     waktu = datetime.strptime(waktu_str, "%Y-%m-%d %H:%M:%S")
     return (waktu + timedelta(hours=7)).strftime("%Y-%m-%d %H:%M:%S")
 
-# 2. Fungsi simpan_file_excel diubah untuk menggunakan shared_utils
-def simpan_file_excel(dataframe):
+def simpan_file_excel(dataframe, lokasi_name, tanggal_str):
+    """
+    Menyimpan DataFrame ke file Excel dengan penamaan yang dinamis.
+    
+    Args:
+        dataframe (pd.DataFrame): DataFrame yang akan disimpan.
+        lokasi_name (str): Nama lokasi cabang.
+        tanggal_str (str): Tanggal dalam format DD.MM.YYYY.
+    """
     # Bagian pemrosesan data DataFrame TIDAK BERUBAH
     kolom_buang = ['finish.lat', 'finish.lon', 'finish.notes']
     dataframe = dataframe.drop(columns=[col for col in kolom_buang if col in dataframe.columns])
@@ -87,8 +91,9 @@ def simpan_file_excel(dataframe):
     urutan_kolom_final = [col for col in urutan_kolom if col in dataframe.columns]
     dataframe = dataframe[urutan_kolom_final]
 
-    # Bagian penyimpanan file diubah menggunakan shared_utils
-    filename = get_save_path("Hasil Start Finish")
+    # --- MODIFIKASI UNTUK NAMA FILE DINAMIS ---
+    file_basename = f"Time Summary {lokasi_name} - {tanggal_str}"
+    filename = get_save_path(file_basename)
     if not filename:
         messagebox.showwarning("Dibatalkan", "Penyimpanan file dibatalkan.")
         return
@@ -132,7 +137,6 @@ def simpan_file_excel(dataframe):
 
     wb.save(filename)
     
-    # Buka file menggunakan shared_utils
     open_file_externally(filename)
 
 
@@ -140,28 +144,37 @@ def simpan_file_excel(dataframe):
 # BAGIAN 2: FUNGSI-FUNGSI PEMROSESAN UTAMA
 # =============================================================================
 
-# 3. Fungsi ambil_data diubah untuk menggunakan shared_utils
-def ambil_data(dates, app_instance=None): # app_instance opsional
+def ambil_data(dates, app_instance=None):
     """
     Fungsi utama untuk mengambil data start-finish time dari API.
-    """
-    # Gunakan format tanggal yang sesuai
-    tanggal_str = dates["dmy"] 
     
-    # Update status jika app_instance tersedia
+    Args:
+        dates (dict): Dictionary yang berisi format tanggal, misal {"dmy": "25-07-2025"}.
+        app_instance (object): Instance GUI untuk update status.
+    """
+    tanggal_str = dates["dmy"]
+    
     if app_instance:
         app_instance.update_status("Mengambil data dari API...")
 
     constants = load_constants()
-    if not constants:
-        return # Pesan error sudah ditangani di dalam shared_utils
-    
-    api_token = constants.get("token")
-    if not api_token:
-        messagebox.showerror("Data Tidak Ditemukan", "Token API tidak ditemukan di constant.json.\n\nHubungi Admin.")
+    config = load_config()
+    if not all([constants, config]):
         return
     
-    # --- Proses tanggal & API request (TIDAK BERUBAH) ---
+    api_token = constants.get("token")
+    lokasi_code = config.get("lokasi")
+    
+    if not api_token:
+        messagebox.showerror("Data Tidak Ditemukan", "Token API tidak ditemukan di constant.json.")
+        return
+    if not lokasi_code:
+        messagebox.showerror("Konfigurasi Salah", "Lokasi cabang tidak ditemukan di config.json.")
+        return
+        
+    lokasi_mapping = constants.get('lokasi_mapping', {})
+    lokasi_name = next((name for name, code in lokasi_mapping.items() if code == lokasi_code), lokasi_code)
+    
     tanggal_obj = datetime.strptime(tanggal_str, "%d-%m-%Y")
     tanggal_input = tanggal_obj.strftime("%Y-%m-%d")
     tanggal_from = (tanggal_obj - timedelta(days=1)).strftime("%Y-%m-%d")
@@ -176,7 +189,7 @@ def ambil_data(dates, app_instance=None): # app_instance opsional
     
     try:
         response = requests.get(url, params=params, headers=headers, timeout=30)
-        response.raise_for_status() # Cek jika status code bukan 2xx
+        response.raise_for_status()
     except requests.exceptions.RequestException as e:
         messagebox.showerror("API Error", f"Gagal terhubung ke API:\n{e}")
         return
@@ -214,25 +227,21 @@ def ambil_data(dates, app_instance=None): # app_instance opsional
         df_api_data = df_api_data[df_api_data['startTime'].dt.strftime("%Y-%m-%d") == tanggal_input]
 
     try:
-        config = load_config()
-        nama_lokasi = config.get("lokasi", "").lower()
-
         if 'Email' in df_api_data.columns:
-            df_api_data = df_api_data[df_api_data['Email'].str.contains(nama_lokasi, na=False, case=False)]
+            df_api_data = df_api_data[df_api_data['Email'].str.contains(lokasi_code, na=False, case=False)]
 
         if df_api_data.empty:
             tk.messagebox.showerror("Error", "Data tidak ditemukan untuk lokasi yang dipilih.")
             return
 
-        # Memuat master data menggunakan shared_utils
-        mapping_df = load_master_data()
+        mapping_df = load_master_data(lokasi_cabang=lokasi_code)
         if mapping_df is None: return
 
         required_master_cols = {'Email', 'Driver', 'Plat'}
         if not required_master_cols.issubset(mapping_df.columns):
             raise ValueError(f"Master data driver harus ada kolom: {', '.join(required_master_cols)}")
 
-        mapping_df_filtered = mapping_df[mapping_df['Email'].str.contains(nama_lokasi, na=False, case=False)]
+        mapping_df_filtered = mapping_df[mapping_df['Email'].str.contains(lokasi_code, na=False, case=False)]
         df_merged = df_api_data.merge(mapping_df_filtered[['Email', 'Driver', 'Plat']], on='Email', how='left')
         
         df_merged['Driver'] = df_merged['Driver'].fillna(df_merged['Email'])
@@ -245,7 +254,6 @@ def ambil_data(dates, app_instance=None): # app_instance opsional
         messagebox.showerror("Error", f"Gagal memproses master data driver:\n{e}")
         return
 
-    # Sisa logika pemrosesan (TIDAK BERUBAH)
     existing_drivers = df_merged['Driver'].unique().tolist()
     missing_rows_df = mapping_df_filtered[~mapping_df_filtered['Driver'].isin(existing_drivers)].copy()
     
@@ -292,9 +300,10 @@ def ambil_data(dates, app_instance=None): # app_instance opsional
     final_df = pd.concat([filtered_df_final, kosong_df], ignore_index=True)
     final_df.drop(columns=['finish.totalDuration_menit'], inplace=True)
     final_df = final_df.sort_values(by='Driver', ascending=True)
+    
+    tanggal_format_titik = tanggal_str.replace('-', '.')
+    simpan_file_excel(final_df, lokasi_name, tanggal_format_titik)
 
-    simpan_file_excel(final_df)
-    # Beri tahu user jika proses selesai
     if app_instance:
         app_instance.update_status("Proses selesai.")
 
@@ -302,91 +311,13 @@ def ambil_data(dates, app_instance=None): # app_instance opsional
 # BAGIAN 3: FUNGSI GUI DAN EKSEKUSI
 # =============================================================================
 
-def pilih_cabang_gui():
-    """GUI untuk memilih cabang jika belum ada di config.json."""
-    # Fungsi ini spesifik, namun kita gunakan CONFIG_PATH dari shared_utils
-    # agar konsisten.
-    lokasi_dict = {
-        "01. Sidoarjo": "plsda", "02. Jakarta": "pljkt", "03. Bandung": "plbdg",
-        "04. Semarang": "plsmg", "05. Yogyakarta": "plygy", "06. Malang": "plmlg",
-        "07. Denpasar": "pldps", "08. Makasar": "plmks", "09. Jember": "pljbr"
-    }
-    
-    dialog = tk.Toplevel()
-    dialog.title("Pilih Lokasi Cabang")
-    
-    def on_select():
-        selected_display = combo.get()
-        if selected_display in lokasi_dict:
-            kode_lokasi = lokasi_dict[selected_display]
-            try:
-                # Simpan langsung ke config.json
-                with open(CONFIG_PATH, "w") as f:
-                    import json
-                    json.dump({"lokasi": kode_lokasi}, f, indent=2)
-                dialog.destroy()
-            except IOError as e:
-                messagebox.showerror("Error", f"Gagal menyimpan konfigurasi:\n{e}")
-
-    # Logika GUI tetap sama...
-    lebar, tinggi = 350, 180
-    x = (dialog.winfo_screenwidth() - lebar) // 2
-    y = (dialog.winfo_screenheight() - tinggi) // 2
-    dialog.geometry(f"{lebar}x{tinggi}+{x}+{y}")
-    tk.Label(dialog, text="Pilih Lokasi Cabang:", font=("Arial", 14)).pack(pady=10)
-    combo = ttk.Combobox(dialog, values=list(lokasi_dict.keys()), font=("Arial", 12), state="readonly")
-    combo.pack(pady=10)
-    combo.current(0)
-    tk.Button(dialog, text="Pilih", command=on_select, font=("Arial", 12)).pack(pady=10)
-    
-    dialog.transient()
-    dialog.grab_set()
-    dialog.wait_window()
-
-
-def buka_tanggal_gui():
-    """GUI utama untuk memilih tanggal."""
-    config = load_config()
-    if not config or "lokasi" not in config:
-        pilih_cabang_gui()
-        # Cek lagi setelah pemilihan
-        config = load_config()
-        if not config or "lokasi" not in config:
-            messagebox.showwarning("Dibatalkan", "Pemilihan lokasi dibatalkan. Program akan berhenti.")
-            return
-
-    root = tk.Tk()
-    root.title("Pilih Tanggal")
-
-    lebar = 300
-    tinggi = 150
-    x = (root.winfo_screenwidth() - lebar) // 2
-    y = (root.winfo_screenheight() - tinggi) // 2
-    root.geometry(f"{lebar}x{tinggi}+{x}+{y}")
-
-    ttk.Label(root, text="Pilih Tanggal", font=("Helvetica", 14)).pack(pady=10)
-    cal = DateEntry(root, date_pattern='dd-MM-yyyy', font=("Helvetica", 14), style='TButton')
-    cal.pack(pady=10)
-
-    def proses():
-        tanggal = cal.get()
-        root.destroy()  # Tutup GUI dulu sebelum proses panjang
-        ambil_data(tanggal)
-
-    ttk.Button(root, text="Proses", command=proses).pack(pady=10)
-    root.mainloop()
-
 def main():
     """Fungsi utama untuk modul Start Finish Time."""
-    # Pengecekan config awal bisa dilakukan di sini sebelum memanggil GUI
     config = load_config()
-    if not config:
+    if not config or not config.get("lokasi"):
         messagebox.showinfo("Setup Awal", "Lokasi cabang belum diatur. Silakan atur melalui menu Pengaturan > Ganti Lokasi Cabang.")
-        # panggil fungsi pilih lokasi jika masih mau ada popup dari sini
-        # atau return agar user mengaturnya dari menu utama
         return
 
-    # Definisikan fungsi wrapper yang akan dijalankan oleh GUI
     def process_wrapper(dates, app_instance):
         ambil_data(dates, app_instance)
 

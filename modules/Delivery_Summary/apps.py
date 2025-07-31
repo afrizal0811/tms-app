@@ -1,23 +1,18 @@
-
 import pandas as pd
 from datetime import datetime
 from tkinter import filedialog, messagebox
 from openpyxl.utils import get_column_letter
 from openpyxl.styles import Alignment, PatternFill
+import re
+import os
 
 # 2. Impor semua fungsi bantuan dari shared_utils
-from ..shared_utils import load_config, load_master_data, get_save_path, open_file_externally
-
+from ..shared_utils import load_config, load_master_data, get_save_path, open_file_externally, load_constants
 
 # =============================================================================
 # BAGIAN 1: FUNGSI-FUNGSI BANTU (HELPER FUNCTIONS)
 # =============================================================================
 
-# SEMUA FUNGSI LAMA (load_config, baca_master_driver, get_save_path, open_file)
-# SUDAH DIHAPUS DARI SINI KARENA KITA MENGGUNAKAN VERSI DARI shared_utils.py
-
-
-# Fungsi-fungsi yang spesifik untuk modul ini tetap ada di sini
 def apply_styles_and_formatting(writer):
     """
     Menerapkan semua styling (alignment, warna, auto-size) ke semua sheet.
@@ -48,14 +43,12 @@ def apply_styles_and_formatting(writer):
             sep_col_idx = header_map[' ']
             worksheet.cell(row=1, column=sep_col_idx).value = ""
         for column_cells in worksheet.columns:
-            # Menghindari error jika kolom kosong
             try:
                 max_length = max(len(str(cell.value)) for cell in column_cells if cell.value is not None)
                 adjusted_width = max_length + 2
                 if adjusted_width > 50: adjusted_width = 50
                 worksheet.column_dimensions[get_column_letter(column_cells[0].column)].width = adjusted_width
             except ValueError:
-                # Lewati jika kolom benar-benar kosong
                 pass
 
 def convert_datetime_column(df, column_name, target_format='%H:%M'):
@@ -99,7 +92,7 @@ def calculate_actual_visit(start, end):
 
 
 # =============================================================================
-# BAGIAN 2: FUNGSI-FUNGSI PEMROSESAN UTAMA (TIDAK ADA PERUBAHAN DI SINI)
+# BAGIAN 2: FUNGSI-FUNGSI PEMROSESAN UTAMA
 # =============================================================================
 def process_total_delivered(df, master_driver_df):
     """Membuat ringkasan jumlah visit dan delivery, membiarkan total kosong untuk driver tanpa data."""
@@ -182,14 +175,25 @@ def process_ro_vs_real(df, master_driver_df):
     if 'Driver' in df_final.columns and 'Real Sequence' in df_final.columns and not df_final.empty:
         df_final['Real Sequence'] = pd.to_numeric(df_final['Real Sequence'], errors='coerce')
         df_final.sort_values(by=['Driver', 'Real Sequence'], ascending=True, inplace=True)
+        
         all_drivers_data = []
         for _, group in df_final.groupby('Driver', sort=False):
             all_drivers_data.append(group)
             blank_row = pd.DataFrame([[None] * len(df_final.columns)], columns=df_final.columns)
             all_drivers_data.append(blank_row)
+        
+        # --- PERUBAHAN KODE DI SINI ---
+        # Hapus baris kosong terakhir yang tidak perlu
         if all_drivers_data:
-            df_final = pd.concat(all_drivers_data[:-1], ignore_index=True)
+            all_drivers_data = all_drivers_data[:-1]
 
+        if all_drivers_data:
+            non_empty_dfs = [df for df in all_drivers_data if not df.empty and not df.isna().all().all()]
+            if non_empty_dfs:
+                df_final = pd.concat(non_empty_dfs, ignore_index=True)
+            else:
+                df_final = pd.DataFrame(columns=df_final.columns)
+    
     return df_final
 
 def process_pending_so(df, master_driver_df):
@@ -218,7 +222,7 @@ def process_pending_so(df, master_driver_df):
     if 'title' in df_filtered.columns: df_filtered['Customer ID'] = df_filtered['title'].apply(extract_customer_id)
     if 'Driver' in df_filtered.columns: df_filtered['Temperature'] = df_filtered['Driver'].str.split(' ').str[0].str.replace("'", "")
     def get_reason(row):
-        status = row.get('label', ''); return row.get('Alasan Batal', '') if status in ['PENDING', 'BATAL'] else (row.get('Alasan Tolakan', '') if status == 'TERIMA SEBAGIAN' else '')
+        status = row.get('label', ''); return row.get('Alasan Batal', '') if status in ['PENDING', 'BATAL'] else (row.get('Alasan Tolakan', '') if status == 'TERIMA SEBAGIAN' else (''))
     df_filtered['Reason'] = df_filtered.apply(get_reason, axis=1)
     def assign_faktur_by_title(row):
         status, title_val = row.get('label', ''), row.get('title', ''); return (title_val, '', '') if status == 'BATAL' else (('', title_val, '') if status == 'TERIMA SEBAGIAN' else (('', '', title_val) if status == 'PENDING' else ('', '', '')))
@@ -243,11 +247,11 @@ def process_pending_so(df, master_driver_df):
 # =============================================================================
 
 def main():
-    # 3. Ganti pemanggilan fungsi dengan versi dari shared_utils
     config = load_config()
-        
+    constants = load_constants()
+
     if config and "lokasi" in config:
-        lokasi = config["lokasi"]
+        lokasi_code = config["lokasi"]
     else:
         messagebox.showwarning("Dibatalkan", "Pilih lokasi cabang!")
         return
@@ -272,14 +276,14 @@ def main():
             
         email_prefixes = df_original["assignee"].dropna().astype(str).str.extract(r'kendaraan\.([^.@]+)', expand=False)
         email_prefixes = email_prefixes.dropna().str.lower().unique()
-        if not any(lokasi.lower() in prefix for prefix in email_prefixes):
+        if not any(lokasi_code.lower() in prefix for prefix in email_prefixes):
             messagebox.showerror("Proses Gagal", f"Lokasi cabang tidak valid!\n\nLokasi cabang tidak sesuai dengan file Export Task!")
             return
 
         results_to_save = {}
         
         # Panggil fungsi terpusat untuk memuat data master
-        master_df = load_master_data(lokasi)
+        master_df = load_master_data(lokasi_code)
         if master_df is None:
             return
 
@@ -299,8 +303,23 @@ def main():
             messagebox.showerror("Proses Gagal", "File tidak valid atau tidak ada data yang relevan untuk diproses.")
             return
         
-        # Panggil fungsi terpusat untuk mendapatkan path penyimpanan
-        save_file_path = get_save_path("Delivery Summary")
+        # --- MODIFIKASI UNTUK NAMA FILE DINAMIS ---
+        # 1. Dapatkan nama lokasi dari mapping
+        lokasi_mapping = constants.get('lokasi_mapping', {})
+        lokasi_name = next((name for name, code in lokasi_mapping.items() if code == lokasi_code), lokasi_code)
+        
+        # 2. Ambil tanggal dari nama file input menggunakan regex.
+        input_filename = os.path.basename(input_file)
+        date_match = re.search(r'(\d{2}-\d{2}-\d{4})', input_filename)
+        if date_match:
+            date_str = date_match.group(1).replace('-', '.')
+        else:
+            # Fallback jika tanggal tidak ditemukan di nama file
+            date_str = datetime.now().strftime('%d.%m.%Y')
+        
+        # 3. Buat nama file keluaran
+        file_basename = f"Delivery Summary {lokasi_name} - {date_str}"
+        save_file_path = get_save_path(file_basename)
         
         if not save_file_path:
             messagebox.showwarning("Proses Gagal", "Proses Dibatalkan")
@@ -314,7 +333,6 @@ def main():
             
             apply_styles_and_formatting(writer)
         
-        # Panggil fungsi terpusat untuk membuka file
         open_file_externally(save_file_path)
         
     except Exception as e:
