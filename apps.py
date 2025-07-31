@@ -21,13 +21,13 @@ from modules.shared_utils import (
 )
 
 # --- Impor Modul Aplikasi ---
-# Fungsi 'main' dari modul manual yang akan dipanggil dari menu
 from modules.Routing_Summary.apps import main as routing_summary_main
 from modules.Delivery_Summary.apps import main as delivery_summary_main
 from modules.Auto_Delivery_Summary.apps import main as auto_delivery_summary_main
 from modules.Start_Finish_Time.apps import main as start_finish_time_main
 from modules.Sync_Driver.apps import main as sync_driver_main
 from modules.Check_User.apps import main as check_user_main
+from modules.Auto_Routing_Summary.apps import main as auto_routing_summary_main
 
 ensure_config_exists()
 # ==============================================================================
@@ -99,8 +99,6 @@ def pilih_lokasi(parent_window):
 
 def pilih_pengguna_awal(parent_window):
     """Menjalankan proses pemilihan pengguna menggunakan modul Check_User."""
-    # Tetap menerima parent_window untuk kompatibilitas pemanggilan,
-    # meskipun saat ini fungsi check_user_main tidak memanfaatkannya langsung.
     check_user_main(parent_window)
 
 def on_closing():
@@ -125,21 +123,17 @@ def check_update():
 def periksa_konfigurasi_awal(parent_window):
     """
     Memeriksa apakah lokasi dan pengguna sudah diatur.
-    Proses ini hanya berjalan jika konfigurasi belum lengkap.
     """
-    # 1. Periksa Konfigurasi Lokasi dan Pengguna dari config.json
     config = load_config()
     if not config or not config.get("lokasi"):
         messagebox.showinfo("Setup Awal", "Selamat datang! Silakan pilih lokasi cabang Anda terlebih dahulu.")
         pilih_lokasi(parent_window)
         update_title(parent_window)
-        config = load_config() # Muat ulang config setelah lokasi dipilih
+        config = load_config()
     
-    # 2. Periksa Konfigurasi Pengguna (setelah lokasi ada)
     if not config or not config.get("user_checked"):
         messagebox.showinfo("Setup Akun", "Selanjutnya, silakan cari dan pilih akun pengguna Anda untuk aplikasi ini.")
         pilih_pengguna_awal(parent_window)
-        # Setelah pemilihan, periksa lagi apakah user_checked sudah ada di config.
         if not (load_config() or {}).get("user_checked"):
             messagebox.showerror("Setup Tidak Lengkap", "Pemilihan akun pengguna dibatalkan. Aplikasi akan ditutup.")
             on_closing()
@@ -154,20 +148,13 @@ def atur_visibilitas_menu(menu_bar):
     
     restricted_roles = constants.get("restricted_role_ids", {})
     
-    # Dapatkan daftar ID role yang dibatasi dari dictionary
     restricted_role_id_list = list(restricted_roles.values())
 
-    # Periksa apakah menu Pengaturan ada
     try:
         if user_role_id and user_role_id in restricted_role_id_list:
-            # Hapus menu "Ganti Lokasi Cabang" jika role dibatasi
             pengaturan_menu.delete("Ganti Lokasi Cabang")
-        # Jika tidak, tidak perlu melakukan apa-apa karena menu sudah dibuat secara default
-            
     except tk.TclError:
-        # Menu "Ganti Lokasi Cabang" mungkin sudah dihapus atau tidak ada, abaikan error.
         pass
-
 
 def run_sync_in_background(root_window):
     """Menjalankan proses sinkronisasi driver di background thread."""
@@ -189,7 +176,12 @@ def run_sync_in_background(root_window):
     manual_menu.entryconfig("Delivery Summary", state="disabled")
 
     def on_sync_complete():
-        if loading_window.winfo_exists(): loading_window.destroy()
+        # --- [PERBAIKAN] ---
+        # Hentikan progress bar sebelum menutup jendela untuk menghindari error
+        if loading_window.winfo_exists():
+            progress.stop()
+            loading_window.destroy()
+
         for button in main_buttons: button.config(state='normal')
         pengaturan_menu.entryconfig("Sinkronisasi Driver", state="normal")
         manual_menu.entryconfig("Routing Summary", state="normal")
@@ -216,18 +208,15 @@ root.withdraw()
 def ganti_lokasi():
     pilih_lokasi(root)
     update_title(root)
-    # Tidak perlu memanggil atur_visibilitas_menu di sini karena role tidak berubah
 
 # --- Setup Menu Bar ---
 menu_bar = tk.Menu(root)
 
-# Menu "Manual"
 manual_menu = tk.Menu(menu_bar, tearoff=0)
 manual_menu.add_command(label="Routing Summary", command=routing_summary_main)
 manual_menu.add_command(label="Delivery Summary", command=delivery_summary_main)
 menu_bar.add_cascade(label="Manual", menu=manual_menu)
 
-# Menu Pengaturan
 pengaturan_menu = tk.Menu(menu_bar, tearoff=0)
 pengaturan_menu.add_command(label="Ganti Lokasi Cabang", command=ganti_lokasi)
 pengaturan_menu.add_command(label="Sinkronisasi Driver", command=lambda: run_sync_in_background(root))
@@ -238,7 +227,6 @@ def show_about():
         f"TMS Data Processing\nVersi: {CURRENT_VERSION}\n\nDibuat oleh: Afrizal Maulana - EDP © 2025"
     )
 
-# Tambahkan separator dan item "Tentang" ke menu Pengaturan
 pengaturan_menu.add_separator()
 pengaturan_menu.add_command(label="Tentang", command=show_about)
 menu_bar.add_cascade(label="Pengaturan", menu=pengaturan_menu)
@@ -263,7 +251,7 @@ frame.pack(expand=True)
 button_font = ("Arial", 14, "bold")
 
 buttons_config = [
-    ("Auto Routing Summary", show_wip_popup),
+    ("Auto Routing Summary", auto_routing_summary_main),
     ("Auto Delivery Summary", auto_delivery_summary_main),
     ("Start-Finish Time", start_finish_time_main),
 ]
@@ -280,7 +268,7 @@ footer_label.pack(side="bottom", pady=5)
 # --- Tampilkan Window dan Jalankan Proses Latar Belakang ---
 root.deiconify() 
 periksa_konfigurasi_awal(root)
-atur_visibilitas_menu(menu_bar) # Panggil fungsi untuk mengatur menu saat aplikasi pertama kali jalan
+atur_visibilitas_menu(menu_bar)
 
 root.protocol("WM_DELETE_WINDOW", on_closing)
 root.after(500, check_update) 

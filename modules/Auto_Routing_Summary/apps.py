@@ -21,7 +21,8 @@ sys.path.append(project_root)
 # --- Impor dari shared_utils dan gui_utils ---
 from modules.shared_utils import (
     load_config,
-    load_constants
+    load_constants,
+    load_master_data as shared_load_master_data 
 )
 from modules.gui_utils import create_date_picker_window
 
@@ -115,11 +116,18 @@ def process_routing_data(date_formats, gui_instance):
         constants = load_constants()
         lokasi_code = config.get('lokasi')
         
-        master_data_map = load_master_data(project_root, lokasi_code)
+        # Panggil fungsi yang diperbarui
+        master_data_df = shared_load_master_data(lokasi_cabang=lokasi_code)
 
-        if not all([config, constants, master_data_map]):
+        # Periksa apakah DataFrame kosong atau variabel lain tidak valid
+        if not config or not constants or master_data_df is None or master_data_df.empty:
+            if master_data_df is not None and master_data_df.empty:
+                messagebox.showwarning("Data Master", f"Tidak ada data driver yang ditemukan untuk lokasi '{lokasi_code}'.")
             return
-
+        
+        # Konversi DataFrame menjadi dictionary seperti yang diharapkan
+        master_data_map = dict(zip(master_data_df['Email'], master_data_df['Driver']))
+        
         api_token = constants.get('token')
         hub_id = constants.get('hub_ids', {}).get(lokasi_code)
         lokasi_mapping = constants.get('lokasi_mapping', {})
@@ -136,7 +144,7 @@ def process_routing_data(date_formats, gui_instance):
         
         processed_data = []
         first_tags_list = []
-        processed_assignees_for_usage = set() # Set untuk melacak assignee yang sudah dihitung
+        processed_assignees_for_usage = set() 
 
         if 'data' in response_data and 'data' in response_data['data']:
             routing_results = response_data['data']['data']
@@ -147,16 +155,12 @@ def process_routing_data(date_formats, gui_instance):
                         if not assignee_email or lokasi_code not in assignee_email:
                             continue
 
-                        # --- LOGIKA BARU: HITUNG ASSIGNEE 1X UNTUK TRUCK USAGE ---
-                        # Cek apakah assignee ini belum pernah dihitung untuk Truck Usage
                         if assignee_email not in processed_assignees_for_usage:
                             vehicle_tags = route.get('vehicleTags', [])
                             if vehicle_tags:
                                 first_tags_list.append(vehicle_tags[0])
-                            # Tandai assignee ini sudah dihitung
                             processed_assignees_for_usage.add(assignee_email)
 
-                        # Data untuk Truck Detail tetap diproses untuk setiap rute agar bisa diakumulasi
                         driver_name = master_data_map.get(assignee_email, assignee_email)
                         try: weight_num = float(str(route.get('weightPercentage', '0')).replace('%', ''))
                         except: weight_num = 0.0
@@ -257,14 +261,35 @@ def process_routing_data(date_formats, gui_instance):
     except Exception as e:
         import traceback
         messagebox.showerror("Error Tak Terduga", f"Terjadi kesalahan: {e}\n\n{traceback.format_exc()}")
-    finally:
-        if 'gui_instance' in locals() and gui_instance.winfo_exists():
-             gui_instance.after(0, gui_instance.destroy)
+    # --- BLOK FINALLY DIHAPUS DARI SINI ---
+    # Tanggung jawab menutup jendela sekarang ada di dalam 'main'
 
+
+# --- [FUNGSI MAIN YANG DIPERBARUI] ---
 def main():
+    """Fungsi utama untuk modul Auto Routing Summary."""
+    
+    def process_wrapper(dates, gui_instance):
+        """Wrapper untuk menjalankan proses utama dan menangani penutupan GUI dengan aman."""
+        
+        # Fungsi untuk menutup GUI dengan aman
+        def safe_close():
+            # Pastikan window masih ada sebelum mencoba menutupnya
+            if gui_instance and gui_instance.winfo_exists():
+                gui_instance.destroy()
+
+        try:
+            # Panggil fungsi pemrosesan utama seperti biasa
+            process_routing_data(dates, gui_instance)
+        finally:
+            # Apapun hasilnya, jadwalkan fungsi penutupan aman 
+            # untuk berjalan di thread utama GUI setelah jeda singkat.
+            if gui_instance and gui_instance.winfo_exists():
+                gui_instance.after(100, safe_close)
+                
     create_date_picker_window(
         title="Auto Routing Summary",
-        process_callback=process_routing_data
+        process_callback=process_wrapper
     )
 
 if __name__ == '__main__':
