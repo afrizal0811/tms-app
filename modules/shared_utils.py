@@ -9,6 +9,7 @@ import tkinter as tk
 # =============================================================================
 # PENGELOLAAN PATH TERPUSAT (PYINSTALLER-COMPATIBLE)
 # =============================================================================
+SECRET_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'secret.json')
 
 def get_base_path():
     """
@@ -141,3 +142,31 @@ def open_file_externally(filepath):
             subprocess.call(["xdg-open", filepath])
     except Exception as e:
         messagebox.showerror("Gagal Membuka File", f"Tidak dapat membuka file:\n{filepath}\n\nError: {e}")
+
+def load_secret():
+    """
+    Memuat data rahasia dari file secret.json.
+    Jika file tidak ada, akan dibuatkan dengan placeholder.
+    """
+    if not os.path.exists(SECRET_PATH):
+        sample_secret = {"token": "PASTE_YOUR_MILEAPP_TOKEN_HERE"}
+        with open(SECRET_PATH, 'w') as f:
+            json.dump(sample_secret, f, indent=2)
+        messagebox.showerror(
+            "File Secret Hilang",
+            "File 'secret.json' tidak ditemukan.\n\n"
+            "File tersebut telah dibuatkan untuk Anda. Mohon isi nilai 'token' "
+            "dengan token API MileApp Anda, lalu jalankan ulang aplikasi."
+        )
+        return None
+        
+    try:
+        with open(SECRET_PATH, 'r') as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        messagebox.showerror(
+            "Error File Secret",
+            f"Gagal memuat atau mengurai file '{SECRET_PATH}'.\n"
+            "Mohon periksa format file."
+        )
+        return None

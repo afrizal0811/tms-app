@@ -10,7 +10,8 @@ from ..shared_utils import (
     load_constants, 
     load_json_data, 
     save_json_data,
-    MASTER_JSON_PATH
+    MASTER_JSON_PATH,
+    load_secret
 )
 
 # ==============================================================================
@@ -90,9 +91,10 @@ def main():
         # 2. Muat semua file konfigurasi menggunakan shared_utils
         constants = load_constants()
         config = load_config()
+        secrets = load_secret()
 
-        if not constants or not config:
-            messagebox.showerror("Gagal", "File 'constant.json' atau 'config.json' gagal dimuat. Proses dibatalkan.")
+        if not constants or not config or not secrets:
+            messagebox.showerror("Gagal", "File konfigurasi atau secrets gagal dimuat. Proses dibatalkan.")
             return
 
         lokasi_kode = config.get('lokasi')
@@ -100,8 +102,8 @@ def main():
             messagebox.showerror("Gagal", "Kode lokasi tidak ditemukan. Silakan atur lokasi terlebih dahulu.")
             return
 
-        # Ambil token dan hubId dari konstanta
-        api_token = constants.get('token')
+        # Ambil token dan hubId
+        api_token = secrets.get('token')
         hub_ids_map = constants.get('hub_ids', {})
         lokasi_mapping = constants.get('lokasi_mapping', {})
         
@@ -109,7 +111,7 @@ def main():
         lokasi_nama = get_lokasi_nama_by_kode(lokasi_mapping, lokasi_kode)
         
         if not api_token:
-            messagebox.showerror("Gagal", f"Token API tidak ditemukan.\n\nHubungi Admin.")
+            messagebox.showerror("Error Token API", "Token API tidak ditemukan.\n\nHubungi Admin.")
             return
         
         if not hub_id:

@@ -10,7 +10,8 @@ from ..shared_utils import (
     load_constants,
     load_master_data,
     open_file_externally,
-    get_save_path 
+    get_save_path,
+    load_secret
 )
 from ..gui_utils import create_date_picker_window
 
@@ -97,20 +98,24 @@ def panggil_api_dan_simpan(dates, app_instance):
     # --- PENGATURAN MENGGUNAKAN SHARED UTILS ---
     constants = load_constants()
     config = load_config()
-    master_df = load_master_data() 
-    
-    if any(v is None for v in [constants, config, master_df]): 
+    master_df = load_master_data()
+    secrets = load_secret()
+
+    if any(v is None for v in [constants, config, master_df, secrets]):
         return False
         
     master_data_list = master_df.to_dict('records')
 
-    API_TOKEN = constants.get('token') 
+    API_TOKEN = secrets.get('token') # Ambil token dari secrets
     LOKASI_FILTER = config.get('lokasi')
-    HUB_ID = constants.get('hub_ids', {}).get(LOKASI_FILTER) 
+    HUB_ID = constants.get('hub_ids', {}).get(LOKASI_FILTER)
     LOKASI_MAPPING = constants.get('lokasi_mapping', {})
 
-    if not API_TOKEN or not LOKASI_FILTER or not HUB_ID:
-        messagebox.showerror("Konfigurasi Salah", "KESALAHAN: 'token', 'lokasi', atau hubId tidak ditemukan di file konfigurasi.")
+    if not API_TOKEN or API_TOKEN == "PASTE_YOUR_MILEAPP_TOKEN_HERE":
+        messagebox.showerror("Error Token API", "Token API belum diatur di secret.json.")
+        return False
+    if not LOKASI_FILTER or not HUB_ID:
+        messagebox.showerror("Konfigurasi Salah", "KESALAHAN: 'lokasi' atau hubId tidak ditemukan di file konfigurasi.")
         return False
 
     # --- API Call ---
@@ -245,10 +250,10 @@ def panggil_api_dan_simpan(dates, app_instance):
         with pd.ExcelWriter(NAMA_FILE_OUTPUT, engine='openpyxl') as writer:
             format_excel_sheet(writer, df_delivered, 'Total Delivered', centered_cols=['Total Visit', 'Total Delivered'])
             format_excel_sheet(writer, df_pending, 'Hasil Pending SO', 
-                               centered_cols=['Open Time', 'Close Time', 'ETA', 'ETD', 'Actual Arrival', 'Actual Departure', 'Visit Time', 'Actual Visit Time', 'Customer ID', 'ET Sequence', 'Real Sequence', 'Temperature'],
-                               colored_cols={' ': "FFC0CB"})
+                                centered_cols=['Open Time', 'Close Time', 'ETA', 'ETD', 'Actual Arrival', 'Actual Departure', 'Visit Time', 'Actual Visit Time', 'Customer ID', 'ET Sequence', 'Real Sequence', 'Temperature'],
+                                colored_cols={' ': "FFC0CB"})
             format_excel_sheet(writer, df_ro_vs_real, 'Hasil RO vs Real', 
-                               centered_cols=['Status Delivery', 'Open Time', 'Close Time', 'Actual Arrival', 'Actual Departure', 'Visit Time', 'Actual Visit Time', 'ET Sequence', 'Real Sequence', 'Is Same Sequence'])
+                                centered_cols=['Status Delivery', 'Open Time', 'Close Time', 'Actual Arrival', 'Actual Departure', 'Visit Time', 'Actual Visit Time', 'ET Sequence', 'Real Sequence', 'Is Same Sequence'])
         
         open_file_externally(NAMA_FILE_OUTPUT)
         return True

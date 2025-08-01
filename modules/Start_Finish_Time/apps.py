@@ -15,7 +15,8 @@ from ..shared_utils import (
     load_constants,
     load_master_data,
     get_save_path,
-    open_file_externally
+    open_file_externally,
+    load_secret 
 )
 from ..gui_utils import create_date_picker_window
 
@@ -157,20 +158,33 @@ def ambil_data(dates, app_instance=None):
     if app_instance:
         app_instance.update_status("Mengambil data dari API...")
 
-    constants = load_constants()
     config = load_config()
-    if not all([constants, config]):
-        return
+    constants = load_constants()
+    secrets = load_secret()
     
-    api_token = constants.get("token")
-    lokasi_code = config.get("lokasi")
-    
+    if not config:
+        messagebox.showerror("Error Konfigurasi", "File config tidak ditemukan atau kosong.")
+        return False
+    if not constants:
+        messagebox.showerror("Error Konstanta", "File constant tidak ditemukan atau kosong.\n\nHubungi Admin.")
+        return False
+    if not secrets:
+        return False
+
+    api_token = secrets.get('token')
+    lokasi_code = config.get('lokasi')
+    hub_ids = constants.get('hub_ids', {})
+    lokasi_mapping = constants.get('lokasi_mapping', {})
+
     if not api_token:
-        messagebox.showerror("Data Tidak Ditemukan", "Token API tidak ditemukan di constant.json.")
-        return
+        messagebox.showerror("Error Token API", "Token API tidak ditemukan.\n\nHubungi Admin.")
+        return False
     if not lokasi_code:
-        messagebox.showerror("Konfigurasi Salah", "Lokasi cabang tidak ditemukan di config.json.")
-        return
+        messagebox.showerror("Error Konfigurasi", "Atur lokasi cabang terlebih dahulu.")
+        return False
+    if lokasi_code not in hub_ids:
+        messagebox.showerror("Error Hub ID", f"Hub ID untuk lokasi '{lokasi_code}' tidak ditemukan.\n\nHubungi Admin.")
+        return False
         
     lokasi_mapping = constants.get('lokasi_mapping', {})
     lokasi_name = next((name for name, code in lokasi_mapping.items() if code == lokasi_code), lokasi_code)

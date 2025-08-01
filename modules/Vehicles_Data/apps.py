@@ -19,7 +19,8 @@ from modules.shared_utils import (
     load_constants,
     load_master_data,
     get_save_path,
-    open_file_externally
+    open_file_externally,
+    load_secret 
 )
 
 def auto_size_columns(workbook):
@@ -47,6 +48,7 @@ def fetch_and_save_vehicles_data():
     """
     config = load_config()
     constants = load_constants()
+    secrets = load_secret()
 
     if not config:
         messagebox.showerror("Error Konfigurasi", "File config.json tidak ditemukan atau kosong.")
@@ -54,14 +56,16 @@ def fetch_and_save_vehicles_data():
     if not constants:
         messagebox.showerror("Error Konstanta", "File constant.json tidak ditemukan atau kosong.")
         return False
+    if not secrets: 
+        return False
 
-    api_token = constants.get('token')
+    api_token = secrets.get('token')
     lokasi_code = config.get('lokasi')
     hub_ids = constants.get('hub_ids', {})
     lokasi_mapping = constants.get('lokasi_mapping', {})
 
     if not api_token:
-        messagebox.showerror("Error Token API", "Token API tidak ditemukan di constant.json.")
+        messagebox.showerror("Error Token API", "Token API tidak ditemukan.\n\nHubungi Admin.")
         return False
     if not lokasi_code:
         messagebox.showerror("Error Konfigurasi", "Lokasi cabang tidak diatur di config.json.")

@@ -5,7 +5,8 @@ from ..shared_utils import (
     load_config,
     load_constants,
     save_json_data,
-    CONFIG_PATH
+    CONFIG_PATH,
+    load_secret
 )
 
 # Role ID yang harus dikecualikan
@@ -15,20 +16,25 @@ def main(parent_window):
     try:
         constants = load_constants()
         config = load_config()
-        if not constants or not config:
-            messagebox.showerror("Gagal", "File 'constant.json' atau 'config.json' gagal dimuat. Proses dibatalkan.")
+        secrets = load_secret()
+        
+        if not constants or not config or not secrets:
+            messagebox.showerror("Gagal", "File konfigurasi atau secrets gagal dimuat. Proses dibatalkan.")
             return
 
         lokasi_kode = config.get('lokasi')
+        api_token = secrets.get('token')
+        hub_ids_map = constants.get('hub_ids', {})
+        hub_id = hub_ids_map.get(lokasi_kode)
+
         if not lokasi_kode:
             messagebox.showerror("Gagal", "Kode lokasi tidak ditemukan. Silakan atur lokasi terlebih dahulu.")
             return
-
-        api_token = constants.get('token')
-        hub_ids_map = constants.get('hub_ids', {})
-        hub_id = hub_ids_map.get(lokasi_kode)
-        if not api_token or not hub_id:
-            messagebox.showerror("Gagal", "Token API atau Hub ID tidak ditemukan. Hubungi Admin.")
+        if not api_token or api_token == "PASTE_YOUR_MILEAPP_TOKEN_HERE":
+            messagebox.showerror("Gagal", "Token API belum diatur atau salah di secrets.json.")
+            return
+        if not hub_id:
+            messagebox.showerror("Gagal", "Hub ID tidak ditemukan untuk lokasi yang ditentukan.")
             return
 
         restricted_roles = list(constants.get('restricted_role_ids', {}).values())

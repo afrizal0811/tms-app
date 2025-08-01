@@ -18,7 +18,8 @@ from modules.shared_utils import (
     load_constants,
     load_master_data as shared_load_master_data,
     get_save_path,
-    open_file_externally
+    open_file_externally,
+    load_secret 
 )
 from modules.gui_utils import create_date_picker_window
 
@@ -66,21 +67,30 @@ def process_routing_data(date_formats, gui_instance):
         
         config = load_config()
         constants = load_constants()
+        secrets = load_secret()
         lokasi_code = config.get('lokasi')
         
         master_data_df = shared_load_master_data(lokasi_cabang=lokasi_code)
 
-        if not config or not constants or master_data_df is None or master_data_df.empty:
+        # Periksa semua konfigurasi yang diperlukan
+        if not config or not constants or master_data_df is None or master_data_df.empty or not secrets:
             if master_data_df is not None and master_data_df.empty:
                 messagebox.showwarning("Data Master", f"Tidak ada data driver yang ditemukan untuk lokasi '{lokasi_code}'.")
             return
         
         master_data_map = dict(zip(master_data_df['Email'], master_data_df['Driver']))
         
-        api_token = constants.get('token')
+        api_token = secrets.get('token')
         hub_id = constants.get('hub_ids', {}).get(lokasi_code)
         lokasi_mapping = constants.get('lokasi_mapping', {})
         lokasi_name = next((name for name, code in lokasi_mapping.items() if code == lokasi_code), lokasi_code)
+
+        if not api_token or api_token == "PASTE_YOUR_MILEAPP_TOKEN_HERE":
+            messagebox.showerror("Error Token API", "Token API belum diatur di secret.json.")
+            return
+        if not hub_id:
+            messagebox.showerror("Konfigurasi Salah", "KESALAHAN: hubId tidak ditemukan di file konfigurasi.")
+            return
 
         api_url = "https://apiweb.mile.app/api/v3/results"
         params = {'s': search_date_string, 'limit': 1000, 'hubId': hub_id}
