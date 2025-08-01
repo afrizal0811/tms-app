@@ -28,6 +28,7 @@ from modules.Start_Finish_Time.apps import main as start_finish_time_main
 from modules.Sync_Driver.apps import main as sync_driver_main
 from modules.Check_User.apps import main as check_user_main
 from modules.Auto_Routing_Summary.apps import main as auto_routing_summary_main
+from modules.Vehicles_Data.apps import main as vehicles_data_main # Impor modul baru
 
 ensure_config_exists()
 # ==============================================================================
@@ -172,8 +173,9 @@ def run_sync_in_background(root_window):
     
     for button in main_buttons: button.config(state='disabled')
     pengaturan_menu.entryconfig("Sinkronisasi Driver", state="disabled")
-    manual_menu.entryconfig("Routing Summary", state="disabled")
-    manual_menu.entryconfig("Delivery Summary", state="disabled")
+    proses_menu.entryconfig("Routing Summary", state="disabled")
+    proses_menu.entryconfig("Delivery Summary", state="disabled")
+    proses_menu.entryconfig("Vehicles Data", state="disabled") # Nonaktifkan menu baru
 
     def on_sync_complete():
         # --- [PERBAIKAN] ---
@@ -184,8 +186,9 @@ def run_sync_in_background(root_window):
 
         for button in main_buttons: button.config(state='normal')
         pengaturan_menu.entryconfig("Sinkronisasi Driver", state="normal")
-        manual_menu.entryconfig("Routing Summary", state="normal")
-        manual_menu.entryconfig("Delivery Summary", state="normal")
+        proses_menu.entryconfig("Routing Summary", state="normal")
+        proses_menu.entryconfig("Delivery Summary", state="normal")
+        proses_menu.entryconfig("Vehicles Data", state="normal") 
 
     def thread_target():
         try:
@@ -212,10 +215,12 @@ def ganti_lokasi():
 # --- Setup Menu Bar ---
 menu_bar = tk.Menu(root)
 
-manual_menu = tk.Menu(menu_bar, tearoff=0)
-manual_menu.add_command(label="Routing Summary", command=routing_summary_main)
-manual_menu.add_command(label="Delivery Summary", command=delivery_summary_main)
-menu_bar.add_cascade(label="Manual", menu=manual_menu)
+proses_menu = tk.Menu(menu_bar, tearoff=0)
+proses_menu.add_command(label="Routing Summary", command=routing_summary_main)
+proses_menu.add_command(label="Delivery Summary", command=delivery_summary_main)
+proses_menu.add_separator()
+proses_menu.add_command(label="Vehicles Data", command=vehicles_data_main)
+menu_bar.add_cascade(label="Proses", menu=proses_menu)
 
 pengaturan_menu = tk.Menu(menu_bar, tearoff=0)
 pengaturan_menu.add_command(label="Ganti Lokasi Cabang", command=ganti_lokasi)
