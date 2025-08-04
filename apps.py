@@ -22,7 +22,6 @@ from utils.messages import (
     INFO_MESSAGES
 )
 
-
 # --- Impor Modul Aplikasi ---
 from modules.Routing_Summary.apps import main as routing_summary_main
 from modules.Delivery_Summary.apps import main as delivery_summary_main
@@ -229,8 +228,11 @@ pengaturan_menu.add_command(label="Sinkronisasi Driver", command=lambda: run_syn
 def show_about():
     show_info_message(
         "Tentang Aplikasi",
-        INFO_MESSAGES["ABOUT_APP"].format(version=CURRENT_VERSION)
+        INFO_MESSAGES["APP_VERSION"].format(version=CURRENT_VERSION)
+        + "\n\n"
+        + INFO_MESSAGES["APP_BUILD_BY"]
     )
+
 
 pengaturan_menu.add_separator()
 pengaturan_menu.add_command(label="Tentang", command=show_about)
@@ -267,7 +269,7 @@ for i, (text, command) in enumerate(buttons_config):
     btn.grid(row=i, column=0, padx=10, pady=10)
     main_buttons.append(btn)
 
-footer_label = tk.Label(root, text="Dibuat oleh: Afrizal Maulana - EDP © 2025", font=("Arial", 8), fg="gray")
+footer_label = tk.Label(root, text=INFO_MESSAGES["APP_BUILD_BY"], font=("Arial", 8), fg="gray")
 footer_label.pack(side="bottom", pady=5)
 
 # --- Tampilkan Window dan Jalankan Proses Latar Belakang ---
