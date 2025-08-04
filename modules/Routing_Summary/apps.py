@@ -1,31 +1,42 @@
 # modules/Routing_Summary/apps.py (KODE AKHIR)
 
-import traceback
-import tkinter as tk
-from tkinter import filedialog, messagebox
-import re
-import pandas as pd
-import openpyxl
+from datetime import datetime
 from openpyxl.styles import Alignment
 from openpyxl.utils import get_column_letter
-from datetime import datetime
-from ..shared_utils import load_config, load_master_data, get_save_path, open_file_externally, load_constants
+from tkinter import filedialog
+import openpyxl
+import pandas as pd
+import re
+import tkinter as tk
+import traceback
+from utils.function import (
+    get_save_path,
+    load_config,
+    load_constants,
+    load_master_data,
+    open_file_externally,
+    show_ask_message,
+    show_error_message,
+    show_info_message
+)
+from utils.messages import ASK_MESSAGES, ERROR_MESSAGES, INFO_MESSAGES
 
 
 # ==============================================================================
 # FUNGSI-FUNGSI UTAMA (HELPER FUNCTIONS)
 # ==============================================================================
 
-def pilih_file_excel(prompt="Pilih file Excel"):
+def pilih_file_excel():
     """Membuka dialog untuk memilih satu file Excel."""
     root = tk.Tk()
     root.withdraw()
-    messagebox.showinfo("Upload File", prompt)
+    show_info_message("Upload File", INFO_MESSAGES["SELECT_FILE"].format(text="export routing"))
     file_path = filedialog.askopenfilename(
-        title=prompt,
+        title="Upload File Routing",
         filetypes=[("Excel files", "*.xlsx *.xls")]
     )
     return file_path
+
 
 def contains_capacity_constraint(file_path):
     """Mengecek apakah baris-baris awal file Excel mengandung 'capacity constraint'."""
@@ -238,21 +249,19 @@ def main():
     """Fungsi controller yang menjalankan semua proses secara otomatis."""
     try:
         config = load_config()
-            
-        if config and "lokasi" in config:
-            lokasi = config["lokasi"]
-        else:
-            messagebox.showwarning("Dibatalkan", "Pilih lokasi cabang!")
+        if not config or "lokasi" not in config:
+            show_error_message("Dibatalkan", ERROR_MESSAGES["LOCATION_CODE_MISSING"])
             return
+        
+        lokasi = config["lokasi"]
         
         all_data = []
         index = 1
         while True:
-            prompt = f"Pilih File Excel ke-{index}"
-            path = pilih_file_excel(prompt)
+            path = pilih_file_excel()
             if not path:
                 if index == 1: 
-                    messagebox.showwarning("Proses Gagal", "Proses Dibatalkan")
+                    show_info_message("Dibatalkan", INFO_MESSAGES["CANCELLED_BY_USER"])
                     return
                 else: 
                     break 
@@ -263,7 +272,7 @@ def main():
             all_data.append(df)
             
             index += 1
-            lanjut = messagebox.askyesno("Konfirmasi", "Apakah ada file lain yang ingin diproses?")
+            lanjut = show_ask_message("Konfirmasi", ASK_MESSAGES["ASK_ANOTHER_FILE"])
             if not lanjut:
                 break
         
@@ -278,28 +287,25 @@ def main():
         ]
         missing_columns = [col for col in required_columns if col not in combined_df.columns]
         if missing_columns:
-            messagebox.showerror(
-                "Proses Gagal", "File tidak valid!\n\nUpload file Export Routing dengan benar!"
-            )
+            show_error_message("Proses Gagal", ERROR_MESSAGES["INVALID_FILE"].format(details="Upload file Export Routing dengan benar!"))
             return
         
         email_prefixes = combined_df["Assignee"].dropna().str.extract(r'kendaraan\.([^.@]+)', expand=False)
         email_prefixes = email_prefixes.dropna().str.lower().unique()
 
         if not any(lokasi.lower() in prefix for prefix in email_prefixes):
-            messagebox.showerror(
-                "Proses Gagal", "Lokasi cabang tidak valid!\n\nLokasi cabang tidak sesuai dengan file Routing!"
-            )
+            show_error_message("Proses Gagal", ERROR_MESSAGES["LOCATION_CODE_MISSING"])
             return
         
         output_wb = openpyxl.Workbook()
         output_wb.remove(output_wb.active)
     
+        # Panggil fungsi-fungsi pemrosesan
         proses_truck_detail(output_wb, combined_df, lokasi)
         proses_truck_usage(output_wb, combined_df)
 
         if not output_wb.sheetnames:
-            messagebox.showinfo("Selesai", "Tidak ada data yang diproses atau dihasilkan.")
+            show_error_message("Selesai", ERROR_MESSAGES["UNKNOWN_ERROR"])
             return
         
         # --- PERUBAHAN UNTUK NAMA FILE DINAMIS ---
@@ -315,11 +321,12 @@ def main():
             output_wb.save(save_path)
             open_file_externally(save_path)
         else:
-            messagebox.showwarning("Proses Gagal", "Penyimpanan file dibatalkan.")
+            show_info_message("Dibatalkan", INFO_MESSAGES["CANCELLED_BY_USER"])
+            return
 
     except Exception as e:
         error_message = traceback.format_exc()
-        messagebox.showerror("Terjadi Kesalahan", f"Error: {e}\n\n{error_message}")
+        show_error_message("Terjadi Kesalahan", ERROR_MESSAGES["UNKNOWN_ERROR"].format(error_detail=f"{e}\n\n{error_message}"))
 
 
 if __name__ == "__main__":

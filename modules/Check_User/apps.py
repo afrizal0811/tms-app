@@ -1,13 +1,16 @@
-import tkinter as tk
-from tkinter import messagebox, ttk
+from tkinter import ttk
 import requests
-from ..shared_utils import (
+import tkinter as tk
+from utils.function import (
+    CONFIG_PATH,
     load_config,
     load_constants,
+    load_secret,
     save_json_data,
-    CONFIG_PATH,
-    load_secret
+    show_ask_message,
+    show_error_message
 )
+from utils.messages import ERROR_MESSAGES, ASK_MESSAGES
 
 # Role ID yang harus dikecualikan
 EXCLUDED_ROLE_ID = "6703410af6be892f3208ecde"
@@ -17,9 +20,16 @@ def main(parent_window):
         constants = load_constants()
         config = load_config()
         secrets = load_secret()
-        
-        if not constants or not config or not secrets:
-            messagebox.showerror("Gagal", "File konfigurasi atau secrets gagal dimuat. Proses dibatalkan.")
+
+        if not constants:
+            show_error_message("Gagal", ERROR_MESSAGES["CONSTANT_FILE_ERROR"])
+            return
+        if not config:
+            # Menggunakan pesan yang relevan meskipun tidak ada di ERROR_MESSAGES asli
+            show_error_message("Gagal", ERROR_MESSAGES["CONFIG_FILE_ERROR"])
+            return
+        if not secrets:
+            show_error_message("Gagal", ERROR_MESSAGES["SECRET_FILE_ERROR"])
             return
 
         lokasi_kode = config.get('lokasi')
@@ -28,22 +38,39 @@ def main(parent_window):
         hub_id = hub_ids_map.get(lokasi_kode)
 
         if not lokasi_kode:
-            messagebox.showerror("Gagal", "Kode lokasi tidak ditemukan. Silakan atur lokasi terlebih dahulu.")
+            show_error_message("Gagal", ERROR_MESSAGES["LOCATION_CODE_MISSING"])
             return
-        if not api_token or api_token == "PASTE_YOUR_MILEAPP_TOKEN_HERE":
-            messagebox.showerror("Gagal", "Token API belum diatur atau salah di secrets.json.")
+        if not api_token:
+            show_error_message("Gagal", ERROR_MESSAGES["API_TOKEN_MISSING"])
             return
         if not hub_id:
-            messagebox.showerror("Gagal", "Hub ID tidak ditemukan untuk lokasi yang ditentukan.")
+            show_error_message("Gagal", ERROR_MESSAGES["HUB_ID_MISSING"])
             return
 
         restricted_roles = list(constants.get('restricted_role_ids', {}).values())
         api_url = "https://apiweb.mile.app/api/v3/users"
         headers = {'Authorization': f'Bearer {api_token}'}
         params = {'limit': 500, 'hubId': hub_id, 'status': 'active'}
-        response = requests.get(api_url, headers=headers, params=params, timeout=30)
-        response.raise_for_status()
-        users_data = response.json().get('data', [])
+
+        try:
+            response = requests.get(api_url, headers=headers, params=params, timeout=30)
+            response.raise_for_status()
+            users_data = response.json().get('data', [])
+        except requests.exceptions.HTTPError as errh:
+            status_code = errh.response.status_code
+            if status_code == 401:
+                show_error_message("Akses Ditolak (401)", ERROR_MESSAGES["API_TOKEN_MISSING"])
+            elif status_code >= 500:
+                show_error_message("Masalah Server API", ERROR_MESSAGES["SERVER_ERROR"].format(error_detail=status_code))
+            else:
+                show_error_message("Kesalahan HTTP", ERROR_MESSAGES["HTTP_ERROR_GENERIC"].format(status_code=status_code))
+            return
+        except requests.exceptions.ConnectionError:
+            show_error_message("Koneksi Gagal", ERROR_MESSAGES["CONNECTION_ERROR"].format(error_detail="Tidak dapat terhubung ke server. Periksa koneksi internet Anda."))
+            return
+        except requests.exceptions.RequestException as e:
+            show_error_message("Kesalahan API", ERROR_MESSAGES["API_REQUEST_FAILED"].format(error_detail=e))
+            return
 
         # filter default menggunakan restricted_roles dan mengecualikan EXCLUDED_ROLE_ID
         def filter_users():
@@ -52,7 +79,7 @@ def main(parent_window):
         filtered_users = filter_users()
         filtered_users.sort(key=lambda u: u.get('name', '').lower())
         if not filtered_users:
-            messagebox.showwarning("Data Tidak Ditemukan", "Tidak ada pengguna yang sesuai role yang diizinkan.")
+            show_error_message("Data Tidak Ditemukan", ERROR_MESSAGES["DATA_NOT_FOUND"])
             return
 
         dialog = tk.Toplevel(parent_window)
@@ -97,7 +124,7 @@ def main(parent_window):
             for user in user_list:
                 name_cap = user.get('name', 'Nama tidak ditemukan').title()
                 rb = tk.Radiobutton(scroll_frame, text=name_cap, variable=selected_var,
-                                    value=user.get('_id'), anchor='w', font=("Arial", 12))
+                                     value=user.get('_id'), anchor='w', font=("Arial", 12))
                 rb.pack(fill=tk.X, padx=10, pady=2)
                 radio_buttons.append(rb)
 
@@ -116,10 +143,13 @@ def main(parent_window):
             user_id = selected_var.get()
             selected_user = next((u for u in users_data if u.get('_id') == user_id), None)
             if not selected_user:
-                messagebox.showerror("Error", "Data pengguna yang dipilih tidak ditemukan.")
+                show_error_message("Error", ERROR_MESSAGES["USER_SELECTION_NOT_FOUND"])
                 return
-            if not messagebox.askyesno("Konfirmasi", "Pengguna yang dipilih tidak dapat diganti lagi. Apakah Anda yakin menyimpannya?"):
+            
+            # Konfirmasi sekarang ada di dalam fungsi simpan_pengguna
+            if not show_ask_message("Konfirmasi", ASK_MESSAGES["CONFIRM_SAVE_USER"]):
                 return
+                
             config['user_checked'] = {
                 'name': selected_user.get('name'),
                 '_id': selected_user.get('_id'),
@@ -127,7 +157,6 @@ def main(parent_window):
                 'role_id': selected_user.get('roleId')
             }
             save_json_data(config, CONFIG_PATH)
-            messagebox.showinfo("Sukses", f"Pengguna '{selected_user.get('name')}' telah berhasil disimpan.")
             dialog.destroy()
 
         save_button.config(command=simpan_pengguna)
@@ -136,7 +165,5 @@ def main(parent_window):
         dialog.grab_set()
         parent_window.wait_window(dialog)
 
-    except requests.exceptions.RequestException as e:
-        messagebox.showerror("Error", f"Gagal menghubungi API: {e}")
     except Exception as e:
-        messagebox.showerror("Error Tidak Dikenal", f"Terjadi kesalahan tak terduga:\n{e}")
+        show_error_message("Error Tak Terduga", ERROR_MESSAGES["UNKNOWN_ERROR"].format(error_detail=e))

@@ -5,11 +5,20 @@ import subprocess
 import pandas as pd
 from tkinter import filedialog, messagebox
 import tkinter as tk
-
+from utils.messages import ERROR_MESSAGES
 # =============================================================================
 # PENGELOLAAN PATH TERPUSAT (PYINSTALLER-COMPATIBLE)
 # =============================================================================
 SECRET_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'secret.json')
+
+def show_error_message(title, message):
+    messagebox.showerror(title, message)
+
+def show_info_message(title, message):
+    messagebox.showinfo(title, message)
+
+def show_ask_message(title, message):
+    return messagebox.askyesno(title, message)
 
 def get_base_path():
     """
@@ -108,14 +117,15 @@ def load_master_data(lokasi_cabang=None):
         df = pd.DataFrame(data)
         df.columns = [col.strip() for col in df.columns]
         if 'Email' not in df.columns or 'Driver' not in df.columns:
-            raise ValueError("Key 'Email' dan/atau 'Driver' tidak ditemukan di master data")
+            show_error_message("Gagal Memuat Master Data", ERROR_MESSAGES["MASTER_DATA_MISSING"])
+            return None
         df['Email'] = df['Email'].astype(str).str.strip().str.lower()
         df['Driver'] = df['Driver'].astype(str).str.strip()
         if lokasi_cabang:
             df = df[df['Email'].str.contains(lokasi_cabang, case=False, na=False)].copy()
         return df
     except Exception as e:
-        messagebox.showerror("Error Master Data", f"Terjadi kesalahan saat memproses master data:\n{e}")
+        show_error_message("Gagal Memuat Master Data", ERROR_MESSAGES["MASTER_FILE_ERROR"])
         return None
 
 def get_save_path(base_name="Laporan", extension=".xlsx"):
@@ -141,7 +151,7 @@ def open_file_externally(filepath):
         else:
             subprocess.call(["xdg-open", filepath])
     except Exception as e:
-        messagebox.showerror("Gagal Membuka File", f"Tidak dapat membuka file:\n{filepath}\n\nError: {e}")
+        show_error_message("Gagal Membuka File", ERROR_MESSAGES["FAILED_OPENING_FILE"].format(error_detail=str(e)))
 
 def load_secret():
     """
@@ -152,21 +162,12 @@ def load_secret():
         sample_secret = {"token": "PASTE_YOUR_MILEAPP_TOKEN_HERE"}
         with open(SECRET_PATH, 'w') as f:
             json.dump(sample_secret, f, indent=2)
-        messagebox.showerror(
-            "File Secret Hilang",
-            "File 'secret.json' tidak ditemukan.\n\n"
-            "File tersebut telah dibuatkan untuk Anda. Mohon isi nilai 'token' "
-            "dengan token API MileApp Anda, lalu jalankan ulang aplikasi."
-        )
+        show_error_message("Gagal", ERROR_MESSAGES["API_TOKEN_MISSING"])
         return None
         
     try:
         with open(SECRET_PATH, 'r') as f:
             return json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
-        messagebox.showerror(
-            "Error File Secret",
-            f"Gagal memuat atau mengurai file '{SECRET_PATH}'.\n"
-            "Mohon periksa format file."
-        )
+        show_error_message("Gagal", ERROR_MESSAGES["SECRET_FILE_ERROR"])
         return None

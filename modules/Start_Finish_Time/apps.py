@@ -3,22 +3,24 @@
 from datetime import datetime, timedelta
 from openpyxl.styles import PatternFill, Alignment
 from openpyxl.utils import get_column_letter
-from tkinter import ttk, messagebox
 import openpyxl
 import pandas as pd
 import requests
 import tkinter as tk
 
 # Impor fungsi bantuan dari shared_utils dan gui_utils
-from ..shared_utils import (
+from utils.function import (
+    get_save_path,
     load_config,
     load_constants,
     load_master_data,
-    get_save_path,
+    load_secret,
     open_file_externally,
-    load_secret 
+    show_error_message,
+    show_info_message
 )
-from ..gui_utils import create_date_picker_window
+from utils.gui import create_date_picker_window
+from utils.messages import ERROR_MESSAGES, INFO_MESSAGES
 
 # =============================================================================
 # BAGIAN 1: FUNGSI-FUNGSI BANTU (HELPER FUNCTIONS)
@@ -96,7 +98,7 @@ def simpan_file_excel(dataframe, lokasi_name, tanggal_str):
     file_basename = f"Time Summary {lokasi_name} - {tanggal_str}"
     filename = get_save_path(file_basename)
     if not filename:
-        messagebox.showwarning("Dibatalkan", "Penyimpanan file dibatalkan.")
+        show_info_message("Dibatalkan", INFO_MESSAGES["CANCELLED_BY_USER"])
         return
 
     dataframe.to_excel(filename, index=False)
@@ -162,13 +164,14 @@ def ambil_data(dates, app_instance=None):
     constants = load_constants()
     secrets = load_secret()
     
-    if not config:
-        messagebox.showerror("Error Konfigurasi", "File config tidak ditemukan atau kosong.")
+    if not config or "lokasi" not in config:
+        show_error_message("Error Konfigurasi", ERROR_MESSAGES["CONFIG_FILE_ERROR"])
         return False
     if not constants:
-        messagebox.showerror("Error Konstanta", "File constant tidak ditemukan atau kosong.\n\nHubungi Admin.")
+        show_error_message("Error Konstanta", ERROR_MESSAGES["CONSTANT_FILE_ERROR"])
         return False
     if not secrets:
+        show_error_message("Error Rahasia", ERROR_MESSAGES["SECRET_FILE_ERROR"])
         return False
 
     api_token = secrets.get('token')
@@ -177,13 +180,13 @@ def ambil_data(dates, app_instance=None):
     lokasi_mapping = constants.get('lokasi_mapping', {})
 
     if not api_token:
-        messagebox.showerror("Error Token API", "Token API tidak ditemukan.\n\nHubungi Admin.")
+        show_error_message("Error Token API", ERROR_MESSAGES["API_TOKEN_MISSING"])
         return False
     if not lokasi_code:
-        messagebox.showerror("Error Konfigurasi", "Atur lokasi cabang terlebih dahulu.")
+        show_error_message("Error Konfigurasi", ERROR_MESSAGES["LOCATION_CODE_MISSING"])
         return False
     if lokasi_code not in hub_ids:
-        messagebox.showerror("Error Hub ID", f"Hub ID untuk lokasi '{lokasi_code}' tidak ditemukan.\n\nHubungi Admin.")
+        show_error_message("Error Hub ID", ERROR_MESSAGES["HUB_ID_MISSING"])
         return False
         
     lokasi_mapping = constants.get('lokasi_mapping', {})
@@ -205,11 +208,11 @@ def ambil_data(dates, app_instance=None):
         response = requests.get(url, params=params, headers=headers, timeout=30)
         response.raise_for_status()
     except requests.exceptions.RequestException as e:
-        messagebox.showerror("API Error", f"Gagal terhubung ke API:\n{e}")
+        show_error_message("API Error", ERROR_MESSAGES["API_REQUEST_FAILED"].format(error_detail=e))
         return
 
     if not response.json().get("tasks", {}).get("data"):
-        tk.messagebox.showerror("Error", "Data tidak ditemukan dari API untuk tanggal yang dipilih.")
+        show_error_message("Error", ERROR_MESSAGES["DATA_NOT_FOUND"])
         return
 
     result = response.json()
@@ -231,7 +234,7 @@ def ambil_data(dates, app_instance=None):
 
     df_api_data = pd.json_normalize(filtered_items)
     if df_api_data.empty:
-        messagebox.showinfo("Informasi", "Tidak ada data trip yang memenuhi kriteria untuk diproses.")
+        show_error_message("Gagal", ERROR_MESSAGES["DATA_NOT_FOUND"])
         return
         
     df_api_data.rename(columns={"_id": "Email"}, inplace=True)
@@ -245,15 +248,17 @@ def ambil_data(dates, app_instance=None):
             df_api_data = df_api_data[df_api_data['Email'].str.contains(lokasi_code, na=False, case=False)]
 
         if df_api_data.empty:
-            tk.messagebox.showerror("Error", "Data tidak ditemukan untuk lokasi yang dipilih.")
+            show_error_message("Error", ERROR_MESSAGES["DATA_NOT_FOUND"])
             return
 
         mapping_df = load_master_data(lokasi_cabang=lokasi_code)
-        if mapping_df is None: return
+        if mapping_df is None: 
+            show_error_message("Proses Gagal", ERROR_MESSAGES["MASTER_DATA_MISSING"])
+            return
 
         required_master_cols = {'Email', 'Driver', 'Plat'}
         if not required_master_cols.issubset(mapping_df.columns):
-            raise ValueError(f"Master data driver harus ada kolom: {', '.join(required_master_cols)}")
+            show_error_message("Proses Gagal", ERROR_MESSAGES["MASTER_DATA_MISSING"])
 
         mapping_df_filtered = mapping_df[mapping_df['Email'].str.contains(lokasi_code, na=False, case=False)]
         df_merged = df_api_data.merge(mapping_df_filtered[['Email', 'Driver', 'Plat']], on='Email', how='left')
@@ -265,7 +270,7 @@ def ambil_data(dates, app_instance=None):
         df_merged = df_merged.sort_values(by='Driver', ascending=True)
 
     except Exception as e:
-        messagebox.showerror("Error", f"Gagal memproses master data driver:\n{e}")
+        show_error_message("Error", ERROR_MESSAGES["UNKNOWN_ERROR"].format(error_detail=e))
         return
 
     existing_drivers = df_merged['Driver'].unique().tolist()
@@ -329,7 +334,7 @@ def main():
     """Fungsi utama untuk modul Start Finish Time."""
     config = load_config()
     if not config or not config.get("lokasi"):
-        messagebox.showinfo("Setup Awal", "Lokasi cabang belum diatur. Silakan atur melalui menu Pengaturan > Ganti Lokasi Cabang.")
+        show_error_message("Setup Awal", ERROR_MESSAGES["LOCATION_CODE_MISSING"])
         return
 
     def process_wrapper(dates, app_instance):

@@ -1,27 +1,26 @@
-# auto_routing.py (Final)
-
-import sys
-import os
 from datetime import datetime
-from tkinter import messagebox
-import requests
-import pandas as pd
 from openpyxl import load_workbook
 from openpyxl.styles import Alignment
 from openpyxl.utils import get_column_letter
-
-project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.path.append(project_root)
-
-from modules.shared_utils import (
+import os
+import pandas as pd
+import requests
+import sys
+from utils.function import (
+    get_save_path,
     load_config,
     load_constants,
     load_master_data as shared_load_master_data,
-    get_save_path,
+    load_secret,
     open_file_externally,
-    load_secret 
+    show_error_message,
+    show_info_message
 )
-from modules.gui_utils import create_date_picker_window
+from utils.gui import create_date_picker_window
+from utils.messages import ERROR_MESSAGES, INFO_MESSAGES
+
+project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.append(project_root)
 
 def style_excel(file_path):
     """Menerapkan style pada file Excel yang sudah ada."""
@@ -62,7 +61,7 @@ def process_routing_data(date_formats, gui_instance):
             date_obj = datetime.strptime(selected_date_dmy, '%d-%m-%Y')
             search_date_string = date_obj.strftime('%d/%m/%Y')
         except ValueError:
-            messagebox.showerror("Error Format Tanggal", "Format tanggal dari pemilih tidak valid.")
+            show_error_message("Error Format Tanggal", "Format tanggal dari pemilih tidak valid.")
             return
         
         config = load_config()
@@ -73,11 +72,19 @@ def process_routing_data(date_formats, gui_instance):
         master_data_df = shared_load_master_data(lokasi_cabang=lokasi_code)
 
         # Periksa semua konfigurasi yang diperlukan
-        if not config or not constants or master_data_df is None or master_data_df.empty or not secrets:
-            if master_data_df is not None and master_data_df.empty:
-                messagebox.showwarning("Data Master", f"Tidak ada data driver yang ditemukan untuk lokasi '{lokasi_code}'.")
+        if not config:
+            show_error_message("Gagal", ERROR_MESSAGES["CONFIG_FILE_ERROR"])
             return
-        
+        if not constants:
+            show_error_message("Gagal", ERROR_MESSAGES["CONSTANT_FILE_ERROR"])
+            return
+        if not secrets:
+            show_error_message("Gagal", ERROR_MESSAGES["SECRET_FILE_ERROR"])
+            return
+        if master_data_df is None or master_data_df.empty:
+            show_error_message("Gagal", ERROR_MESSAGES["MASTER_DATA_MISSING"])
+            return
+
         master_data_map = dict(zip(master_data_df['Email'], master_data_df['Driver']))
         
         api_token = secrets.get('token')
@@ -85,11 +92,11 @@ def process_routing_data(date_formats, gui_instance):
         lokasi_mapping = constants.get('lokasi_mapping', {})
         lokasi_name = next((name for name, code in lokasi_mapping.items() if code == lokasi_code), lokasi_code)
 
-        if not api_token or api_token == "PASTE_YOUR_MILEAPP_TOKEN_HERE":
-            messagebox.showerror("Error Token API", "Token API belum diatur di secret.json.")
+        if not api_token:
+            show_error_message("Error Token API", ERROR_MESSAGES["API_TOKEN_MISSING"])
             return
         if not hub_id:
-            messagebox.showerror("Konfigurasi Salah", "KESALAHAN: hubId tidak ditemukan di file konfigurasi.")
+            show_error_message("Konfigurasi Salah", ERROR_MESSAGES["HUB_ID_MISSING"])
             return
 
         api_url = "https://apiweb.mile.app/api/v3/results"
@@ -136,6 +143,7 @@ def process_routing_data(date_formats, gui_instance):
                         })
 
         if not processed_data:
+            show_error_message("Data Tidak Ditemukan", ERROR_MESSAGES["DATA_NOT_FOUND"])
             df_api_grouped = pd.DataFrame()
         else:
             df_api = pd.DataFrame(processed_data)
@@ -201,7 +209,9 @@ def process_routing_data(date_formats, gui_instance):
         file_basename = f"Routing Summary {lokasi_name} - {selected_date_for_filename}"
         save_path = get_save_path(base_name=file_basename, extension=".xlsx")
         
-        if not save_path: return
+        if not save_path: 
+            show_info_message("Dibatalkan", INFO_MESSAGES["CANCELLED_BY_USER"])
+            return
 
         gui_instance.update_status(f"Menyimpan ke {os.path.basename(save_path)}...")
         with pd.ExcelWriter(save_path, engine='openpyxl') as writer:
@@ -213,13 +223,26 @@ def process_routing_data(date_formats, gui_instance):
         style_excel(save_path)
         
         gui_instance.update_status("Membuka file...")
-        open_file_externally(save_path) # Menggunakan fungsi open_file_externally dari shared_utils
+        open_file_externally(save_path)
         
         gui_instance.update_status("Selesai.")
 
+    except requests.exceptions.HTTPError as errh:
+        status_code = errh.response.status_code
+        if status_code == 401:
+            show_error_message("Akses Ditolak (401)", ERROR_MESSAGES["API_TOKEN_MISSING"])
+        elif status_code >= 500:
+            show_error_message("Masalah Server API", ERROR_MESSAGES["SERVER_ERROR"].format(error_detail=status_code))
+        else:
+            show_error_message("Kesalahan HTTP", ERROR_MESSAGES["HTTP_ERROR_GENERIC"].format(status_code=status_code))
+    except requests.exceptions.ConnectionError:
+        show_error_message("Koneksi Gagal", ERROR_MESSAGES["CONNECTION_ERROR"].format(error_detail="Tidak dapat terhubung ke server. Periksa koneksi internet Anda."))
+    except requests.exceptions.RequestException as e:
+        show_error_message("Kesalahan API", ERROR_MESSAGES["API_REQUEST_FAILED"].format(error_detail=e))
     except Exception as e:
         import traceback
-        messagebox.showerror("Error Tak Terduga", f"Terjadi kesalahan: {e}\n\n{traceback.format_exc()}")
+        show_error_message("Error Tak Terduga", ERROR_MESSAGES["UNKNOWN_ERROR"].format(error_detail=f"Terjadi kesalahan: {e}\n\n{traceback.format_exc()}"))
+
 
 def main():
     """Fungsi utama untuk modul Auto Routing Summary."""

@@ -1,18 +1,18 @@
 # modules/Sync_Driver/apps.py (KODE BARU)
 
 import requests
-import json
-from tkinter import messagebox
 
 # 1. Impor semua fungsi dan path yang dibutuhkan dari shared_utils
-from ..shared_utils import (
+from utils.function import (
+    MASTER_JSON_PATH,
     load_config, 
     load_constants, 
     load_json_data, 
+    load_secret,
     save_json_data,
-    MASTER_JSON_PATH,
-    load_secret
+    show_error_message
 )
+from utils.messages import ERROR_MESSAGES
 
 # ==============================================================================
 # FUNGSI-FUNGSI BANTU (HELPER FUNCTIONS)
@@ -43,10 +43,7 @@ def fetch_and_process_vehicle_data(token, hub_id, lokasi_nama):
         vehicle_data = api_response_data.get('data')
 
         if not vehicle_data:
-            messagebox.showwarning(
-                "Data Tidak Ditemukan",
-                f"Tidak ada data kendaraan yang ditemukan dari API untuk lokasi '{lokasi_nama}'.\n\nHubungi Admin."
-            )
+            show_error_message("Data Tidak Ditemukan", ERROR_MESSAGES["DATA_NOT_FOUND"])
             return []
 
         processed_data = [
@@ -56,9 +53,9 @@ def fetch_and_process_vehicle_data(token, hub_id, lokasi_nama):
         return processed_data
 
     except requests.exceptions.HTTPError as err:
-        raise ValueError(f"Gagal mengambil data dari API (HTTP Status: {err.response.status_code}).\nPastikan Token atau Hub ID sudah benar.")
+        show_error_message("Kesalahan HTTP", ERROR_MESSAGES["HTTP_ERROR_GENERIC"].format(status_code=err.response.status_code))
     except requests.exceptions.RequestException as e:
-        raise ConnectionError(f"Gagal terhubung ke API: {e}")
+        show_error_message("Kesalahan API", ERROR_MESSAGES["API_REQUEST_FAILED"].format(error_detail=e))
 
 
 def compare_and_update_master(api_data, master_data):
@@ -94,12 +91,12 @@ def main():
         secrets = load_secret()
 
         if not constants or not config or not secrets:
-            messagebox.showerror("Gagal", "File konfigurasi atau secrets gagal dimuat. Proses dibatalkan.")
+            show_error_message("Gagal", ERROR_MESSAGES["CONFIG_FILE_ERROR"])
             return
 
         lokasi_kode = config.get('lokasi')
         if not lokasi_kode:
-            messagebox.showerror("Gagal", "Kode lokasi tidak ditemukan. Silakan atur lokasi terlebih dahulu.")
+            show_error_message("Gagal", ERROR_MESSAGES["LOCATION_CODE_MISSING"])
             return
 
         # Ambil token dan hubId
@@ -111,11 +108,11 @@ def main():
         lokasi_nama = get_lokasi_nama_by_kode(lokasi_mapping, lokasi_kode)
         
         if not api_token:
-            messagebox.showerror("Error Token API", "Token API tidak ditemukan.\n\nHubungi Admin.")
+            show_error_message("Error Token API", ERROR_MESSAGES["API_TOKEN_MISSING"])
             return
         
         if not hub_id:
-            messagebox.showerror("Gagal", f"Hub ID tidak ditemukan.\n\nHubungi Admin.")
+            show_error_message("Gagal", ERROR_MESSAGES["HUB_ID_MISSING"].format(lokasi_code="ini"))
             return
         
         # 3. Proses sinkronisasi
@@ -123,7 +120,7 @@ def main():
         
         master_vehicle_list = load_json_data(MASTER_JSON_PATH)
         if master_vehicle_list is None:
-             messagebox.showerror("Gagal", "File master data tidak ditemukan.")
+             show_error_message("Gagal", ERROR_MESSAGES["MASTER_DATA_MISSING"])
              return
 
         updated_master, was_updated = compare_and_update_master(processed_api_list, master_vehicle_list)
@@ -134,10 +131,10 @@ def main():
 
     except (ValueError, ConnectionError) as e:
         # Menangkap error spesifik dari proses fetch
-        messagebox.showerror("Error Sinkronisasi", str(e))
+        show_error_message("Error Sinkronisasi", str(e))
     except Exception as e:
         # Menangkap error lainnya
-        messagebox.showerror("Error Tidak Dikenal", f"Terjadi kesalahan tak terduga saat sinkronisasi:\n{e}")
+        show_error_message("Error Tidak Dikenal", ERROR_MESSAGES["UNKNOWN_ERROR"].format(error_detail=e))
 
 if __name__ == "__main__":
     # Untuk pengujian langsung (jika diperlukan)

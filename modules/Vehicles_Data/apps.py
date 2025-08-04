@@ -1,27 +1,28 @@
-# modules/Vehicles_Data/apps.py
+# modules/Vehicles_Data/apps.py (KODE BARU)
 
 import requests
 import pandas as pd
 import os
 import sys
-from tkinter import messagebox
 from datetime import datetime
 import openpyxl
-from openpyxl.utils import get_column_letter
 
 # Menambahkan project root ke sys.path agar impor shared_utils berfungsi
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.append(project_root)
 
 # Impor fungsi terpusat dari shared_utils
-from modules.shared_utils import (
+from utils.function import (
+    get_save_path,
     load_config,
     load_constants,
     load_master_data,
-    get_save_path,
+    load_secret,
     open_file_externally,
-    load_secret 
+    show_error_message,
+    show_info_message
 )
+from utils.messages import ERROR_MESSAGES, INFO_MESSAGES
 
 def auto_size_columns(workbook):
     """Menyesuaikan lebar kolom agar sesuai dengan panjang teks maksimal."""
@@ -51,10 +52,10 @@ def fetch_and_save_vehicles_data():
     secrets = load_secret()
 
     if not config:
-        messagebox.showerror("Error Konfigurasi", "File config.json tidak ditemukan atau kosong.")
+        show_error_message("Error Konfigurasi", ERROR_MESSAGES["CONFIG_FILE_ERROR"])
         return False
     if not constants:
-        messagebox.showerror("Error Konstanta", "File constant.json tidak ditemukan atau kosong.")
+        show_error_message("Error Konstanta", ERROR_MESSAGES["CONSTANT_FILE_ERROR"])
         return False
     if not secrets: 
         return False
@@ -65,13 +66,13 @@ def fetch_and_save_vehicles_data():
     lokasi_mapping = constants.get('lokasi_mapping', {})
 
     if not api_token:
-        messagebox.showerror("Error Token API", "Token API tidak ditemukan.\n\nHubungi Admin.")
+        show_error_message("Error Token API", ERROR_MESSAGES["API_TOKEN_MISSING"])
         return False
     if not lokasi_code:
-        messagebox.showerror("Error Konfigurasi", "Lokasi cabang tidak diatur di config.json.")
+        show_error_message("Error Konfigurasi", ERROR_MESSAGES["LOCATION_CODE_MISSING"])
         return False
     if lokasi_code not in hub_ids:
-        messagebox.showerror("Error Hub ID", f"Hub ID untuk lokasi '{lokasi_code}' tidak ditemukan di constant.json.")
+        show_error_message("Error Hub ID", ERROR_MESSAGES["HUB_ID_MISSING"].format(lokasi_code=lokasi_code))
         return False
 
     hub_id = hub_ids.get(lokasi_code)
@@ -94,7 +95,7 @@ def fetch_and_save_vehicles_data():
         vehicles_data = response_data.get('data')
 
         if not vehicles_data:
-            messagebox.showwarning("Data Kosong", "Tidak ada data kendaraan yang ditemukan dari API.")
+            show_error_message("Data Kosong", ERROR_MESSAGES["DATA_NOT_FOUND"])
             return False
         
         master_df = load_master_data(lokasi_cabang=lokasi_code)
@@ -214,7 +215,7 @@ def fetch_and_save_vehicles_data():
         save_path = get_save_path(file_basename)
         
         if not save_path:
-            messagebox.showwarning("Dibatalkan", "Penyimpanan file dibatalkan.")
+            show_info_message("Dibatalkan", INFO_MESSAGES["CANCELLED_BY_USER"])
             return False
 
         with pd.ExcelWriter(save_path, engine='openpyxl') as writer:
@@ -234,23 +235,20 @@ def fetch_and_save_vehicles_data():
     except requests.exceptions.HTTPError as errh:
         status_code = errh.response.status_code
         if status_code == 401:
-            messagebox.showerror("Akses Ditolak (401)", "KESALAHAN: Unauthorized. Token API mungkin salah atau sudah kedaluwarsa.")
+            show_error_message("Akses Ditolak (401)", ERROR_MESSAGES["API_TOKEN_MISSING"])
         elif status_code >= 500:
-            messagebox.showerror("Masalah Server API", f"KESALAHAN: Terjadi masalah pada server API (Status Code: {status_code}). Coba lagi nanti.")
+            show_error_message("Masalah Server API", ERROR_MESSAGES["SERVER_ERROR"].format(status_code=status_code))
         else:
-            messagebox.showerror("Kesalahan HTTP", f"KESALAHAN HTTP: {errh}")
+            show_error_message("Kesalahan HTTP", ERROR_MESSAGES["HTTP_ERROR_GENERIC"].format(error_detail=errh))
         return False
     except requests.exceptions.ConnectionError:
-        messagebox.showerror("Koneksi Gagal", "KESALAHAN: Tidak dapat terhubung ke server. Periksa koneksi internet Anda.")
-        return False
-    except requests.exceptions.Timeout:
-        messagebox.showerror("Timeout", "Permintaan API melebihi batas waktu.")
+        show_error_message("Koneksi Gagal", ERROR_MESSAGES["API_CONNECTION_FAILED_GENERIC"])
         return False
     except requests.exceptions.RequestException as e:
-        messagebox.showerror("Kesalahan API", f"Terjadi kesalahan saat melakukan permintaan API:\n{e}")
+        show_error_message("Kesalahan API", ERROR_MESSAGES["API_REQUEST_FAILED"].format(error_detail=e))
         return False
     except Exception as e:
-        messagebox.showerror("Error Tak Terduga", f"Terjadi kesalahan tak terduga:\n{e}")
+        show_error_message("Error Tak Terduga", ERROR_MESSAGES["UNKNOWN_ERROR"].format(error_detail=e))
         return False
 
 def main():

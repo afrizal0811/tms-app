@@ -1,13 +1,22 @@
-import pandas as pd
 from datetime import datetime
-from tkinter import filedialog, messagebox
-from openpyxl.utils import get_column_letter
 from openpyxl.styles import Alignment, PatternFill
-import re
+from openpyxl.utils import get_column_letter
+from tkinter import filedialog
 import os
+import pandas as pd
+import re
 
 # 2. Impor semua fungsi bantuan dari shared_utils
-from ..shared_utils import load_config, load_master_data, get_save_path, open_file_externally, load_constants
+from utils.function import (
+    get_save_path,
+    load_config,
+    load_constants,
+    load_master_data,
+    open_file_externally,
+    show_error_message,
+    show_info_message
+)
+from utils.messages import ERROR_MESSAGES, INFO_MESSAGES
 
 # =============================================================================
 # BAGIAN 1: FUNGSI-FUNGSI BANTU (HELPER FUNCTIONS)
@@ -213,7 +222,7 @@ def process_pending_so(df, master_driver_df):
     for col in time_cols_to_convert:
         if col in df_filtered.columns: df_filtered = convert_datetime_column(df_filtered, col)
     if 'Klik Jika Anda Sudah Sampai' in df_filtered.columns and 'doneTime' in df_filtered.columns:
-         df_filtered['Actual Visit Time'] = df_filtered.apply(lambda row: calculate_actual_visit(row['Klik Jika Anda Sudah Sampai'], row['doneTime']), axis=1)
+        df_filtered['Actual Visit Time'] = df_filtered.apply(lambda row: calculate_actual_visit(row['Klik Jika Anda Sudah Sampai'], row['doneTime']), axis=1)
     def extract_customer_id(title):
         if not isinstance(title, str): return ''
         try:
@@ -250,18 +259,18 @@ def main():
     config = load_config()
     constants = load_constants()
 
-    if config and "lokasi" in config:
-        lokasi_code = config["lokasi"]
-    else:
-        messagebox.showwarning("Dibatalkan", "Pilih lokasi cabang!")
+    if not config or "lokasi" not in config:
+        show_error_message("Dibatalkan", ERROR_MESSAGES["LOCATION_CODE_MISSING"])
         return
 
-    messagebox.showinfo("Informasi", "Pilih Export Task")
+    lokasi_code = config["lokasi"]
+    
+    show_info_message("Upload File Task", INFO_MESSAGES["SELECT_FILE"].format(text="export task"))
     
     input_file = filedialog.askopenfilename(title="Pilih File Excel yang Akan Diproses", filetypes=[("Excel Files", "*.xlsx *.xls")])
     
     if not input_file:
-        messagebox.showwarning("Proses Gagal", "Proses Dibatalkan")
+        show_info_message("Dibatalkan", INFO_MESSAGES["CANCELLED_BY_USER"])
         return
 
     try:
@@ -271,13 +280,13 @@ def main():
         required_columns = ['assignedVehicle', 'assignee', 'Alasan Tidak Bisa Dikunjungi', 'Alasan Batal','Open Time', 'Close Time', 'eta', 'etd', 'Klik Jika Anda Sudah Sampai', 'doneTime', 'Visit Time', 'routePlannedOrder']
         missing_columns = [col for col in required_columns if col not in df_original.columns]
         if missing_columns:
-            messagebox.showerror("Proses Gagal", f"File tidak valid!\n\nUpload file Export Task dengan benar!")
+            show_error_message("Proses Gagal", ERROR_MESSAGES["INVALID_FILE"].format(details="Upload file Export Task dengan benar!"))
             return
             
         email_prefixes = df_original["assignee"].dropna().astype(str).str.extract(r'kendaraan\.([^.@]+)', expand=False)
         email_prefixes = email_prefixes.dropna().str.lower().unique()
         if not any(lokasi_code.lower() in prefix for prefix in email_prefixes):
-            messagebox.showerror("Proses Gagal", f"Lokasi cabang tidak valid!\n\nLokasi cabang tidak sesuai dengan file Export Task!")
+            show_error_message("Proses Gagal", ERROR_MESSAGES["LOCATION_CODE_MISSING"])
             return
 
         results_to_save = {}
@@ -285,6 +294,7 @@ def main():
         # Panggil fungsi terpusat untuk memuat data master
         master_df = load_master_data(lokasi_code)
         if master_df is None:
+            show_error_message("Proses Gagal", ERROR_MESSAGES["MASTER_DATA_MISSING"])
             return
 
         result_total = process_total_delivered(df_original, master_df)
@@ -300,7 +310,7 @@ def main():
             results_to_save['Hasil RO vs Real'] = result_ro
                 
         if not results_to_save:
-            messagebox.showerror("Proses Gagal", "File tidak valid atau tidak ada data yang relevan untuk diproses.")
+            show_error_message("Proses Gagal", ERROR_MESSAGES["DATA_NOT_FOUND"])
             return
         
         # --- MODIFIKASI UNTUK NAMA FILE DINAMIS ---
@@ -322,7 +332,7 @@ def main():
         save_file_path = get_save_path(file_basename)
         
         if not save_file_path:
-            messagebox.showwarning("Proses Gagal", "Proses Dibatalkan")
+            show_error_message("Proses Gagal", INFO_MESSAGES["CANCELLED_BY_USER"])
             return
             
         with pd.ExcelWriter(save_file_path, engine='openpyxl') as writer:
@@ -336,7 +346,7 @@ def main():
         open_file_externally(save_file_path)
         
     except Exception as e:
-        messagebox.showerror("Terjadi Error", f"Sebuah kesalahan tak terduga terjadi:\n{e}")
+        show_error_message("Terjadi Error", ERROR_MESSAGES["UNKNOWN_ERROR"].format(error_detail=e))
 
 if __name__ == "__main__":
     main()

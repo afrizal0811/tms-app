@@ -1,24 +1,27 @@
 # @GUI/apps.py (KODE YANG DIMODIFIKASI)
 
-import tkinter as tk
-from tkinter import messagebox, ttk
-import sys
+from tkinter import ttk
 import requests
-import webbrowser
+import sys
 import threading
-
-# --- Impor Lokal ---
+import tkinter as tk
+import webbrowser
 from version import CURRENT_VERSION, REMOTE_VERSION_URL, DOWNLOAD_LINK
-
-# 1. Impor fungsi terpusat dari shared_utils
-from modules.shared_utils import (
+from utils.function import (
+    CONFIG_PATH,
+    ensure_config_exists,
     load_config,
     load_constants,
-    save_json_data,
-    ensure_config_exists,
     resource_path,
-    CONFIG_PATH # Diperlukan untuk menyimpan config
+    save_json_data,
+    show_error_message,
+    show_info_message,
 )
+from utils.messages import (
+    ERROR_MESSAGES,
+    INFO_MESSAGES
+)
+
 
 # --- Impor Modul Aplikasi ---
 from modules.Routing_Summary.apps import main as routing_summary_main
@@ -34,10 +37,6 @@ ensure_config_exists()
 # ==============================================================================
 # FUNGSI BANTUAN LOKAL DAN KONFIGURASI AWAL
 # ==============================================================================
-
-def show_wip_popup():
-    """Menampilkan pop-up bahwa fitur masih dalam pengembangan."""
-    messagebox.showinfo("Segera Hadir", "Fitur ini masih dalam tahap pengembangan dan akan segera tersedia.")
 
 # Muat konstanta di awal menggunakan shared_utils
 CONSTANTS = load_constants()
@@ -116,7 +115,8 @@ def check_update():
         response.raise_for_status()
         latest_version = response.text.strip()
         if latest_version > CURRENT_VERSION:
-            if messagebox.askyesno("Update Tersedia", f"Versi baru: {latest_version}\nVersi Anda: {CURRENT_VERSION}\n\nBuka halaman update?"):
+            message = INFO_MESSAGES["UPDATE_AVAILABLE"].format(latest_version=latest_version, current_version=CURRENT_VERSION)
+            if show_info_message("Update Tersedia", message):
                 webbrowser.open(DOWNLOAD_LINK)
     except requests.exceptions.RequestException:
         pass
@@ -127,16 +127,16 @@ def periksa_konfigurasi_awal(parent_window):
     """
     config = load_config()
     if not config or not config.get("lokasi"):
-        messagebox.showinfo("Setup Awal", "Selamat datang! Silakan pilih lokasi cabang Anda terlebih dahulu.")
+        show_info_message("Setup Awal", INFO_MESSAGES["WELCOME_SETUP"])
         pilih_lokasi(parent_window)
         update_title(parent_window)
         config = load_config()
     
     if not config or not config.get("user_checked"):
-        messagebox.showinfo("Setup Akun", "Selanjutnya, silakan cari dan pilih akun pengguna Anda untuk aplikasi ini.")
+        show_info_message("Setup Akun", INFO_MESSAGES["USER_SETUP"])
         pilih_pengguna_awal(parent_window)
         if not (load_config() or {}).get("user_checked"):
-            messagebox.showerror("Setup Tidak Lengkap", "Pemilihan akun pengguna dibatalkan. Aplikasi akan ditutup.")
+            show_error_message("Setup Tidak Lengkap", ERROR_MESSAGES["USER_SETUP_CANCELED"])
             on_closing()
 
 def atur_visibilitas_menu(menu_bar):
@@ -227,9 +227,9 @@ pengaturan_menu.add_command(label="Ganti Lokasi Cabang", command=ganti_lokasi)
 pengaturan_menu.add_command(label="Sinkronisasi Driver", command=lambda: run_sync_in_background(root))
 
 def show_about():
-    messagebox.showinfo(
+    show_info_message(
         "Tentang Aplikasi",
-        f"TMS Data Processing\nVersi: {CURRENT_VERSION}\n\nDibuat oleh: Afrizal Maulana - EDP © 2025"
+        INFO_MESSAGES["ABOUT_APP"].format(version=CURRENT_VERSION)
     )
 
 pengaturan_menu.add_separator()
