@@ -76,7 +76,8 @@ def fetch_and_save_vehicles_data():
         return False
 
     hub_id = hub_ids.get(lokasi_code)
-    api_url = "https://apiweb.mile.app/api/v3/vehicles"
+    base_url = constants.get('base_url')
+    api_url = f"{base_url}/vehicles"
     
     params = {
         "limit": 500,

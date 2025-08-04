@@ -98,8 +98,8 @@ def process_routing_data(date_formats, gui_instance):
         if not hub_id:
             show_error_message("Konfigurasi Salah", ERROR_MESSAGES["HUB_ID_MISSING"])
             return
-
-        api_url = "https://apiweb.mile.app/api/v3/results"
+        base_url = constants.get('base_url')
+        api_url = f"{base_url}/results"
         params = {'s': search_date_string, 'limit': 1000, 'hubId': hub_id}
         headers = {'Authorization': f'Bearer {api_token}'}
 

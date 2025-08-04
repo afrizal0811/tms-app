@@ -29,9 +29,10 @@ def get_lokasi_nama_by_kode(mapping, kode):
             return nama
     return None
 
-def fetch_and_process_vehicle_data(token, hub_id, lokasi_nama):
+def fetch_and_process_vehicle_data(token, hub_id, constants):
     """Memanggil API kendaraan dan memproses hasilnya."""
-    api_url = 'https://apiweb.mile.app/api/v3/vehicles'
+    base_url = constants.get('base_url')
+    api_url = f'{base_url}/vehicles'
     headers = {'Authorization': f'Bearer {token}'}
     params = {'limit': 100, 'hubId': hub_id}
     
@@ -116,7 +117,7 @@ def main():
             return
         
         # 3. Proses sinkronisasi
-        processed_api_list = fetch_and_process_vehicle_data(api_token, hub_id, lokasi_nama)
+        processed_api_list = fetch_and_process_vehicle_data(api_token, hub_id, constants)
         
         master_vehicle_list = load_json_data(MASTER_JSON_PATH)
         if master_vehicle_list is None:

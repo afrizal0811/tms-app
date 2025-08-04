@@ -6,7 +6,6 @@ from openpyxl.utils import get_column_letter
 import openpyxl
 import pandas as pd
 import requests
-import tkinter as tk
 
 # Impor fungsi bantuan dari shared_utils dan gui_utils
 from utils.function import (
@@ -196,7 +195,8 @@ def ambil_data(dates, app_instance=None):
     tanggal_input = tanggal_obj.strftime("%Y-%m-%d")
     tanggal_from = (tanggal_obj - timedelta(days=1)).strftime("%Y-%m-%d")
 
-    url = "https://apiweb.mile.app/api/v3/location-histories"
+    base_url = constants.get('base_url')
+    url = f"{base_url}/location-histories"
     params = {
         "limit": 150, "startFinish": "true", "fields": "finish,startTime",
         "timeTo": f"{tanggal_input} 23:59:59", "timeFrom": f"{tanggal_from} 00:00:00",

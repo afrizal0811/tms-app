@@ -128,8 +128,8 @@ def panggil_api_dan_simpan(dates, app_instance):
         show_error_message("Konfigurasi Salah", ERROR_MESSAGES["HUB_ID_MISSING"])
         return False
 
-    # --- API Call ---
-    api_url = "https://apiweb.mile.app/api/v3/tasks"
+    base_url = constants.get('base_url')
+    api_url = f"{base_url}/tasks"
     params = {
         "status": "DONE",
         "hubId": HUB_ID,

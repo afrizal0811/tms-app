@@ -1,4 +1,5 @@
 {
+    "base_url": "https://apiweb.mile.app/api/v3",
     "lokasi_mapping": {
         "Sidoarjo": "plsda",
         "Jakarta": "pljkt",

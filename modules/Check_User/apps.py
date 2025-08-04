@@ -48,7 +48,8 @@ def main(parent_window):
             return
 
         restricted_roles = list(constants.get('restricted_role_ids', {}).values())
-        api_url = "https://apiweb.mile.app/api/v3/users"
+        base_url = constants.get('base_url')
+        api_url = f"{base_url}/users"
         headers = {'Authorization': f'Bearer {api_token}'}
         params = {'limit': 500, 'hubId': hub_id, 'status': 'active'}
 
