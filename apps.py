@@ -1,12 +1,13 @@
 # @GUI/apps.py (KODE YANG DIMODIFIKASI)
 
 from tkinter import ttk
+from version import CURRENT_VERSION, REMOTE_VERSION_URL, DOWNLOAD_LINK
+import os
 import requests
 import sys
 import threading
 import tkinter as tk
 import webbrowser
-from version import CURRENT_VERSION, REMOTE_VERSION_URL, DOWNLOAD_LINK
 from utils.function import (
     CONFIG_PATH,
     ensure_config_exists,
@@ -47,6 +48,15 @@ LOKASI_MAPPING = CONSTANTS.get('lokasi_mapping', {})
 LOKASI_DISPLAY = CONSTANTS.get('lokasi_display', {})
 KODE_KE_LOKASI = {v: k for k, v in LOKASI_MAPPING.items()}
 
+def reset_config_and_exit():
+    """Menghapus config.json agar setup wajib diulang, lalu keluar aplikasi."""
+    try:
+        if os.path.exists(CONFIG_PATH):
+            os.remove(CONFIG_PATH)
+    except Exception:
+        pass
+    show_error_message("Setup Tidak Lengkap", ERROR_MESSAGES["SETUP_CANCELED"])
+    on_closing()
 
 def update_title(root_window):
     """Membaca konfigurasi dan memperbarui judul window utama."""
@@ -62,10 +72,9 @@ def update_title(root_window):
     root_window.title(title)
 
 def pilih_lokasi(parent_window):
-    """Menampilkan GUI modal untuk memilih lokasi cabang."""
     reverse_dict = {v: k for k, v in LOKASI_DISPLAY.items()}
     selected_display_name = list(LOKASI_DISPLAY.keys())[0]
-    
+
     config_data = load_config() or {}
     kode_lokasi = config_data.get("lokasi", "")
     if kode_lokasi in reverse_dict:
@@ -77,12 +86,13 @@ def pilih_lokasi(parent_window):
     x, y = (dialog.winfo_screenwidth() - lebar) // 2, (dialog.winfo_screenheight() - tinggi) // 2
     dialog.geometry(f"{lebar}x{tinggi}+{x}+{y}")
     dialog.resizable(False, False)
+
     tk.Label(dialog, text="Pilih Lokasi Cabang:", font=("Arial", 14)).pack(pady=10)
     selected_var = tk.StringVar(value=selected_display_name)
     combo = ttk.Combobox(dialog, values=list(LOKASI_DISPLAY.keys()), textvariable=selected_var, font=("Arial", 12), state="readonly")
     combo.pack(pady=10)
     combo.set(selected_display_name)
-    
+
     def on_select():
         selected = combo.get()
         if selected in LOKASI_DISPLAY:
@@ -91,14 +101,23 @@ def pilih_lokasi(parent_window):
             save_json_data(config_data, CONFIG_PATH)
             dialog.destroy()
 
+    # --- Tambahkan handler close ---
+    def on_cancel():
+        dialog.destroy()
+        reset_config_and_exit()
+
+    dialog.protocol("WM_DELETE_WINDOW", on_cancel)
     tk.Button(dialog, text="Pilih", command=on_select, font=("Arial", 12)).pack(pady=10)
     dialog.transient(parent_window)
     dialog.grab_set()
     parent_window.wait_window(dialog)
 
+
 def pilih_pengguna_awal(parent_window):
-    """Menjalankan proses pemilihan pengguna menggunakan modul Check_User."""
     check_user_main(parent_window)
+    config_after = load_config()
+    if not config_after or not config_after.get("user_checked"):
+        reset_config_and_exit()
 
 def on_closing():
     try:
@@ -121,22 +140,16 @@ def check_update():
         pass
 
 def periksa_konfigurasi_awal(parent_window):
-    """
-    Memeriksa apakah lokasi dan pengguna sudah diatur.
-    """
     config = load_config()
     if not config or not config.get("lokasi"):
-        show_info_message("Setup Awal", INFO_MESSAGES["WELCOME_SETUP"])
+        show_info_message("Setup Lokasi", INFO_MESSAGES["LOCATION_SETUP"])
         pilih_lokasi(parent_window)
         update_title(parent_window)
         config = load_config()
-    
+
     if not config or not config.get("user_checked"):
         show_info_message("Setup Akun", INFO_MESSAGES["USER_SETUP"])
         pilih_pengguna_awal(parent_window)
-        if not (load_config() or {}).get("user_checked"):
-            show_error_message("Setup Tidak Lengkap", ERROR_MESSAGES["USER_SETUP_CANCELED"])
-            on_closing()
 
 def atur_visibilitas_menu(menu_bar):
     """Mengatur visibilitas item menu berdasarkan role pengguna."""
