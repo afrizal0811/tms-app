@@ -250,6 +250,44 @@ def process_pending_so(df, master_driver_df):
     if 'Driver' in df_final.columns: df_final = df_final.sort_values(by='Driver', ascending=True).reset_index(drop=True)
     return df_final
 
+def process_update_longlat(df):
+    """
+    Membuat dataframe untuk sheet 'Update Longlat'
+    Hanya ambil baris dengan 'Klik Lokasi Client' != '-'
+    """
+    if 'title' not in df.columns or 'Klik Lokasi Client' not in df.columns:
+        return pd.DataFrame(columns=["Customer ID", "Customer Name", "Location ID", "New Longlat"])
+
+    data = []
+    for _, row in df.iterrows():
+        title = str(row['title']) if pd.notna(row['title']) else ''
+        new_longlat = row['Klik Lokasi Client'] if pd.notna(row['Klik Lokasi Client']) else ''
+
+        # Skip jika nilai '-' atau kosong
+        if str(new_longlat).strip() == '-' or str(new_longlat).strip() == '':
+            continue
+
+        # Ekstraksi berdasarkan tanda hubung
+        parts = [p.strip() for p in title.split('-')]
+        if len(parts) >= 3:
+            customer_name = parts[0]
+            customer_id = parts[1]
+            location_id = parts[-1]
+        else:
+            # Fallback regex untuk customer_id dengan pola C0xxxxxxx
+            customer_id_match = re.search(r'(C0\d+)', title)
+            customer_id = customer_id_match.group(1) if customer_id_match else ''
+            customer_name = parts[0] if parts else ''
+            location_id = parts[-1] if len(parts) > 1 else ''
+
+        data.append({
+            "Customer ID": customer_id,
+            "Customer Name": customer_name,
+            "Location ID": location_id,
+            "New Longlat": new_longlat
+        })
+
+    return pd.DataFrame(data, columns=["Customer ID", "Customer Name", "Location ID", "New Longlat"])
 
 # =============================================================================
 # BAGIAN 3: FUNGSI EKSEKUSI UTAMA
@@ -308,7 +346,17 @@ def main():
         result_ro = process_ro_vs_real(df_original, master_df)
         if result_ro is not None and not result_ro.empty:
             results_to_save['Hasil RO vs Real'] = result_ro
-                
+
+        result_update_longlat = process_update_longlat(df_original)
+        if result_update_longlat.empty:
+            result_update_longlat = pd.DataFrame([{
+                "Customer ID": "Tidak Ada Update Longlat",
+                "Customer Name": "",
+                "Location ID": "",
+                "New Longlat": ""
+            }])
+        results_to_save['Update Longlat'] = result_update_longlat
+            
         if not results_to_save:
             show_error_message("Proses Gagal", ERROR_MESSAGES["DATA_NOT_FOUND"])
             return
@@ -336,13 +384,19 @@ def main():
             return
             
         with pd.ExcelWriter(save_file_path, engine='openpyxl') as writer:
-            sheet_order = ['Total Delivered', 'Hasil Pending SO', 'Hasil RO vs Real']
+            sheet_order = ['Total Delivered', 'Hasil Pending SO', 'Hasil RO vs Real', 'Update Longlat']
             for sheet_name in sheet_order:
                 if sheet_name in results_to_save:
                     results_to_save[sheet_name].to_excel(writer, sheet_name=sheet_name, index=False)
             
             apply_styles_and_formatting(writer)
-        
+                        # Auto-width untuk sheet Update Longlat
+            if 'Update Longlat' in writer.sheets:
+                worksheet = writer.sheets['Update Longlat']
+                for col_idx, col_cells in enumerate(worksheet.columns, 1):
+                    max_length = max(len(str(cell.value)) if cell.value is not None else 0 for cell in col_cells)
+                    worksheet.column_dimensions[get_column_letter(col_idx)].width = max_length + 2
+
         open_file_externally(save_file_path)
         
     except Exception as e:

@@ -242,6 +242,41 @@ def panggil_api_dan_simpan(dates, app_instance):
             last_driver = row['Driver']
         df_ro_vs_real = pd.DataFrame(final_ro_rows)
 
+    # --- Generate Sheet "Update Longlat" ---
+    # --- Generate Sheet "Update Longlat" (tetap ada meskipun kosong) ---
+    update_longlat_data = []
+    for task in tasks_data:
+        longlat = task.get('klikLokasiClient', '')
+        if not longlat:  # Skip jika klikLokasiClient kosong/null
+            continue
+
+        title = task.get('title', '')
+
+        # Ekstrak Customer ID
+        match_id = re.search(r'C0\d{6,}', title)
+        customer_id = match_id.group(0) if match_id else 'N/A'
+
+        # Ekstrak Customer Name (sebelum tanda hubung pertama)
+        customer_name = title.split(' - ')[0].strip()
+
+        # Ekstrak Location ID (setelah tanda hubung terakhir)
+        parts = title.split(' - ')
+        location_id = parts[-1].strip() if len(parts) > 2 else 'N/A'
+
+        update_longlat_data.append({
+            'Customer ID': customer_id,
+            'Customer Name': customer_name,
+            'Location ID': location_id,
+            'New Longlat': longlat
+        })
+
+    if update_longlat_data:
+        df_longlat = pd.DataFrame(update_longlat_data)
+        df_longlat = df_longlat.sort_values(by='Customer ID', ascending=True)
+    else:
+        # Jika tidak ada data, buat DataFrame 1 kolom dengan 1 row teks
+        df_longlat = pd.DataFrame({"": ["Tidak Ada Update Longlat"]})
+
     # --- Excel Writing ---
     app_instance.update_status("💾 Meminta lokasi penyimpanan file...")
 
@@ -264,6 +299,11 @@ def panggil_api_dan_simpan(dates, app_instance):
                                  colored_cols={' ': "FFC0CB"})
             format_excel_sheet(writer, df_ro_vs_real, 'Hasil RO vs Real',
                                  centered_cols=['Status Delivery', 'Open Time', 'Close Time', 'Actual Arrival', 'Actual Departure', 'Visit Time', 'Actual Visit Time', 'ET Sequence', 'Real Sequence', 'Is Same Sequence'])
+            if "Customer ID" in df_longlat.columns:
+                format_excel_sheet(writer, df_longlat, 'Update Longlat',
+                                   centered_cols=['Customer ID', 'Location ID'])
+            else:
+                df_longlat.to_excel(writer, index=False, sheet_name='Update Longlat')
 
         open_file_externally(NAMA_FILE_OUTPUT)
         return True
