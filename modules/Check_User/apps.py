@@ -75,7 +75,7 @@ def main(parent_window):
 
         # filter default menggunakan restricted_roles dan mengecualikan EXCLUDED_ROLE_ID
         def filter_users():
-            return [u for u in users_data if u.get('roleId') in restricted_roles and u.get('roleId') != EXCLUDED_ROLE_ID]
+            return [u for u in users_data if u.get('roleId') in restricted_roles and u.get('roleId') not in (EXCLUDED_ROLE_ID,)]
 
         filtered_users = filter_users()
         filtered_users.sort(key=lambda u: u.get('name', '').lower())

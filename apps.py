@@ -187,7 +187,7 @@ def run_sync_in_background(root_window):
     pengaturan_menu.entryconfig("Sinkronisasi Driver", state="disabled")
     proses_menu.entryconfig("Routing Summary", state="disabled")
     proses_menu.entryconfig("Delivery Summary", state="disabled")
-    proses_menu.entryconfig("Vehicles Data", state="disabled") # Nonaktifkan menu baru
+    proses_menu.entryconfig("Vehicles Data", state="disabled")
 
     def on_sync_complete():
         # --- [PERBAIKAN] ---
@@ -271,8 +271,8 @@ frame.pack(expand=True)
 button_font = ("Arial", 14, "bold")
 
 buttons_config = [
-    ("Auto Routing Summary", auto_routing_summary_main),
-    ("Auto Delivery Summary", auto_delivery_summary_main),
+    ("Routing Summary", auto_routing_summary_main),
+    ("Delivery Summary", auto_delivery_summary_main),
     ("Start-Finish Time", start_finish_time_main),
 ]
 
