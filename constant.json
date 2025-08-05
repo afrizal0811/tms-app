@@ -1,5 +1,7 @@
 {
     "base_url": "https://apiweb.mile.app/api/v3",
+    "guide_planner": "https://docs.google.com/document/d/1vcd1ZXjIvvLvax4KW-cHNssqRo8bzsXJOWIElIZg9cM/edit?tab=t.0",
+    "guide_driver": "https://docs.google.com/document/d/1ZPej_S8DTNWbH17W-IMIqAAWFirMGfXbjKGqM1Z4HNA/edit?tab=t.0",
     "lokasi_mapping": {
         "Sidoarjo": "plsda",
         "Jakarta": "pljkt",

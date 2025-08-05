@@ -47,6 +47,8 @@ if CONSTANTS is None:
 LOKASI_MAPPING = CONSTANTS.get('lokasi_mapping', {})
 LOKASI_DISPLAY = CONSTANTS.get('lokasi_display', {})
 KODE_KE_LOKASI = {v: k for k, v in LOKASI_MAPPING.items()}
+USER_GUIDE_PLANNER = CONSTANTS.get('guide_planner', '')
+USER_GUIDE_DRIVER = CONSTANTS.get('guide_driver', '')
 
 def reset_config_and_exit():
     """Menghapus config.json agar setup wajib diulang, lalu keluar aplikasi."""
@@ -165,7 +167,7 @@ def atur_visibilitas_menu(menu_bar):
 
     try:
         if user_role_id and user_role_id in restricted_role_id_list:
-            pengaturan_menu.delete("Ganti Lokasi Cabang")
+            konfigurasi_menu.delete("Ganti Lokasi Cabang")
     except tk.TclError:
         pass
 
@@ -184,10 +186,10 @@ def run_sync_in_background(root_window):
     progress.start()
     
     for button in main_buttons: button.config(state='disabled')
-    pengaturan_menu.entryconfig("Sinkronisasi Driver", state="disabled")
-    proses_menu.entryconfig("Routing Summary", state="disabled")
-    proses_menu.entryconfig("Delivery Summary", state="disabled")
-    proses_menu.entryconfig("Vehicles Data", state="disabled")
+    konfigurasi_menu.entryconfig("Sinkronisasi Driver", state="disabled")
+    laporan_menu.entryconfig("Routing Summary", state="disabled")
+    laporan_menu.entryconfig("Delivery Summary", state="disabled")
+    laporan_menu.entryconfig("Data Kendaraan", state="disabled")
 
     def on_sync_complete():
         # --- [PERBAIKAN] ---
@@ -197,10 +199,10 @@ def run_sync_in_background(root_window):
             loading_window.destroy()
 
         for button in main_buttons: button.config(state='normal')
-        pengaturan_menu.entryconfig("Sinkronisasi Driver", state="normal")
-        proses_menu.entryconfig("Routing Summary", state="normal")
-        proses_menu.entryconfig("Delivery Summary", state="normal")
-        proses_menu.entryconfig("Vehicles Data", state="normal") 
+        konfigurasi_menu.entryconfig("Sinkronisasi Driver", state="normal")
+        laporan_menu.entryconfig("Routing Summary", state="normal")
+        laporan_menu.entryconfig("Delivery Summary", state="normal")
+        laporan_menu.entryconfig("Data Kendaraan", state="normal") 
 
     def thread_target():
         try:
@@ -227,16 +229,17 @@ def ganti_lokasi():
 # --- Setup Menu Bar ---
 menu_bar = tk.Menu(root)
 
-proses_menu = tk.Menu(menu_bar, tearoff=0)
-proses_menu.add_command(label="Routing Summary", command=routing_summary_main)
-proses_menu.add_command(label="Delivery Summary", command=delivery_summary_main)
-proses_menu.add_separator()
-proses_menu.add_command(label="Vehicles Data", command=vehicles_data_main)
-menu_bar.add_cascade(label="Proses", menu=proses_menu)
+laporan_menu = tk.Menu(menu_bar, tearoff=0)
+laporan_menu.add_command(label="Routing Summary", command=routing_summary_main)
+laporan_menu.add_command(label="Delivery Summary", command=delivery_summary_main)
+laporan_menu.add_separator()
+laporan_menu.add_command(label="Data Kendaraan", command=vehicles_data_main)
+menu_bar.add_cascade(label="Laporan", menu=laporan_menu)
 
-pengaturan_menu = tk.Menu(menu_bar, tearoff=0)
-pengaturan_menu.add_command(label="Ganti Lokasi Cabang", command=ganti_lokasi)
-pengaturan_menu.add_command(label="Sinkronisasi Driver", command=lambda: run_sync_in_background(root))
+konfigurasi_menu = tk.Menu(menu_bar, tearoff=0)
+konfigurasi_menu.add_command(label="Ganti Lokasi Cabang", command=ganti_lokasi)
+konfigurasi_menu.add_command(label="Sinkronisasi Driver", command=lambda: run_sync_in_background(root))
+menu_bar.add_cascade(label="Konfigurasi", menu=konfigurasi_menu)
 
 def show_about():
     show_info_message(
@@ -246,10 +249,16 @@ def show_about():
         + INFO_MESSAGES["APP_BUILD_BY"]
     )
 
+def show_user_guide(link):
+    """Fungsi untuk membuka panduan pengguna di browser web."""
+    webbrowser.open(link) 
 
-pengaturan_menu.add_separator()
-pengaturan_menu.add_command(label="Tentang", command=show_about)
-menu_bar.add_cascade(label="Pengaturan", menu=pengaturan_menu)
+bantuan_menu = tk.Menu(menu_bar, tearoff=0)
+bantuan_menu.add_command(label="Panduan Pengguna (Planner)", command=lambda:show_user_guide(USER_GUIDE_PLANNER))
+bantuan_menu.add_command(label="Panduan Pengguna (Driver)", command=lambda: show_user_guide(USER_GUIDE_DRIVER))
+bantuan_menu.add_separator()
+bantuan_menu.add_command(label="Tentang", command=show_about)
+menu_bar.add_cascade(label="Bantuan", menu=bantuan_menu)
 
 root.config(menu=menu_bar)
 
@@ -278,7 +287,7 @@ buttons_config = [
 
 main_buttons = []
 for i, (text, command) in enumerate(buttons_config):
-    btn = tk.Button(frame, text=text, command=command, font=button_font, padx=20, pady=10, width=20)
+    btn = tk.Button(frame, text=text, command=command, font=button_font, padx=20, pady=10, width=15)
     btn.grid(row=i, column=0, padx=10, pady=10)
     main_buttons.append(btn)
 
