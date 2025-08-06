@@ -64,7 +64,7 @@
             "Email": "kendaraan.plsda11@panganlestari.com",
             "Driver": "'DRY' Arik Siswanto OS",
             "Plat": "W 8312 PV",
-            "Type": ""
+            "Type": "DRY-CDD-LONG-5000"
         },
         {
             "Email": "kendaraan.plsda12@panganlestari.com",
@@ -244,5 +244,9 @@
     "hub_ids": {
         "plsda": "670369a8a5d2d4b5ee0b020d",
         "plsmg": "67a41cb1480d2d3b580fc61c"
+    },
+    "type_map": {
+        "FROZEN-KFC": "FROZEN-CDD-LONG-5000",
+        "DRY-HAVI": "DRY-FUSO-LONG"
     }
 }
