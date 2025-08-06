@@ -10,6 +10,7 @@ import tkinter as tk
 import webbrowser
 from utils.function import (
     CONFIG_PATH,
+    MASTER_JSON_PATH,
     ensure_config_exists,
     load_config,
     load_constants,
@@ -51,14 +52,17 @@ USER_GUIDE_PLANNER = CONSTANTS.get('guide_planner', '')
 USER_GUIDE_DRIVER = CONSTANTS.get('guide_driver', '')
 
 def reset_config_and_exit():
-    """Menghapus config.json agar setup wajib diulang, lalu keluar aplikasi."""
+    """Menghapus config.json dan master.json agar setup wajib diulang, lalu keluar aplikasi."""
     try:
         if os.path.exists(CONFIG_PATH):
             os.remove(CONFIG_PATH)
+        if os.path.exists(MASTER_JSON_PATH):
+            os.remove(MASTER_JSON_PATH)
     except Exception:
         pass
     show_error_message("Setup Tidak Lengkap", ERROR_MESSAGES["SETUP_CANCELED"])
     on_closing()
+
 
 def update_title(root_window):
     """Membaca konfigurasi dan memperbarui judul window utama."""
@@ -73,7 +77,7 @@ def update_title(root_window):
             
     root_window.title(title)
 
-def pilih_lokasi(parent_window):
+def pilih_lokasi(parent_window, initial_setup=False):
     reverse_dict = {v: k for k, v in LOKASI_DISPLAY.items()}
     selected_display_name = list(LOKASI_DISPLAY.keys())[0]
 
@@ -102,18 +106,19 @@ def pilih_lokasi(parent_window):
             config_data['lokasi'] = kode
             save_json_data(config_data, CONFIG_PATH)
             dialog.destroy()
+            sync_data_main()
 
     # --- Tambahkan handler close ---
     def on_cancel():
         dialog.destroy()
-        reset_config_and_exit()
+        if initial_setup:  # hanya reset jika memang setup awal
+            reset_config_and_exit()
 
     dialog.protocol("WM_DELETE_WINDOW", on_cancel)
     tk.Button(dialog, text="Pilih", command=on_select, font=("Arial", 12)).pack(pady=10)
     dialog.transient(parent_window)
     dialog.grab_set()
     parent_window.wait_window(dialog)
-
 
 def pilih_pengguna_awal(parent_window):
     check_user_main(parent_window)
@@ -145,9 +150,10 @@ def periksa_konfigurasi_awal(parent_window):
     config = load_config()
     if not config or not config.get("lokasi"):
         show_info_message("Setup Lokasi", INFO_MESSAGES["LOCATION_SETUP"])
-        pilih_lokasi(parent_window)
+        pilih_lokasi(parent_window, initial_setup=True)
         update_title(parent_window)
         config = load_config()
+
 
     if not config or not config.get("user_checked"):
         show_info_message("Setup Akun", INFO_MESSAGES["USER_SETUP"])
@@ -221,8 +227,9 @@ root = tk.Tk()
 root.withdraw() 
 
 def ganti_lokasi():
-    pilih_lokasi(root)
+    pilih_lokasi(root, initial_setup=False)
     update_title(root)
+    run_sync_in_background(root)
 
 # --- Setup Menu Bar ---
 menu_bar = tk.Menu(root)
@@ -299,6 +306,6 @@ atur_visibilitas_menu(menu_bar)
 
 root.protocol("WM_DELETE_WINDOW", on_closing)
 root.after(500, check_update) 
-root.after(1500, lambda: run_sync_in_background(root))
+run_sync_in_background(root)
 
 root.mainloop()

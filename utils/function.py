@@ -55,12 +55,8 @@ def resource_path(relative_path):
 
 # --- Definisi Path ---
 BASE_DIR = get_base_path()
-
-# config.json dan master.json dicari di sebelah file .exe
 CONFIG_PATH = os.path.join(BASE_DIR, 'config.json')
 MASTER_JSON_PATH = os.path.join(BASE_DIR, 'master.json')
-
-# constant.json dicari di dalam bundle .exe (atau di root proyek saat development)
 CONSTANT_PATH = resource_path('constant.json')
 
 
@@ -68,18 +64,32 @@ CONSTANT_PATH = resource_path('constant.json')
 # FUNGSI UTILITAS UMUM
 # =============================================================================
 
-def load_json_data(file_path):
-    """Fungsi generik untuk membaca data dari file JSON."""
+def load_json_data(file_path, default_data=None):
+    """Fungsi generik untuk membaca data dari file JSON.
+       - Jika file tidak ada:
+         * Jika default_data diberikan → buat file dengan default_data
+         * Jika default_data None → return None
+       - Jika file ada tapi rusak → buat ulang jika default_data ada, selain itu return None
+    """
     if not os.path.exists(file_path):
-        # Tampilkan pesan error yang lebih informatif
-        messagebox.showerror("File Tidak Ditemukan", f"File yang diperlukan tidak ditemukan di path:\n{file_path}")
-        return None
+        if default_data is not None:
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+            with open(file_path, 'w', encoding='utf-8') as f:
+                json.dump(default_data, f, indent=4)
+            return default_data
+        else:
+            return None
+
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
             return json.load(f)
-    except (json.JSONDecodeError, IOError) as e:
-        messagebox.showerror("Error Membaca File", f"Gagal memuat file '{os.path.basename(file_path)}'. File mungkin rusak atau formatnya salah.\n\nError: {e}")
-        return None
+    except (json.JSONDecodeError, IOError):
+        if default_data is not None:
+            with open(file_path, 'w', encoding='utf-8') as f:
+                json.dump(default_data, f, indent=4)
+            return default_data
+        else:
+            return None
 
 def save_json_data(data, file_path):
     """Fungsi generik untuk menyimpan data ke file JSON."""
