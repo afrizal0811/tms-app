@@ -6,6 +6,7 @@ from utils.function import (
     load_config,
     load_constants,
     load_secret,
+    load_master_data,
     save_json_data,
     show_ask_message,
     show_error_message
@@ -34,9 +35,14 @@ def main(parent_window):
 
         lokasi_kode = config.get('lokasi')
         api_token = secrets.get('token')
-        hub_ids_map = constants.get('hub_ids', {})
+        master_data = load_master_data()
+        
+        hub_ids_map = master_data['hub_ids']
         hub_id = hub_ids_map.get(lokasi_kode)
 
+        if not master_data or 'hub_ids' not in master_data:
+            show_error_message("Gagal", ERROR_MESSAGES["MASTER_DATA_MISSING"])
+            return
         if not lokasi_kode:
             show_error_message("Gagal", ERROR_MESSAGES["LOCATION_CODE_MISSING"])
             return

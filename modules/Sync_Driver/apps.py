@@ -81,12 +81,7 @@ def compare_and_update_master(api_data, master_data):
 # ==============================================================================
 
 def main():
-    """
-    Fungsi utama untuk menjalankan sinkronisasi berdasarkan lokasi yang dipilih.
-    Kini menggunakan shared_utils.
-    """
     try:
-        # 2. Muat semua file konfigurasi menggunakan shared_utils
         constants = load_constants()
         config = load_config()
         secrets = load_secret()
@@ -100,41 +95,38 @@ def main():
             show_error_message("Gagal", ERROR_MESSAGES["LOCATION_CODE_MISSING"])
             return
 
-        # Ambil token dan hubId
         api_token = secrets.get('token')
-        hub_ids_map = constants.get('hub_ids', {})
-        lokasi_mapping = constants.get('lokasi_mapping', {})
-        
-        hub_id = hub_ids_map.get(lokasi_kode)
-        lokasi_nama = get_lokasi_nama_by_kode(lokasi_mapping, lokasi_kode)
-        
         if not api_token:
             show_error_message("Error Token API", ERROR_MESSAGES["API_TOKEN_MISSING"])
             return
-        
-        if not hub_id:
-            show_error_message("Gagal", ERROR_MESSAGES["HUB_ID_MISSING"].format(lokasi_code="ini"))
+
+        # Load master.json
+        master_json = load_json_data(MASTER_JSON_PATH)
+        if not master_json or "driver" not in master_json or "hub_ids" not in master_json:
+            show_error_message("Gagal", ERROR_MESSAGES["MASTER_DATA_MISSING"])
             return
-        
-        # 3. Proses sinkronisasi
+
+        hub_ids_map = master_json.get("hub_ids", {})
+        hub_id = hub_ids_map.get(lokasi_kode)
+        lokasi_mapping = constants.get('lokasi_mapping', {})
+        lokasi_nama = get_lokasi_nama_by_kode(lokasi_mapping, lokasi_kode)
+
+        if not hub_id:
+            show_error_message("Gagal", ERROR_MESSAGES["HUB_ID_MISSING"].format(lokasi_code=lokasi_kode))
+            return
+
+        # Proses sinkronisasi
         processed_api_list = fetch_and_process_vehicle_data(api_token, hub_id, constants)
-        
-        master_vehicle_list = load_json_data(MASTER_JSON_PATH)
-        if master_vehicle_list is None:
-             show_error_message("Gagal", ERROR_MESSAGES["MASTER_DATA_MISSING"])
-             return
+        master_vehicle_list = master_json["driver"]
 
         updated_master, was_updated = compare_and_update_master(processed_api_list, master_vehicle_list)
-        
         if was_updated:
-            # 4. Simpan data menggunakan shared_utils
-            save_json_data(updated_master, MASTER_JSON_PATH)
+            master_json["driver"] = updated_master
+            save_json_data(master_json, MASTER_JSON_PATH)
 
     except (ValueError, ConnectionError) as e:
-        # Menangkap error spesifik dari proses fetch
         show_error_message("Error Sinkronisasi", str(e))
     except Exception as e:
-        # Menangkap error lainnya
         show_error_message("Error Tidak Dikenal", ERROR_MESSAGES["UNKNOWN_ERROR"].format(error_detail=e))
 
 if __name__ == "__main__":

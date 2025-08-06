@@ -1,5 +1,3 @@
-# modules/Start_Finish_Time/apps.py (KODE AKHIR)
-
 from datetime import datetime, timedelta
 from openpyxl.styles import PatternFill, Alignment
 from openpyxl.utils import get_column_letter
@@ -26,31 +24,19 @@ from utils.messages import ERROR_MESSAGES, INFO_MESSAGES
 # =============================================================================
 
 def extract_email_from_id(_id):
-    """Mengekstrak email dari ID MileApp."""
     parts = _id.split('_')
     return parts[1] if len(parts) > 1 else _id
 
 def convert_to_jam(menit):
-    """Mengonversi durasi dalam menit ke format jam:menit."""
     jam = menit // 60
     sisa_menit = menit % 60
     return f"{jam}:{sisa_menit:02}"
 
 def tambah_7_jam(waktu_str):
-    """Menambahkan 7 jam ke waktu string untuk penyesuaian zona waktu."""
     waktu = datetime.strptime(waktu_str, "%Y-%m-%d %H:%M:%S")
     return (waktu + timedelta(hours=7)).strftime("%Y-%m-%d %H:%M:%S")
 
 def simpan_file_excel(dataframe, lokasi_name, tanggal_str):
-    """
-    Menyimpan DataFrame ke file Excel dengan penamaan yang dinamis.
-    
-    Args:
-        dataframe (pd.DataFrame): DataFrame yang akan disimpan.
-        lokasi_name (str): Nama lokasi cabang.
-        tanggal_str (str): Tanggal dalam format DD.MM.YYYY.
-    """
-    # Bagian pemrosesan data DataFrame TIDAK BERUBAH
     kolom_buang = ['finish.lat', 'finish.lon', 'finish.notes']
     dataframe = dataframe.drop(columns=[col for col in kolom_buang if col in dataframe.columns])
 
@@ -93,7 +79,6 @@ def simpan_file_excel(dataframe, lokasi_name, tanggal_str):
     urutan_kolom_final = [col for col in urutan_kolom if col in dataframe.columns]
     dataframe = dataframe[urutan_kolom_final]
 
-    # --- MODIFIKASI UNTUK NAMA FILE DINAMIS ---
     file_basename = f"Time Summary {lokasi_name} - {tanggal_str}"
     filename = get_save_path(file_basename)
     if not filename:
@@ -102,7 +87,6 @@ def simpan_file_excel(dataframe, lokasi_name, tanggal_str):
 
     dataframe.to_excel(filename, index=False)
 
-    # Bagian styling Excel TIDAK BERUBAH
     wb = openpyxl.load_workbook(filename)
     ws = wb.active
     kolom_rata_tengah = ['Plat', 'Start Date', 'Start Time', 'Finish Date', 'Finish Time', 'Tracked Time', 'Total Duration', 'Total Distance']
@@ -117,7 +101,6 @@ def simpan_file_excel(dataframe, lokasi_name, tanggal_str):
 
     for column_idx, column_name in enumerate(dataframe.columns):
         column_letter = get_column_letter(column_idx + 1)
-        max_length = 0
         try:
             max_length = max(len(str(cell.value)) for cell in ws[column_letter] if cell.value is not None)
             adjusted_width = (max_length + 2)
@@ -138,31 +121,23 @@ def simpan_file_excel(dataframe, lokasi_name, tanggal_str):
                 finish_date_cell.fill = merah_fill
 
     wb.save(filename)
-    
     open_file_externally(filename)
 
-
 # =============================================================================
-# BAGIAN 2: FUNGSI-FUNGSI PEMROSESAN UTAMA
+# BAGIAN 2: FUNGSI PEMROSESAN UTAMA
 # =============================================================================
 
 def ambil_data(dates, app_instance=None):
-    """
-    Fungsi utama untuk mengambil data start-finish time dari API.
-    
-    Args:
-        dates (dict): Dictionary yang berisi format tanggal, misal {"dmy": "25-07-2025"}.
-        app_instance (object): Instance GUI untuk update status.
-    """
     tanggal_str = dates["dmy"]
-    
+
     if app_instance:
         app_instance.update_status("Mengambil data dari API...")
 
     config = load_config()
     constants = load_constants()
     secrets = load_secret()
-    
+    master_data = load_master_data()
+
     if not config or "lokasi" not in config:
         show_error_message("Error Konfigurasi", ERROR_MESSAGES["CONFIG_FILE_ERROR"])
         return False
@@ -172,10 +147,13 @@ def ambil_data(dates, app_instance=None):
     if not secrets:
         show_error_message("Error Rahasia", ERROR_MESSAGES["SECRET_FILE_ERROR"])
         return False
+    if not master_data:
+        show_error_message("Error Master", ERROR_MESSAGES["MASTER_DATA_MISSING"])
+        return False
 
     api_token = secrets.get('token')
     lokasi_code = config.get('lokasi')
-    hub_ids = constants.get('hub_ids', {})
+    hub_ids = master_data.get('hub_ids', {})
     lokasi_mapping = constants.get('lokasi_mapping', {})
 
     if not api_token:
@@ -187,10 +165,9 @@ def ambil_data(dates, app_instance=None):
     if lokasi_code not in hub_ids:
         show_error_message("Error Hub ID", ERROR_MESSAGES["HUB_ID_MISSING"])
         return False
-        
-    lokasi_mapping = constants.get('lokasi_mapping', {})
+
     lokasi_name = next((name for name, code in lokasi_mapping.items() if code == lokasi_code), lokasi_code)
-    
+
     tanggal_obj = datetime.strptime(tanggal_str, "%d-%m-%Y")
     tanggal_input = tanggal_obj.strftime("%Y-%m-%d")
     tanggal_from = (tanggal_obj - timedelta(days=1)).strftime("%Y-%m-%d")
@@ -203,7 +180,7 @@ def ambil_data(dates, app_instance=None):
         "timeBy": "createdTime"
     }
     headers = {"Authorization": f"Bearer {api_token}"}
-    
+
     try:
         response = requests.get(url, params=params, headers=headers, timeout=30)
         response.raise_for_status()
@@ -211,12 +188,10 @@ def ambil_data(dates, app_instance=None):
         show_error_message("API Error", ERROR_MESSAGES["API_REQUEST_FAILED"].format(error_detail=e))
         return
 
-    if not response.json().get("tasks", {}).get("data"):
+    items = response.json().get("tasks", {}).get("data", [])
+    if not items:
         show_error_message("Error", ERROR_MESSAGES["DATA_NOT_FOUND"])
         return
-
-    result = response.json()
-    items = result.get("tasks", {}).get("data", [])
 
     filtered_items = []
     for item in items:
@@ -236,36 +211,24 @@ def ambil_data(dates, app_instance=None):
     if df_api_data.empty:
         show_error_message("Gagal", ERROR_MESSAGES["DATA_NOT_FOUND"])
         return
-        
-    df_api_data.rename(columns={"_id": "Email"}, inplace=True)
 
+    df_api_data.rename(columns={"_id": "Email"}, inplace=True)
     if 'startTime' in df_api_data.columns:
         df_api_data['startTime'] = pd.to_datetime(df_api_data['startTime'])
         df_api_data = df_api_data[df_api_data['startTime'].dt.strftime("%Y-%m-%d") == tanggal_input]
 
     try:
-        if 'Email' in df_api_data.columns:
-            df_api_data = df_api_data[df_api_data['Email'].str.contains(lokasi_code, na=False, case=False)]
-
+        df_api_data = df_api_data[df_api_data['Email'].str.contains(lokasi_code, na=False, case=False)]
         if df_api_data.empty:
             show_error_message("Error", ERROR_MESSAGES["DATA_NOT_FOUND"])
             return
 
-        mapping_df = load_master_data(lokasi_cabang=lokasi_code)
-        if mapping_df is None: 
-            show_error_message("Proses Gagal", ERROR_MESSAGES["MASTER_DATA_MISSING"])
-            return
-
-        required_master_cols = {'Email', 'Driver', 'Plat'}
-        if not required_master_cols.issubset(mapping_df.columns):
-            show_error_message("Proses Gagal", ERROR_MESSAGES["MASTER_DATA_MISSING"])
-
+        mapping_df = master_data["df"]
         mapping_df_filtered = mapping_df[mapping_df['Email'].str.contains(lokasi_code, na=False, case=False)]
         df_merged = df_api_data.merge(mapping_df_filtered[['Email', 'Driver', 'Plat']], on='Email', how='left')
-        
+
         df_merged['Driver'] = df_merged['Driver'].fillna(df_merged['Email'])
         df_merged['Plat'] = df_merged['Plat'].fillna('')
-
         df_merged.drop(columns=['Email'], inplace=True)
         df_merged = df_merged.sort_values(by='Driver', ascending=True)
 
@@ -275,7 +238,6 @@ def ambil_data(dates, app_instance=None):
 
     existing_drivers = df_merged['Driver'].unique().tolist()
     missing_rows_df = mapping_df_filtered[~mapping_df_filtered['Driver'].isin(existing_drivers)].copy()
-    
     if not missing_rows_df.empty:
         missing_drivers_df_processed = missing_rows_df[['Driver', 'Plat']].copy()
         for col in df_merged.columns:
@@ -319,7 +281,7 @@ def ambil_data(dates, app_instance=None):
     final_df = pd.concat([filtered_df_final, kosong_df], ignore_index=True)
     final_df.drop(columns=['finish.totalDuration_menit'], inplace=True)
     final_df = final_df.sort_values(by='Driver', ascending=True)
-    
+
     tanggal_format_titik = tanggal_str.replace('-', '.')
     simpan_file_excel(final_df, lokasi_name, tanggal_format_titik)
 
@@ -331,7 +293,6 @@ def ambil_data(dates, app_instance=None):
 # =============================================================================
 
 def main():
-    """Fungsi utama untuk modul Start Finish Time."""
     config = load_config()
     if not config or not config.get("lokasi"):
         show_error_message("Setup Awal", ERROR_MESSAGES["LOCATION_CODE_MISSING"])

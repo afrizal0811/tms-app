@@ -98,8 +98,11 @@ def panggil_api_dan_simpan(dates, app_instance):
     # --- PENGATURAN MENGGUNAKAN SHARED UTILS ---
     constants = load_constants()
     config = load_config()
-    master_df = load_master_data()
     secrets = load_secret()
+    master_data  = load_master_data()
+
+    master_df = master_data["df"]
+    hub_ids = master_data["hub_ids"]
 
     if not constants:
         show_error_message("Gagal", ERROR_MESSAGES["CONSTANT_FILE_ERROR"])
@@ -110,15 +113,15 @@ def panggil_api_dan_simpan(dates, app_instance):
     if not secrets:
         show_error_message("Gagal", ERROR_MESSAGES["SECRET_FILE_ERROR"])
         return False
-    if master_df is None:
+    if master_data is None:
         show_error_message("Gagal", ERROR_MESSAGES["MASTER_DATA_MISSING"])
         return False
 
-    master_data_list = master_df.to_dict('records')
-
+    master_map = {row['Email']: row for _, row in master_df.iterrows()}
+    
     API_TOKEN = secrets.get('token')
     LOKASI_FILTER = config.get('lokasi')
-    HUB_ID = constants.get('hub_ids', {}).get(LOKASI_FILTER)
+    HUB_ID = hub_ids.get(LOKASI_FILTER)
     LOKASI_MAPPING = constants.get('lokasi_mapping', {})
 
     if not API_TOKEN:
@@ -166,7 +169,6 @@ def panggil_api_dan_simpan(dates, app_instance):
         return False
 
     # --- Data Processing (No changes in this part) ---
-    master_map = {item['Email']: item for item in master_data_list}
     tasks_by_assignee = {}
     for task in tasks_data:
         assignee_email = (task.get('assignedVehicle') or {}).get('assignee')

@@ -111,20 +111,31 @@ def ensure_config_exists():
 def load_master_data(lokasi_cabang=None):
     """Memuat dan memproses master.json."""
     data = load_json_data(MASTER_JSON_PATH)
-    if data is None: return None
+    if data is None:
+        return None
     
     try:
-        df = pd.DataFrame(data)
+        if 'driver' not in data:
+            show_error_message("Gagal Memuat Master Data", ERROR_MESSAGES["MASTER_DATA_MISSING"])
+            return None
+
+        df = pd.DataFrame(data['driver'])  # gunakan key "driver"
         df.columns = [col.strip() for col in df.columns]
         if 'Email' not in df.columns or 'Driver' not in df.columns:
             show_error_message("Gagal Memuat Master Data", ERROR_MESSAGES["MASTER_DATA_MISSING"])
             return None
+
         df['Email'] = df['Email'].astype(str).str.strip().str.lower()
         df['Driver'] = df['Driver'].astype(str).str.strip()
         if lokasi_cabang:
             df = df[df['Email'].str.contains(lokasi_cabang, case=False, na=False)].copy()
-        return df
-    except Exception as e:
+
+        # return dict yang berisi DataFrame dan hub_ids
+        return {
+            "df": df,
+            "hub_ids": data.get("hub_ids", {})
+        }
+    except Exception:
         show_error_message("Gagal Memuat Master Data", ERROR_MESSAGES["MASTER_FILE_ERROR"])
         return None
 

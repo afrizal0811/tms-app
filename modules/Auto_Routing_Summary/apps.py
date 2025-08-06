@@ -10,7 +10,7 @@ from utils.function import (
     get_save_path,
     load_config,
     load_constants,
-    load_master_data as shared_load_master_data,
+    load_master_data,
     load_secret,
     open_file_externally,
     show_error_message,
@@ -59,7 +59,12 @@ def process_routing_data(date_formats, gui_instance):
         constants = load_constants()
         secrets = load_secret()
         lokasi_code = config.get('lokasi')
-        master_data_df = shared_load_master_data(lokasi_cabang=lokasi_code)
+        master_data = load_master_data(lokasi_cabang=lokasi_code)
+        if master_data is None:
+            return
+
+        master_data_df = master_data["df"]
+        hub_ids = master_data["hub_ids"]
 
         if not config:
             show_error_message("Gagal", ERROR_MESSAGES["CONFIG_FILE_ERROR"])
@@ -75,8 +80,8 @@ def process_routing_data(date_formats, gui_instance):
             return
 
         master_data_map = dict(zip(master_data_df['Email'], master_data_df['Driver']))
+        hub_id = hub_ids.get(lokasi_code)
         api_token = secrets.get('token')
-        hub_id = constants.get('hub_ids', {}).get(lokasi_code)
         lokasi_mapping = constants.get('lokasi_mapping', {})
         lokasi_name = next((name for name, code in lokasi_mapping.items() if code == lokasi_code), lokasi_code)
 
