@@ -32,7 +32,7 @@
         },
         {
             "Email": "kendaraan.plsda06@panganlestari.com",
-            "Driver": "'FRZ' Dirgantara Dharma Samudra",
+            "Driver": "'FRZ' Dirgantara Dharma",
             "Plat": "L 9123 BX",
             "Type": "FROZEN-CDE-2000"
         },
@@ -64,7 +64,7 @@
             "Email": "kendaraan.plsda11@panganlestari.com",
             "Driver": "'DRY' Arik Siswanto OS",
             "Plat": "W 8312 PV",
-            "Type": "DRY-CDD-LONG-5000"
+            "Type": ""
         },
         {
             "Email": "kendaraan.plsda12@panganlestari.com",
@@ -98,7 +98,7 @@
         },
         {
             "Email": "kendaraan.plsda17@panganlestari.com",
-            "Driver": "'DRY' Roy Ardiansyah",
+            "Driver": "'DRY' Roy Ardiansyah",
             "Plat": "L 9277 BI",
             "Type": "DRY-CDD-5000"
         },
@@ -243,13 +243,6 @@
     ],
     "hub_ids": {
         "plsda": "670369a8a5d2d4b5ee0b020d",
-        "pljkt": "GANTI_DENGAN_HUB_ID_JAKARTA",
-        "plbdg": "GANTI_DENGAN_HUB_ID_BANDUNG",
-        "plsmg": "67a41cb1480d2d3b580fc61c",
-        "plygy": "GANTI_DENGAN_HUB_ID_YOGYAKARTA",
-        "plmlg": "GANTI_DENGAN_HUB_ID_MALANG",
-        "pldps": "GANTI_DENGAN_HUB_ID_DENPASAR",
-        "plmks": "GANTI_DENGAN_HUB_ID_MAKASAR",
-        "pljbr": "GANTI_DENGAN_HUB_ID_JEMBER"
+        "plsmg": "67a41cb1480d2d3b580fc61c"
     }
 }

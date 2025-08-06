@@ -28,7 +28,7 @@ from modules.Routing_Summary.apps import main as routing_summary_main
 from modules.Delivery_Summary.apps import main as delivery_summary_main
 from modules.Auto_Delivery_Summary.apps import main as auto_delivery_summary_main
 from modules.Start_Finish_Time.apps import main as start_finish_time_main
-from modules.Sync_Driver.apps import main as sync_driver_main
+from modules.Sync_Data.apps import main as sync_data_main
 from modules.Check_User.apps import main as check_user_main
 from modules.Auto_Routing_Summary.apps import main as auto_routing_summary_main
 from modules.Vehicles_Data.apps import main as vehicles_data_main # Impor modul baru
@@ -172,7 +172,7 @@ def atur_visibilitas_menu(menu_bar):
         pass
 
 def run_sync_in_background(root_window):
-    """Menjalankan proses sinkronisasi driver di background thread."""
+    """Menjalankan proses sinkronisasi hub dan driver di background thread."""
     loading_window = tk.Toplevel(root_window)
     loading_window.title("Loading")
     loading_window.geometry("300x100")
@@ -180,38 +180,36 @@ def run_sync_in_background(root_window):
     loading_window.geometry(f"+{x}+{y}")
     loading_window.transient(root_window)
     loading_window.grab_set()
-    ttk.Label(loading_window, text="Sinkronisasi data driver...", font=("Arial", 12)).pack(pady=20)
+    ttk.Label(loading_window, text="Sinkronisasi master data...", font=("Arial", 12)).pack(pady=20)
     progress = ttk.Progressbar(loading_window, mode='indeterminate')
     progress.pack(pady=10, padx=20, fill=tk.X)
     progress.start()
     
-    for button in main_buttons: button.config(state='disabled')
-    konfigurasi_menu.entryconfig("Sinkronisasi Driver", state="disabled")
+    for button in main_buttons:
+        button.config(state='disabled')
+    konfigurasi_menu.entryconfig("Sinkronisasi Data", state="disabled")
     laporan_menu.entryconfig("Routing Summary", state="disabled")
     laporan_menu.entryconfig("Delivery Summary", state="disabled")
     laporan_menu.entryconfig("Data Kendaraan", state="disabled")
 
     def on_sync_complete():
-        # --- [PERBAIKAN] ---
-        # Hentikan progress bar sebelum menutup jendela untuk menghindari error
         if loading_window.winfo_exists():
             progress.stop()
             loading_window.destroy()
-
-        for button in main_buttons: button.config(state='normal')
-        konfigurasi_menu.entryconfig("Sinkronisasi Driver", state="normal")
+        for button in main_buttons:
+            button.config(state='normal')
+        konfigurasi_menu.entryconfig("Sinkronisasi Data", state="normal")
         laporan_menu.entryconfig("Routing Summary", state="normal")
         laporan_menu.entryconfig("Delivery Summary", state="normal")
         laporan_menu.entryconfig("Data Kendaraan", state="normal") 
 
     def thread_target():
         try:
-            sync_driver_main()
+            sync_data_main()
         finally:
             root_window.after(0, on_sync_complete)
             
-    sync_thread = threading.Thread(target=thread_target, daemon=True)
-    sync_thread.start()
+    threading.Thread(target=thread_target, daemon=True).start()
 
 
 # ==============================================================================
@@ -238,7 +236,7 @@ menu_bar.add_cascade(label="Laporan", menu=laporan_menu)
 
 konfigurasi_menu = tk.Menu(menu_bar, tearoff=0)
 konfigurasi_menu.add_command(label="Ganti Lokasi Cabang", command=ganti_lokasi)
-konfigurasi_menu.add_command(label="Sinkronisasi Driver", command=lambda: run_sync_in_background(root))
+konfigurasi_menu.add_command(label="Sinkronisasi Data", command=lambda: run_sync_in_background(root))
 menu_bar.add_cascade(label="Konfigurasi", menu=konfigurasi_menu)
 
 def show_about():
