@@ -1,6 +1,8 @@
-# modules/Sync_Data/apps.py
-
 import requests
+import json
+import os
+import tkinter as tk
+from tkinter import simpledialog
 from utils.function import (
     MASTER_JSON_PATH,
     load_config,
@@ -8,9 +10,46 @@ from utils.function import (
     load_json_data,
     load_secret,
     save_json_data,
+    resource_path,
     show_error_message
 )
 from utils.messages import ERROR_MESSAGES
+
+TYPE_MAP_PATH = resource_path("type_map.json")
+
+# =============================================================================
+# LOAD / SAVE TYPE MAP
+# =============================================================================
+def load_type_map():
+    if not os.path.exists(TYPE_MAP_PATH):
+        with open(TYPE_MAP_PATH, "w", encoding="utf-8") as f:
+            json.dump({"type": {}}, f, indent=4)
+        return {}
+    try:
+        with open(TYPE_MAP_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return data.get("type", {})
+    except Exception:
+        return {}
+
+def save_type_map(type_map):
+    with open(TYPE_MAP_PATH, "w", encoding="utf-8") as f:
+        json.dump({"type": type_map}, f, indent=4)
+
+# =============================================================================
+# ASK USER UNTUK SUBSTITUSI TYPE
+# =============================================================================
+def ask_type_substitution(original_type):
+    root = tk.Tk()
+    root.withdraw()
+    value = simpledialog.askstring(
+        "Input Substitusi Type",
+        f"Tipe kendaraan '{original_type}' tidak sesuai standar.\n"
+        "Masukkan tipe pengganti sesuai standar:",
+        parent=root
+    )
+    root.destroy()
+    return value
 
 # =============================================================================
 # SYNC HUB IDS (TETAP UPDATE SEMUA HUB)
@@ -40,7 +79,7 @@ def sync_hub(api_token, constants):
     return dict(sorted(result.items()))
 
 # =============================================================================
-# FETCH VEHICLES (gunakan type_map dari master.json)
+# FETCH VEHICLES (gunakan type_map + substitusi manual)
 # =============================================================================
 def fetch_and_process_vehicle_data(api_token, hub_id, constants, type_map):
     base_url = constants.get('base_url')
@@ -55,17 +94,41 @@ def fetch_and_process_vehicle_data(api_token, hub_id, constants, type_map):
         show_error_message("Error Kendaraan", ERROR_MESSAGES["API_REQUEST_FAILED"].format(error_detail=e))
         return []
 
+    valid_types = constants.get("vehicle_type", [])
+    type_map_updated = False
+
     vehicles = []
     for v in vehicle_data:
         if not v.get('assignee') or not v.get('name'):
             continue
+
         raw_type = (v.get('tags', [])[0] if v.get('tags') else '')
-        mapped_type = type_map.get(raw_type, raw_type)
+        mapped_type = type_map.get(raw_type)
+
+        # Jika tidak ada di type_map, validasi dengan vehicle_type
+        if not mapped_type:
+            if any(t in raw_type for t in valid_types):
+                mapped_type = raw_type
+            else:
+                # Minta user input substitusi
+                substitute = ask_type_substitution(raw_type)
+                if substitute:
+                    type_map[raw_type] = substitute
+                    mapped_type = substitute
+                    type_map_updated = True
+                else:
+                    mapped_type = raw_type  # fallback jika user cancel
+
         vehicles.append({
             'Email': v.get('assignee', '').lower(),
             'Plat': v.get('name', ''),
             'Type': mapped_type
         })
+
+    # Simpan update ke type_map.json jika ada substitusi baru
+    if type_map_updated:
+        save_type_map(type_map)
+
     return vehicles
 
 # =============================================================================
@@ -134,6 +197,7 @@ def main():
         constants = load_constants()
         config = load_config()
         secrets = load_secret()
+        type_map = load_type_map()  # Ambil dari file terpisah
 
         if not constants or not config or not secrets:
             show_error_message("Gagal", ERROR_MESSAGES["CONFIG_FILE_ERROR"])
@@ -149,10 +213,6 @@ def main():
             master_json["hub_ids"] = {}
         if "driver" not in master_json:
             master_json["driver"] = []
-        if "type_map" not in master_json:
-            master_json["type_map"] = {}
-
-        type_map = master_json.get("type_map", {})
 
         # 1. Sync semua hub_ids tanpa filter lokasi aktif
         hub_ids = sync_hub(api_token, constants)
@@ -168,7 +228,7 @@ def main():
             show_error_message("Gagal", ERROR_MESSAGES["HUB_ID_MISSING"].format(lokasi_code=lokasi_kode))
             return
 
-        # 2. Ambil users dan vehicles hub aktif (pakai type_map dari master.json)
+        # 2. Ambil users dan vehicles hub aktif (pakai type_map + validasi vehicle_type)
         users = fetch_driver_users(api_token, hub_id, constants)
         vehicles = fetch_and_process_vehicle_data(api_token, hub_id, constants, type_map)
 

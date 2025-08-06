@@ -27,5 +27,8 @@
     "restricted_role_ids": {
         "planner": "6703410af6be892f3208ecdd",
         "checker": "675a95be8fbcd91803047cc2"
-    }
+    },
+    "vehicle_type": [
+        "L300", "CDE", "CDE-LONG", "CDD", "CDD-LONG", "FUSO", "FUSO-LONG"
+    ]
 }
