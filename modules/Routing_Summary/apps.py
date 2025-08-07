@@ -167,7 +167,7 @@ def proses_truck_usage(workbook, source_df):
         return ""
     upload_df["Vehicle Tags"] = upload_df["Vehicle Name"].apply(find_vehicle_tag)
     upload_df.loc[upload_df["Vehicle Tags"].str.contains("HAVI", na=False, case=False), "Vehicle Tags"] = "Fuso-DRY"
-    upload_df.loc[upload_df["Vehicle Tags"].str.contains("KFC", na=False, case=False), "Vehicle Tags"] = "CDD-Long-FROZEN"
+    upload_df.loc[upload_df["Vehicle Tags"].str.contains("KFC", na=False, case=False), "Vehicle Tags"] = "CDD-LONG-FROZEN"
     upload_df["Vehicle Tags"] = upload_df["Vehicle Tags"].str.upper()
 
     dry_df = upload_df[upload_df["Vehicle Tags"].str.contains("DRY", na=False)]
@@ -201,8 +201,8 @@ def proses_truck_usage(workbook, source_df):
         sheet_usage[f"A{row}"] = v_type
         dry_count = dry_counts.get(v_type, 0)
         frozen_count = frozen_counts.get(v_type, 0)
-        sheet_usage[f"B{row}"] = dry_count if dry_count != 0 else "-"
-        sheet_usage[f"C{row}"] = frozen_count if frozen_count != 0 else "-"
+        sheet_usage[f"B{row}"] = dry_count if dry_count != 0 else None
+        sheet_usage[f"C{row}"] = frozen_count if frozen_count != 0 else None
         row += 1
     for col_letter in ["A", "B", "C"]:
         sheet_usage.column_dimensions[col_letter].width = 25

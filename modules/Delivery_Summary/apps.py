@@ -92,8 +92,25 @@ def process_total_delivered(df, master_driver_df):
         df_proc = df.copy()
         df_proc['Driver'] = df_proc['assignee'].str.lower().map(email_to_name)
         df_proc.dropna(subset=['Driver'], inplace=True)
-        visit_counts = df_proc['Driver'].value_counts().reset_index().rename(columns={'index':'Driver','Driver':'Total Visit'})
-        delivered_counts = df_proc[df_proc['label'].str.upper() == 'SUKSES']['Driver'].value_counts().reset_index().rename(columns={'index':'Driver','Driver':'Total Delivered'})
+        if 'Driver' not in df_proc.columns:
+            df_proc['Driver'] = pd.NA
+
+        visit_counts = df_proc['Driver'].value_counts(dropna=True).reset_index()
+        if not visit_counts.empty:
+            visit_counts.columns = ['Driver', 'Total Visit']
+        else:
+            visit_counts = pd.DataFrame(columns=['Driver', 'Total Visit'])
+
+        if 'label' in df_proc.columns:
+            sukses_df = df_proc[df_proc['label'].str.upper() == 'SUKSES']
+            delivered_counts = sukses_df['Driver'].value_counts(dropna=True).reset_index()
+            if not delivered_counts.empty:
+                delivered_counts.columns = ['Driver', 'Total Delivered']
+            else:
+                delivered_counts = pd.DataFrame(columns=['Driver', 'Total Delivered'])
+        else:
+            delivered_counts = pd.DataFrame(columns=['Driver', 'Total Delivered'])
+
         final_df = master_summary.merge(visit_counts, on='Driver', how='left').merge(delivered_counts, on='Driver', how='left')
     else:
         final_df = master_summary.assign(**{'Total Visit': pd.NA, 'Total Delivered': pd.NA})
@@ -114,19 +131,47 @@ def process_ro_vs_real(df, master_driver_df):
     df_proc['Actual Visit Time'] = df_proc.apply(lambda r: calculate_actual_visit(r.get('Klik Jika Anda Sudah Sampai',''), r.get('doneTime','')),axis=1)
     df_proc['doneTime_parsed'] = pd.to_datetime(df_proc['doneTime'], format='%H:%M', errors='coerce')
     df_proc['Real Seq'] = df_proc.groupby('assignee')['doneTime_parsed'].rank(method='dense').astype('Int64')
+
     df_proc.rename(columns={
         'assignedVehicle':'License Plat','assignee':'Driver','title':'Customer','label':'Status Delivery',
         'Klik Jika Anda Sudah Sampai':'Actual Arrival','doneTime':'Actual Departure',
         'routePlannedOrder':'ET Sequence','Real Seq':'Real Sequence'
     }, inplace=True)
+    if df_proc.columns.duplicated().any():
+        df_proc = df_proc.loc[:, ~df_proc.columns.duplicated()]
+
     df_proc['Is Same Sequence'] = (pd.to_numeric(df_proc['ET Sequence'], errors='coerce') == pd.to_numeric(df_proc['Real Sequence'], errors='coerce')).map({True:'SAMA',False:'TIDAK SAMA'})
     cols = ['License Plat','Driver','Customer','Status Delivery','Open Time','Close Time','Actual Arrival','Actual Departure','Visit Time','Actual Visit Time','ET Sequence','Real Sequence','Is Same Sequence']
     df_final = df_proc[cols].sort_values(['Driver','Real Sequence'])
     parts = []
-    for _,g in df_final.groupby('Driver'):
+    df_final['Driver'] = df_final['Driver'].astype(str).str.strip()  # normalisasi
+
+    for _, g in df_final.dropna(subset=['Driver']).groupby('Driver'):
         parts.append(g)
-        parts.append(pd.DataFrame([[None]*len(df_final.columns)],columns=df_final.columns))
-    return pd.concat(parts[:-1],ignore_index=True)
+
+        # Tambahkan baris kosong hanya jika semua kolom bukan all-NA
+        row_none = pd.DataFrame([{col: None for col in df_final.columns}])
+        if not row_none.isna().all(axis=1).all():
+            parts.append(row_none)
+        else:
+            # paksa pandas untuk mengenali ini sebagai typed row, bukan all-NA
+            row_dummy = pd.DataFrame({col: [''] for col in df_final.columns}).astype(object)
+            row_dummy.iloc[0] = None  # kosongkan
+            parts.append(row_dummy)
+
+    # Hapus baris kosong terakhir jika ada
+    if parts and parts[-1].isna().all(axis=1).all():
+        parts = parts[:-1]
+
+    # Ganti semua NaN jadi None agar bisa ditulis ke Excel
+    for i in range(len(parts)):
+        parts[i] = parts[i].where(pd.notnull(parts[i]), None)
+
+    safe_parts = [
+        df if not df.isna().all(axis=None) else pd.DataFrame([{col: "" for col in df.columns}])
+        for df in parts
+    ]
+    return pd.concat(safe_parts, ignore_index=True)
 
 def process_pending_so(df, master_driver_df):
     df_proc = df.copy()
@@ -193,9 +238,19 @@ def main():
     email_prefixes = df_original["assignee"].dropna().astype(str).str.extract(r'kendaraan\.([^.@]+)',expand=False).dropna().str.lower().unique()
     if not any(lokasi_code.lower() in prefix for prefix in email_prefixes):
         show_error_message("Proses Gagal", ERROR_MESSAGES["LOCATION_CODE_MISSING"]); return
-    master_df = load_master_data(lokasi_code)
-    if master_df is None:
+    master_data = load_master_data(lokasi_code)
+    if master_data is None:
         show_error_message("Proses Gagal", ERROR_MESSAGES["MASTER_DATA_MISSING"]); return
+
+    master_df = master_data["df"]
+    required_master_cols = {'Driver', 'Plat', 'Email'}
+    if not required_master_cols.issubset(master_df.columns):
+        show_error_message("Proses Gagal", "Kolom pada data master tidak lengkap."); return
+
+    required_master_cols = {'Driver', 'Plat', 'Email'}
+    if not required_master_cols.issubset(master_df.columns):
+        show_error_message("Proses Gagal", "Kolom pada data master tidak lengkap."); return
+    
     results_to_save = {
         'Total Delivered': process_total_delivered(df_original, master_df),
         'Hasil Pending SO': process_pending_so(df_original, master_df),
