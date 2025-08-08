@@ -22,7 +22,7 @@ ERROR_MESSAGES = {
 INFO_MESSAGES = {
     "APP_BUILD_BY": "Dibuat oleh: Afrizal Maulana - EDP © 2025",
     "APP_VERSION": "Versi {version}",
-    "CANCELLED_BY_USER": "Proses dibatalkan oleh user!",
+    "CANCELED_BY_USER": "Proses dibatalkan oleh user!",
     "SELECT_FILE": "Silakan pilih file {text}",
     "UPDATE_AVAILABLE": "Versi baru {latest_version} tersedia.\nVersi Anda saat ini adalah {current_version}.\n\nApakah Anda ingin membuka halaman unduhan untuk memperbarui?",
     "USER_SETUP": "Silakan pilih user terlebih dahulu!",

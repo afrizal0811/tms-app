@@ -230,7 +230,7 @@ def main():
     show_info_message("Upload File Task", INFO_MESSAGES["SELECT_FILE"].format(text="export task"))
     input_file = filedialog.askopenfilename(title="Pilih File Excel yang Akan Diproses", filetypes=[("Excel Files","*.xlsx *.xls")])
     if not input_file:
-        show_info_message("Dibatalkan", INFO_MESSAGES["CANCELLED_BY_USER"]); return
+        show_info_message("Dibatalkan", INFO_MESSAGES["CANCELED_BY_USER"]); return
     df_original = pd.read_excel(input_file)
     required_columns = ['assignedVehicle','assignee','Alasan Tidak Bisa Dikunjungi','Alasan Batal','Open Time','Close Time','eta','etd','Klik Jika Anda Sudah Sampai','doneTime','Visit Time','routePlannedOrder']
     if any(col not in df_original.columns for col in required_columns):
@@ -266,7 +266,7 @@ def main():
     date_str = date_match.group(1).replace('-', '.') if date_match else datetime.now().strftime('%d.%m.%Y')
     file_basename = f"Delivery Summary {lokasi_name} - {date_str}"
     save_file_path = get_save_path(file_basename)
-    if not save_file_path: show_error_message("Proses Gagal", INFO_MESSAGES["CANCELLED_BY_USER"]); return
+    if not save_file_path: show_error_message("Proses Gagal", INFO_MESSAGES["CANCELED_BY_USER"]); return
     with pd.ExcelWriter(save_file_path, engine='openpyxl') as writer:
         for sheet in ['Total Delivered','Hasil Pending SO','Hasil RO vs Real','Update Longlat']:
             if sheet in results_to_save and results_to_save[sheet] is not None:

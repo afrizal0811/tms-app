@@ -215,7 +215,7 @@ def fetch_and_save_vehicles_data():
         save_path = get_save_path(file_basename)
 
         if not save_path:
-            show_info_message("Dibatalkan", INFO_MESSAGES["CANCELLED_BY_USER"])
+            show_info_message("Dibatalkan", INFO_MESSAGES["CANCELED_BY_USER"])
             return False
 
         with pd.ExcelWriter(save_path, engine='openpyxl') as writer:

@@ -284,7 +284,7 @@ def panggil_api_dan_simpan(dates, app_instance):
     NAMA_FILE_OUTPUT = get_save_path(base_name)
 
     if not NAMA_FILE_OUTPUT:
-        show_info_message("Dibatalkan", INFO_MESSAGES["CANCELLED_BY_USER"])
+        show_info_message("Dibatalkan", INFO_MESSAGES["CANCELED_BY_USER"])
         return False
 
     try:

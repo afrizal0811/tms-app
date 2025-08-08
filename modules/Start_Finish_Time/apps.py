@@ -82,7 +82,7 @@ def simpan_file_excel(dataframe, lokasi_name, tanggal_str):
     file_basename = f"Time Summary {lokasi_name} - {tanggal_str}"
     filename = get_save_path(file_basename)
     if not filename:
-        show_info_message("Dibatalkan", INFO_MESSAGES["CANCELLED_BY_USER"])
+        show_info_message("Dibatalkan", INFO_MESSAGES["CANCELED_BY_USER"])
         return
 
     dataframe.to_excel(filename, index=False)

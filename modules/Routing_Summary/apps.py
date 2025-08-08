@@ -225,7 +225,7 @@ def main():
             path = pilih_file_excel()
             if not path:
                 if index == 1:
-                    show_info_message("Dibatalkan", INFO_MESSAGES["CANCELLED_BY_USER"])
+                    show_info_message("Dibatalkan", INFO_MESSAGES["CANCELED_BY_USER"])
                     return
                 else:
                     break
@@ -268,7 +268,7 @@ def main():
             output_wb.save(save_path)
             open_file_externally(save_path)
         else:
-            show_info_message("Dibatalkan", INFO_MESSAGES["CANCELLED_BY_USER"])
+            show_info_message("Dibatalkan", INFO_MESSAGES["CANCELED_BY_USER"])
 
     except Exception as e:
         error_message = traceback.format_exc()

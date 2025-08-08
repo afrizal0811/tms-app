@@ -252,7 +252,7 @@ def process_routing_data(date_formats, gui_instance):
         file_basename = f"Routing Summary {lokasi_name} - {selected_date_for_filename}"
         save_path = get_save_path(base_name=file_basename, extension=".xlsx")
         if not save_path:
-            show_info_message("Dibatalkan", INFO_MESSAGES["CANCELLED_BY_USER"])
+            show_info_message("Dibatalkan", INFO_MESSAGES["CANCELED_BY_USER"])
             return
 
         gui_instance.update_status(f"Menyimpan ke {os.path.basename(save_path)}...")
