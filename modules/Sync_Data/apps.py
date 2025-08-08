@@ -313,12 +313,17 @@ def main():
             show_error_message("Gagal", ERROR_MESSAGES["LOCATION_CODE_MISSING"])
             return
 
-        # Jika hub_ids kosong, coba sinkron hub dari API
-        if not hub_ids:
-            hub_ids = sync_hub(api_token, constants)
-            if hub_ids is None:
-                return
+        # Selalu sync hub dari API
+        new_hub_ids = sync_hub(api_token, constants)
+        if new_hub_ids is None:
+            return
 
+        if hub_ids != new_hub_ids:
+            hub_ids.update(new_hub_ids)
+
+        # Sort berdasarkan key ascending
+        hub_ids = dict(sorted(hub_ids.items()))
+        
         hub_id = hub_ids.get(lokasi_kode)
         if not hub_id:
             show_error_message("Gagal", ERROR_MESSAGES["HUB_ID_MISSING"].format(lokasi_code=lokasi_kode))
