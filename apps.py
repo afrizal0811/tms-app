@@ -261,7 +261,6 @@ root.withdraw()
 def ganti_lokasi():
     pilih_lokasi(root, initial_setup=False)
     update_title(root)
-    run_sync_in_background(root)
 
 # --- Setup Menu Bar ---
 menu_bar = tk.Menu(root)
