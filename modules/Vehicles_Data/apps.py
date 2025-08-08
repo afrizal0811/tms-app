@@ -4,7 +4,7 @@ import os
 import sys
 from datetime import datetime
 import openpyxl
-
+import traceback
 # Menambahkan project root ke sys.path agar impor shared_utils berfungsi
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.append(project_root)
@@ -21,7 +21,7 @@ from utils.function import (
     show_info_message
 )
 from utils.messages import ERROR_MESSAGES, INFO_MESSAGES
-
+from utils.api_handler import handle_requests_error
 
 def auto_size_columns(workbook):
     """Menyesuaikan lebar kolom agar sesuai dengan panjang teks maksimal."""
@@ -231,24 +231,12 @@ def fetch_and_save_vehicles_data():
         open_file_externally(save_path)
         return True
 
-    except requests.exceptions.HTTPError as errh:
-        status_code = errh.response.status_code
-        if status_code == 401:
-            show_error_message("Akses Ditolak (401)", ERROR_MESSAGES["API_TOKEN_MISSING"])
-        elif status_code >= 500:
-            show_error_message("Masalah Server API", ERROR_MESSAGES["SERVER_ERROR"].format(error_detail=status_code))
-        else:
-            show_error_message("Kesalahan HTTP", ERROR_MESSAGES["HTTP_ERROR_GENERIC"].format(error_detail=errh))
-        return False
-    except requests.exceptions.ConnectionError:
-        show_error_message("Koneksi Gagal", ERROR_MESSAGES["API_CONNECTION_FAILED_GENERIC"])
-        return False
     except requests.exceptions.RequestException as e:
-        show_error_message("Kesalahan API", ERROR_MESSAGES["API_REQUEST_FAILED"].format(error_detail=e))
-        return False
+        handle_requests_error(e)
     except Exception as e:
-        show_error_message("Error Tak Terduga", ERROR_MESSAGES["UNKNOWN_ERROR"].format(error_detail=e))
-        return False
+        show_error_message("Error Tak Terduga", ERROR_MESSAGES["UNKNOWN_ERROR"].format(
+            error_detail=f"{e}\n\n{traceback.format_exc()}"
+        ))
 
 
 def main():

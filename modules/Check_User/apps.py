@@ -12,6 +12,7 @@ from utils.function import (
     show_error_message
 )
 from utils.messages import ERROR_MESSAGES, ASK_MESSAGES
+from utils.api_handler import handle_requests_error
 
 # Role ID yang harus dikecualikan
 EXCLUDED_ROLE_ID = "6703410af6be892f3208ecde"
@@ -63,21 +64,13 @@ def main(parent_window):
             response = requests.get(api_url, headers=headers, params=params, timeout=30)
             response.raise_for_status()
             users_data = response.json().get('data', [])
-        except requests.exceptions.HTTPError as errh:
-            status_code = errh.response.status_code
-            if status_code == 401:
-                show_error_message("Akses Ditolak (401)", ERROR_MESSAGES["API_TOKEN_MISSING"])
-            elif status_code >= 500:
-                show_error_message("Masalah Server API", ERROR_MESSAGES["SERVER_ERROR"].format(error_detail=status_code))
-            else:
-                show_error_message("Kesalahan HTTP", ERROR_MESSAGES["HTTP_ERROR_GENERIC"].format(status_code=status_code))
-            return
-        except requests.exceptions.ConnectionError:
-            show_error_message("Koneksi Gagal", ERROR_MESSAGES["CONNECTION_ERROR"].format(error_detail="Tidak dapat terhubung ke server. Periksa koneksi internet Anda."))
-            return
         except requests.exceptions.RequestException as e:
-            show_error_message("Kesalahan API", ERROR_MESSAGES["API_REQUEST_FAILED"].format(error_detail=e))
-            return
+            handle_requests_error(e)
+        except Exception as e:
+            import traceback
+            show_error_message("Error Tak Terduga", ERROR_MESSAGES["UNKNOWN_ERROR"].format(
+                error_detail=f"Terjadi kesalahan: {e}\n\n{traceback.format_exc()}"
+            ))
 
         # filter default menggunakan restricted_roles dan mengecualikan EXCLUDED_ROLE_ID
         def filter_users():

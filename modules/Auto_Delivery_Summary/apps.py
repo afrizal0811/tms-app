@@ -2,6 +2,7 @@ from openpyxl.styles import Alignment, PatternFill
 import pandas as pd
 import re
 import requests
+import traceback
 from utils.function import (
     get_save_path,
     load_config,
@@ -13,7 +14,7 @@ from utils.function import (
 from utils.gui import create_date_picker_window
 from utils.function import show_error_message, show_info_message
 from utils.messages import ERROR_MESSAGES, INFO_MESSAGES
-
+from utils.api_handler import handle_requests_error
 
 def process_task_data(task, master_map, real_sequence_map):
     """
@@ -152,20 +153,13 @@ def panggil_api_dan_simpan(dates, app_instance):
             show_error_message("Data Tidak Ditemukan", ERROR_MESSAGES["DATA_NOT_FOUND"])
             return False
         app_instance.update_status(f"✅ Ditemukan total {len(tasks_data)} data tugas.")
-    except requests.exceptions.HTTPError as errh:
-        status_code = errh.response.status_code
-        if status_code == 401:
-            show_error_message("Akses Ditolak (401)", ERROR_MESSAGES["API_TOKEN_MISSING"])
-        elif status_code >= 500:
-            show_error_message("Masalah Server API", ERROR_MESSAGES["SERVER_ERROR"].format(error_detail=status_code))
-        else:
-            show_error_message("Kesalahan HTTP", ERROR_MESSAGES["HTTP_ERROR_GENERIC"].format(status_code=status_code))
-        return False
-    except requests.exceptions.ConnectionError:
-        show_error_message("Koneksi Gagal", ERROR_MESSAGES["CONNECTION_ERROR"].format(error_detail="Tidak dapat terhubung ke server. Periksa koneksi internet Anda."))
-        return False
     except requests.exceptions.RequestException as e:
-        show_error_message("Kesalahan API", ERROR_MESSAGES["API_REQUEST_FAILED"].format(error_detail=e))
+        handle_requests_error(e)
+        return False
+    except Exception as e:
+        show_error_message("Error API", ERROR_MESSAGES["UNKNOWN_ERROR"].format(
+            error_detail=f"{e}\n\n{traceback.format_exc()}"
+        ))
         return False
 
     # --- Data Processing (No changes in this part) ---

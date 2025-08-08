@@ -5,6 +5,7 @@ from openpyxl.utils import get_column_letter
 import os
 import pandas as pd
 import requests
+import traceback
 import sys
 from utils.function import (
     get_save_path,
@@ -18,6 +19,7 @@ from utils.function import (
 )
 from utils.gui import create_date_picker_window
 from utils.messages import ERROR_MESSAGES, INFO_MESSAGES
+from utils.api_handler import handle_requests_error
 
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.append(project_root)
@@ -104,6 +106,8 @@ def process_routing_data(date_formats, gui_instance):
             f"{date_obj.day}/{date_obj.month}/{str(date_obj.year)[2:]}"  # 5/8/25
         ]
         response_data = None
+        request_success = False
+
         for i, date_str in enumerate(date_formats_to_try, start=1):
             gui_instance.update_status(f"Menghubungi API (Format {i}: {date_str})...")
             params = {'s': date_str, 'limit': 1000, 'hubId': hub_id}
@@ -111,14 +115,19 @@ def process_routing_data(date_formats, gui_instance):
                 response = requests.get(api_url, headers=headers, params=params, timeout=30)
                 response.raise_for_status()
                 data_check = response.json()
+
                 if 'data' in data_check and 'data' in data_check['data'] and data_check['data']['data']:
                     response_data = data_check
+                    request_success = True
                     break
-            except requests.exceptions.RequestException:
-                continue
+            except requests.exceptions.RequestException as e:
+                last_exception = e 
 
-        if response_data is None:
-            show_error_message("Data Tidak Ditemukan", ERROR_MESSAGES["DATA_NOT_FOUND"])
+        if not request_success:
+            if 'last_exception' in locals():
+                handle_requests_error(last_exception)
+            else:
+                show_error_message("Data Tidak Ditemukan", ERROR_MESSAGES["DATA_NOT_FOUND"])
             return
 
         # === Proses routing data ===

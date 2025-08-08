@@ -4,7 +4,7 @@ from openpyxl.utils import get_column_letter
 import openpyxl
 import pandas as pd
 import requests
-
+import traceback
 # Impor fungsi bantuan dari shared_utils dan gui_utils
 from utils.function import (
     get_save_path,
@@ -18,7 +18,7 @@ from utils.function import (
 )
 from utils.gui import create_date_picker_window
 from utils.messages import ERROR_MESSAGES, INFO_MESSAGES
-
+from utils.api_handler import handle_requests_error
 # =============================================================================
 # BAGIAN 1: FUNGSI-FUNGSI BANTU (HELPER FUNCTIONS)
 # =============================================================================
@@ -184,9 +184,15 @@ def ambil_data(dates, app_instance=None):
     try:
         response = requests.get(url, params=params, headers=headers, timeout=30)
         response.raise_for_status()
+        items = response.json().get("tasks", {}).get("data", [])
     except requests.exceptions.RequestException as e:
-        show_error_message("API Error", ERROR_MESSAGES["API_REQUEST_FAILED"].format(error_detail=e))
-        return
+        handle_requests_error(e)
+        return False
+    except Exception as e:
+        show_error_message("API Error", ERROR_MESSAGES["UNKNOWN_ERROR"].format(
+            error_detail=f"{e}\n\n{traceback.format_exc()}"
+        ))
+        return False
 
     items = response.json().get("tasks", {}).get("data", [])
     if not items:

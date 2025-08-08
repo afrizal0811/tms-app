@@ -3,6 +3,7 @@ import json
 import os
 import tkinter as tk
 from tkinter import simpledialog
+import traceback
 from utils.function import (
     BASE_DIR,
     MASTER_JSON_PATH,
@@ -14,6 +15,7 @@ from utils.function import (
     show_error_message
 )
 from utils.messages import ERROR_MESSAGES
+from utils.api_handler import handle_requests_error
 
 TYPE_MAP_PATH = os.path.join(BASE_DIR, "type_map.json")
 
@@ -63,21 +65,24 @@ def sync_hub(api_token, constants):
         resp = requests.get(url, headers=headers, timeout=30)
         resp.raise_for_status()
         data = resp.json().get("data", [])
+        excluded_id = "683924970c29c079e30d862f"
+        lokasi_mapping = constants.get("lokasi_mapping", {})
+        result = {}
+        for hub in data:
+            if hub.get("_id") == excluded_id:
+                continue
+            hub_name = hub.get("name", "")
+            for nama, kode in lokasi_mapping.items():
+                if nama in hub_name:
+                    result[kode] = hub.get("_id")
+        return dict(sorted(result.items()))
+    except requests.exceptions.RequestException as e:
+        handle_requests_error(e)
+        return None
     except Exception as e:
-        show_error_message("Error Hub API", ERROR_MESSAGES["API_REQUEST_FAILED"].format(error_detail=e))
-        return {}
-
-    excluded_id = "683924970c29c079e30d862f"
-    lokasi_mapping = constants.get("lokasi_mapping", {})
-    result = {}
-    for hub in data:
-        if hub.get("_id") == excluded_id:
-            continue
-        hub_name = hub.get("name", "")
-        for nama, kode in lokasi_mapping.items():
-            if nama in hub_name:
-                result[kode] = hub.get("_id")
-    return dict(sorted(result.items()))
+        show_error_message("Error Tak Terduga", ERROR_MESSAGES["UNKNOWN_ERROR"].format(
+        error_detail=f"{e}\n\n{traceback.format_exc()}"
+    ))
 
 # =============================================================================
 # FETCH VEHICLES (gunakan type_map + substitusi manual pertama kali)
@@ -91,49 +96,52 @@ def fetch_and_process_vehicle_data(api_token, hub_id, constants, type_map):
         response = requests.get(api_url, headers=headers, params=params, timeout=30)
         response.raise_for_status()
         vehicle_data = response.json().get('data', [])
-    except Exception as e:
-        show_error_message("Error Kendaraan", ERROR_MESSAGES["API_REQUEST_FAILED"].format(error_detail=e))
-        return []
+        valid_types = constants.get("vehicle_type", [])
+        type_map_updated = False
+        type_map_empty = len(type_map) == 0
 
-    valid_types = constants.get("vehicle_type", [])
-    type_map_updated = False
-    type_map_empty = len(type_map) == 0  # hanya tanya user jika map kosong
+        vehicles = []
+        for v in vehicle_data:
+            if not v.get('assignee') or not v.get('name'):
+                continue
 
-    vehicles = []
-    for v in vehicle_data:
-        if not v.get('assignee') or not v.get('name'):
-            continue
+            raw_type = (v.get('tags', [])[0] if v.get('tags') else '')
+            mapped_type = type_map.get(raw_type)
 
-        raw_type = (v.get('tags', [])[0] if v.get('tags') else '')
-        mapped_type = type_map.get(raw_type)
-
-        if not mapped_type:
-            # Tidak ada mapping
-            if any(t in raw_type for t in valid_types):
-                mapped_type = raw_type
-            else:
-                if type_map_empty:  # hanya tanya jika file mapping awal kosong
-                    substitute = ask_type_substitution(raw_type)
-                    if substitute:
-                        type_map[raw_type] = substitute
-                        mapped_type = substitute
-                        type_map_updated = True
+            if not mapped_type:
+                if any(t in raw_type for t in valid_types):
+                    mapped_type = raw_type
+                else:
+                    if type_map_empty:
+                        substitute = ask_type_substitution(raw_type)
+                        if substitute:
+                            type_map[raw_type] = substitute
+                            mapped_type = substitute
+                            type_map_updated = True
+                        else:
+                            mapped_type = raw_type
                     else:
                         mapped_type = raw_type
-                else:
-                    mapped_type = raw_type  # tidak tanya user, langsung pakai raw_type
 
-        vehicles.append({
-            'Email': v.get('assignee', '').lower(),
-            'Plat': v.get('name', ''),
-            'Type': mapped_type
-        })
+            vehicles.append({
+                'Email': v.get('assignee', '').lower(),
+                'Plat': v.get('name', ''),
+                'Type': mapped_type
+            })
 
-    if type_map_updated:
-        save_type_map(type_map)
+        if type_map_updated:
+            save_type_map(type_map)
 
-    return vehicles
+        return vehicles
 
+    except requests.exceptions.RequestException as e:
+        handle_requests_error(e)
+        return None  # Mengembalikan None saat terjadi error requests
+    except Exception as e:
+        show_error_message("Error Kendaraan", ERROR_MESSAGES["UNKNOWN_ERROR"].format(
+            error_detail=f"{e}\n\n{traceback.format_exc()}"
+        ))
+        return None
 # =============================================================================
 # FETCH USERS
 # =============================================================================
@@ -152,9 +160,15 @@ def fetch_driver_users(api_token, hub_id, constants):
         resp.raise_for_status()
         users = resp.json().get("data", [])
         return [u for u in users if u.get("name") and ("FRZ" in u["name"] or "DRY" in u["name"])]
+    
+    except requests.exceptions.RequestException as e:
+        handle_requests_error(e)
+        return None # Mengembalikan None saat terjadi error requests
     except Exception as e:
-        show_error_message("Error Users API", ERROR_MESSAGES["API_REQUEST_FAILED"].format(error_detail=e))
-        return []
+        show_error_message("Error Users API", ERROR_MESSAGES["UNKNOWN_ERROR"].format(
+            error_detail=f"{e}\n\n{traceback.format_exc()}"
+        ))
+        return None
 
 # =============================================================================
 # UPDATE DRIVER
@@ -217,8 +231,10 @@ def main():
         if "driver" not in master_json:
             master_json["driver"] = []
 
-        # Sync hub
         hub_ids = sync_hub(api_token, constants)
+        if hub_ids is None:
+            return
+        
         if hub_ids:
             master_json["hub_ids"] = hub_ids
 
