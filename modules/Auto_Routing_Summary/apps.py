@@ -109,7 +109,6 @@ def process_routing_data(date_formats, gui_instance):
         request_success = False
 
         for i, date_str in enumerate(date_formats_to_try, start=1):
-            gui_instance.update_status(f"Menghubungi API (Format {i}: {date_str})...")
             params = {'s': date_str, 'limit': 1000, 'hubId': hub_id}
             try:
                 response = requests.get(api_url, headers=headers, params=params, timeout=30)
@@ -248,40 +247,27 @@ def process_routing_data(date_formats, gui_instance):
             usage_data_for_df.append({'Tipe Kendaraan': v_type,'Jumlah (DRY)': dry_count,'Jumlah (FROZEN)': frozen_count})
         df_usage = pd.DataFrame(usage_data_for_df)
 
-        gui_instance.update_status("Memilih direktori penyimpanan...")
         file_basename = f"Routing Summary {lokasi_name} - {selected_date_for_filename}"
         save_path = get_save_path(base_name=file_basename, extension=".xlsx")
         if not save_path:
             show_info_message("Dibatalkan", INFO_MESSAGES["CANCELED_BY_USER"])
             return
 
-        gui_instance.update_status(f"Menyimpan ke {os.path.basename(save_path)}...")
         with pd.ExcelWriter(save_path, engine='openpyxl') as writer:
             df_final.to_excel(writer, sheet_name='Truck Detail', index=False)
             df_summary.to_excel(writer, sheet_name='Total Distance Summary', index=False)
             df_usage.to_excel(writer, sheet_name='Truck Usage', index=False)
 
-        gui_instance.update_status("Menerapkan style...")
         style_excel(save_path)
-        gui_instance.update_status("Membuka file...")
         open_file_externally(save_path)
-        gui_instance.update_status("Selesai.")
 
-    except requests.exceptions.HTTPError as errh:
-        status_code = errh.response.status_code
-        if status_code == 401:
-            show_error_message("Akses Ditolak (401)", ERROR_MESSAGES["API_TOKEN_MISSING"])
-        elif status_code >= 500:
-            show_error_message("Masalah Server API", ERROR_MESSAGES["SERVER_ERROR"].format(error_detail=status_code))
-        else:
-            show_error_message("Kesalahan HTTP", ERROR_MESSAGES["HTTP_ERROR_GENERIC"].format(status_code=status_code))
-    except requests.exceptions.ConnectionError:
-        show_error_message("Koneksi Gagal", ERROR_MESSAGES["CONNECTION_ERROR"].format(error_detail="Tidak dapat terhubung ke server. Periksa koneksi internet Anda."))
     except requests.exceptions.RequestException as e:
-        show_error_message("Kesalahan API", ERROR_MESSAGES["API_REQUEST_FAILED"].format(error_detail=e))
+        handle_requests_error(e)
+        return None
     except Exception as e:
-        import traceback
-        show_error_message("Error Tak Terduga", ERROR_MESSAGES["UNKNOWN_ERROR"].format(error_detail=f"Terjadi kesalahan: {e}\\n\\n{traceback.format_exc()}"))
+        show_error_message("Error Tak Terduga", ERROR_MESSAGES["UNKNOWN_ERROR"].format(
+        error_detail=f"{e}\n\n{traceback.format_exc()}"
+    ))
 
 def main():
     def process_wrapper(dates, gui_instance):

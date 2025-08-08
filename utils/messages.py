@@ -2,7 +2,7 @@ ERROR_MESSAGES = {
     "API_REQUEST_FAILED": "Gagal menghubungi API: {error_detail}\n\nSilakan hubungi admin!",
     "API_TOKEN_MISSING": "Token API tidak ditemukan.\n\nSilakan hubungi admin!",
     "CONFIG_FILE_ERROR": "File konfigurasi (config) gagal dimuat.\n\nSilakan hubungi admin!",    
-    "CONNECTION_ERROR": "Gagal terhubung ke API: {error_detail}\n\nSilakan hubungi admin!",
+    "CONNECTION_ERROR": "Gagal terhubung ke API: \n{error_detail}\n\nSilakan hubungi admin!",
     "CONSTANT_FILE_ERROR": "File konfigurasi (constant) gagal dimuat.\n\nSilakan hubungi admin!",
     "DATA_NOT_FOUND": "Data tidak ditemukan!",
     "FAILED_OPENING_FILE": "Gagal membuka file: {error_detail}",

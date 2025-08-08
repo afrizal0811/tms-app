@@ -144,7 +144,6 @@ def panggil_api_dan_simpan(dates, app_instance):
     }
     headers = {"Authorization": f"Bearer {API_TOKEN}", "Content-Type": "application/json"}
 
-    app_instance.update_status("🚀 Memulai pemanggilan API...")
     try:
         response = requests.get(api_url, headers=headers, params=params, timeout=60)
         response.raise_for_status()
@@ -152,7 +151,6 @@ def panggil_api_dan_simpan(dates, app_instance):
         if not tasks_data:
             show_error_message("Data Tidak Ditemukan", ERROR_MESSAGES["DATA_NOT_FOUND"])
             return False
-        app_instance.update_status(f"✅ Ditemukan total {len(tasks_data)} data tugas.")
     except requests.exceptions.RequestException as e:
         handle_requests_error(e)
         return False
@@ -175,7 +173,6 @@ def panggil_api_dan_simpan(dates, app_instance):
         for i, task in enumerate(sorted_tasks):
             real_sequence_map[task['_id']] = i + 1
 
-    app_instance.update_status("\n📊 Memulai agregasi data untuk laporan Excel...")
     summary_data = {email: {'License Plat': record.get('Plat', 'N/A'), 'Driver': record.get('Driver', email), 'Total Visit': pd.NA, 'Total Delivered': pd.NA} for email, record in master_map.items() if LOKASI_FILTER in email}
     pending_so_data, ro_vs_real_data = [], []
     undelivered_labels = ["PENDING", "BATAL", "TERIMA SEBAGIAN"]
@@ -272,9 +269,6 @@ def panggil_api_dan_simpan(dates, app_instance):
     else:
         # Jika tidak ada data, buat DataFrame 1 kolom dengan 1 row teks
         df_longlat = pd.DataFrame({"": ["Tidak Ada Update Longlat"]})
-
-    # --- Excel Writing ---
-    app_instance.update_status("💾 Meminta lokasi penyimpanan file...")
 
     # Mendapatkan nama lokasi dari mapping
     lokasi_name = next((name for name, code in LOKASI_MAPPING.items() if code == LOKASI_FILTER), LOKASI_FILTER)

@@ -19,7 +19,7 @@ def handle_requests_error(err):
         show_error_message("Redirect Berlebihan", ERROR_MESSAGES["TOO_MANY_REDIRECTS"])
 
     elif isinstance(err, requests.exceptions.ConnectionError):
-        show_error_message("Koneksi Gagal", ERROR_MESSAGES["CONNECTION_ERROR"])
+        show_error_message("Koneksi Gagal", ERROR_MESSAGES["CONNECTION_ERROR"].format(error_detail="Tidak dapat terhubung ke server. Periksa koneksi internet Anda."))
 
     elif isinstance(err, requests.exceptions.RequestException):
         show_error_message("Kesalahan API", ERROR_MESSAGES["API_REQUEST_FAILED"].format(error_detail=err))

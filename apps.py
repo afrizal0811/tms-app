@@ -8,6 +8,7 @@ import sys
 import threading
 import tkinter as tk
 import webbrowser
+import time
 from utils.function import (
     CONFIG_PATH,
     MASTER_JSON_PATH,
@@ -181,12 +182,18 @@ def run_sync_in_background(root_window):
     """Menjalankan proses sinkronisasi hub dan driver di background thread."""
     loading_window = tk.Toplevel(root_window)
     loading_window.title("Loading")
-    loading_window.geometry("300x100")
-    x, y = root_window.winfo_x() + (root_window.winfo_width() // 2) - 150, root_window.winfo_y() + (root_window.winfo_height() // 2) - 50
+    loading_window.geometry("300x120")
+    x, y = root_window.winfo_x() + (root_window.winfo_width() // 2) - 150, root_window.winfo_y() + (root_window.winfo_height() // 2) - 60
     loading_window.geometry(f"+{x}+{y}")
     loading_window.transient(root_window)
     loading_window.grab_set()
-    ttk.Label(loading_window, text="Sinkronisasi master data...", font=("Arial", 12)).pack(pady=20)
+    
+    status_label = ttk.Label(loading_window, text="Sinkronisasi master data...", font=("Arial", 12))
+    status_label.pack(pady=(10, 0))
+
+    timer_label = ttk.Label(loading_window, text="00:00:00", font=("Arial", 10), foreground="gray")
+    timer_label.pack(pady=(0, 5))
+
     progress = ttk.Progressbar(loading_window, mode='indeterminate')
     progress.pack(pady=10, padx=20, fill=tk.X)
     progress.start()
@@ -198,10 +205,26 @@ def run_sync_in_background(root_window):
     laporan_menu.entryconfig("Delivery Summary", state="disabled")
     laporan_menu.entryconfig("Data Kendaraan", state="disabled")
 
+    start_time = time.time()
+    timer_running = True
+
+    def update_timer():
+        if timer_running and loading_window.winfo_exists():
+            elapsed_time = int(time.time() - start_time)
+            hours = elapsed_time // 3600
+            minutes = (elapsed_time % 3600) // 60
+            seconds = elapsed_time % 60
+            timer_label.config(text=f"{hours:02}:{minutes:02}:{seconds:02}")
+            loading_window.after(1000, update_timer)
+
     def on_sync_complete():
+        nonlocal timer_running
+        timer_running = False
+        
         if loading_window.winfo_exists():
             progress.stop()
             loading_window.destroy()
+
         for button in main_buttons:
             button.config(state='normal')
         konfigurasi_menu.entryconfig("Sinkronisasi Data", state="normal")
@@ -215,6 +238,7 @@ def run_sync_in_background(root_window):
         finally:
             root_window.after(0, on_sync_complete)
             
+    update_timer()
     threading.Thread(target=thread_target, daemon=True).start()
 
 

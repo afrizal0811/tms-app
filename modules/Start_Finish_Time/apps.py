@@ -130,9 +130,6 @@ def simpan_file_excel(dataframe, lokasi_name, tanggal_str):
 def ambil_data(dates, app_instance=None):
     tanggal_str = dates["dmy"]
 
-    if app_instance:
-        app_instance.update_status("Mengambil data dari API...")
-
     config = load_config()
     constants = load_constants()
     secrets = load_secret()
@@ -290,9 +287,6 @@ def ambil_data(dates, app_instance=None):
 
     tanggal_format_titik = tanggal_str.replace('-', '.')
     simpan_file_excel(final_df, lokasi_name, tanggal_format_titik)
-
-    if app_instance:
-        app_instance.update_status("Proses selesai.")
 
 # =============================================================================
 # BAGIAN 3: FUNGSI GUI DAN EKSEKUSI
