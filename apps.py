@@ -181,20 +181,29 @@ def atur_visibilitas_menu(menu_bar):
 def run_sync_in_background(root_window):
     """Menjalankan proses sinkronisasi hub dan driver di background thread."""
     loading_window = tk.Toplevel(root_window)
-    loading_window.title("Loading")
+    loading_window.title("Sinkronisasi")
     loading_window.geometry("300x120")
     x, y = root_window.winfo_x() + (root_window.winfo_width() // 2) - 150, root_window.winfo_y() + (root_window.winfo_height() // 2) - 60
     loading_window.geometry(f"+{x}+{y}")
     loading_window.transient(root_window)
     loading_window.grab_set()
-    
+
+    # --- Tambahkan konfigurasi style di sini ---
+    style = ttk.Style(loading_window)
+    style.theme_use('clam')
+    style.configure("TButton", font=("Helvetica", 12), padding=5)
+    style.configure("TLabel", background='SystemButtonFace', font=("Helvetica", 16, "bold"))
+    style.configure("TProgressbar", thickness=20)
+    # --- Akhir konfigurasi style ---
+
     status_label = ttk.Label(loading_window, text="Sinkronisasi master data...", font=("Arial", 12))
     status_label.pack(pady=(10, 0))
 
     timer_label = ttk.Label(loading_window, text="00:00:00", font=("Arial", 10), foreground="gray")
     timer_label.pack(pady=(0, 5))
 
-    progress = ttk.Progressbar(loading_window, mode='indeterminate')
+    # --- Terapkan style yang baru di sini ---
+    progress = ttk.Progressbar(loading_window, mode='indeterminate', style="Custom.Horizontal.TProgressbar")
     progress.pack(pady=10, padx=20, fill=tk.X)
     progress.start()
     
@@ -240,7 +249,6 @@ def run_sync_in_background(root_window):
             
     update_timer()
     threading.Thread(target=thread_target, daemon=True).start()
-
 
 # ==============================================================================
 # ALUR UTAMA APLIKASI GUI

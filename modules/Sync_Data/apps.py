@@ -326,7 +326,7 @@ def main():
         
         hub_id = hub_ids.get(lokasi_kode)
         if not hub_id:
-            show_error_message("Gagal", ERROR_MESSAGES["HUB_ID_MISSING"].format(lokasi_code=lokasi_kode))
+            show_error_message("Gagal", ERROR_MESSAGES["HUB_ID_MISSING"])
             return
 
         # Ambil users & vehicles (boleh saja master_df None — fungsi aman terhadap itu)
