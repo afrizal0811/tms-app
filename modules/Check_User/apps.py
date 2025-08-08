@@ -27,7 +27,6 @@ def main(parent_window):
             show_error_message("Gagal", ERROR_MESSAGES["CONSTANT_FILE_ERROR"])
             return
         if not config:
-            # Menggunakan pesan yang relevan meskipun tidak ada di ERROR_MESSAGES asli
             show_error_message("Gagal", ERROR_MESSAGES["CONFIG_FILE_ERROR"])
             return
         if not secrets:
@@ -43,7 +42,6 @@ def main(parent_window):
         
         hub_ids_map = master_data['hub_ids']
         hub_id = hub_ids_map.get(lokasi_kode)
-
 
         if not lokasi_kode:
             show_error_message("Gagal", ERROR_MESSAGES["LOCATION_CODE_MISSING"])
@@ -73,9 +71,9 @@ def main(parent_window):
                 error_detail=f"Terjadi kesalahan: {e}\n\n{traceback.format_exc()}"
             ))
 
-        # filter default menggunakan restricted_roles dan mengecualikan EXCLUDED_ROLE_ID
+        # Filter default
         def filter_users():
-            return [u for u in users_data if u.get('roleId') in restricted_roles and u.get('roleId') not in (EXCLUDED_ROLE_ID,)]
+            return [u for u in users_data if u.get('roleId') in restricted_roles and u.get('roleId') != EXCLUDED_ROLE_ID]
 
         filtered_users = filter_users()
         filtered_users.sort(key=lambda u: u.get('name', '').lower())
@@ -83,6 +81,7 @@ def main(parent_window):
             show_error_message("Data Tidak Ditemukan", ERROR_MESSAGES["DATA_NOT_FOUND"])
             return
 
+        # === Dialog Pilihan User ===
         dialog = tk.Toplevel(parent_window)
         dialog.title("Pilih Akun Pengguna")
         dialog_width, dialog_height = 500, 500
@@ -90,48 +89,100 @@ def main(parent_window):
         y = (dialog.winfo_screenheight() // 2) - (dialog_height // 2)
         dialog.geometry(f"{dialog_width}x{dialog_height}+{x}+{y}")
 
-        tk.Label(dialog, text="Pilih Akun Anda", font=("Arial", 16, "bold")).pack(pady=5)
+        dialog.rowconfigure(0, weight=0)  # Title
+        dialog.rowconfigure(1, weight=1)  # area tombol user
+        dialog.rowconfigure(2, weight=0)  # pagination
+        dialog.rowconfigure(3, weight=0)  # save button
+        dialog.columnconfigure(0, weight=1)
 
-        container = tk.Frame(dialog, relief="solid", bd=1)
-        container.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
-        tk.Label(container, text="Pilih salah satu nama di bawah ini:", font=("Arial", 12, "italic"), anchor="w").pack(anchor="w", pady=5, padx=5)
+        # Title di tengah atas
+        tk.Label(dialog, text="Pilih Akun Anda", font=("Arial", 16, "bold")).grid(row=0, column=0, pady=8)
+
+        container = tk.Frame(dialog)
+        container.grid(row=1, column=0, sticky="nsew", padx=10, pady=5)
+
+        pagination_frame = tk.Frame(dialog)  # pagination terpisah
+        pagination_frame.grid(row=2, column=0, pady=5)
+
+        save_button = tk.Button(dialog, text="Simpan Pilihan", state=tk.DISABLED,
+                                font=("Arial", 14, "bold"), bg="#4CAF50", fg="white")
+        save_button.grid(row=3, column=0, sticky="ew", padx=10, pady=10)
 
         selected_var = tk.StringVar()
-        canvas = tk.Canvas(container, borderwidth=0)
-        scrollbar = ttk.Scrollbar(container, orient="vertical", command=canvas.yview)
-        scroll_frame = tk.Frame(canvas)
-        scroll_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
-        canvas.create_window((0, 0), window=scroll_frame, anchor="nw")
-        canvas.configure(yscrollcommand=scrollbar.set)
-        canvas.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
+        user_buttons = []
+        current_page = 0
+        ITEMS_PER_PAGE = 10
 
-        save_button = tk.Button(dialog, text="Simpan Pilihan", state=tk.DISABLED, font=("Arial", 14, "bold"), bg="#4CAF50", fg="white")
-        save_button.pack(fill=tk.X, padx=10, pady=10)
-
-        def on_selection(*args):
+        def on_selection(*a):
             if selected_var.get():
                 save_button.config(state=tk.NORMAL)
             else:
                 save_button.config(state=tk.DISABLED)
 
-        selected_var.trace_add('write', on_selection)
+        def set_selected(user_id, btn):
+            for b in user_buttons:
+                b.config(relief="raised", bg="SystemButtonFace")
+            btn.config(relief="sunken", bg="#d0e0ff")
+            selected_var.set(user_id)
+            on_selection()
 
-        radio_buttons = []
+        def change_page(delta, user_list):
+            nonlocal current_page
+            total_pages = max(1, (len(user_list) + ITEMS_PER_PAGE - 1) // ITEMS_PER_PAGE)
+            current_page = max(0, min(current_page + delta, total_pages - 1))
+            populate_user_list(user_list)
+
         def populate_user_list(user_list):
-            for rb in radio_buttons:
-                rb.destroy()
-            radio_buttons.clear()
-            for user in user_list:
-                name_cap = user.get('name', 'Nama tidak ditemukan').title()
-                rb = tk.Radiobutton(scroll_frame, text=name_cap, variable=selected_var,
-                                     value=user.get('_id'), anchor='w', font=("Arial", 12))
-                rb.pack(fill=tk.X, padx=10, pady=2)
-                radio_buttons.append(rb)
+            nonlocal current_page
+            for w in container.winfo_children():
+                w.destroy()
+            for w in pagination_frame.winfo_children():
+                w.destroy()
+            user_buttons.clear()
+
+            total_pages = max(1, (len(user_list) + ITEMS_PER_PAGE - 1) // ITEMS_PER_PAGE)
+            start = current_page * ITEMS_PER_PAGE
+            page_users = user_list[start:start + ITEMS_PER_PAGE]
+
+            # Spacer top & bottom agar konten tengah vertikal
+            container.grid_rowconfigure(0, weight=1)
+            container.grid_rowconfigure(2, weight=1)
+            container.grid_columnconfigure(0, weight=1)
+            container.grid_columnconfigure(1, weight=1)
+
+            content_frame = tk.Frame(container)
+            content_frame.grid(row=1, column=0, columnspan=2)
+
+            if len(page_users) <= 5:
+                for i, user in enumerate(page_users):
+                    name_cap = user.get('name', 'Nama tidak ditemukan').title()
+                    btn = tk.Button(content_frame, text=name_cap, font=("Arial", 11, "bold"),  # Bold
+                                    width=24, height=2, relief="raised")
+                    btn.grid(row=i, column=0, columnspan=2, padx=8, pady=6)
+                    btn.config(command=lambda u=user, b=btn: set_selected(u.get('_id'), b))
+                    user_buttons.append(btn)
+            else:
+                for i, user in enumerate(page_users):
+                    col = 0 if i < 5 else 1
+                    row = i if i < 5 else i - 5
+                    name_cap = user.get('name', 'Nama tidak ditemukan').title()
+                    btn = tk.Button(content_frame, text=name_cap, font=("Arial", 11, "bold"),  # Bold
+                                    width=18, height=2, relief="raised")
+                    btn.grid(row=row, column=col, padx=8, pady=6)
+                    btn.config(command=lambda u=user, b=btn: set_selected(u.get('_id'), b))
+                    user_buttons.append(btn)
+
+            # Pagination fixed di bawah
+            tk.Button(pagination_frame, text="<< Prev",
+                      state=tk.NORMAL if current_page > 0 else tk.DISABLED,
+                      command=lambda: change_page(-1, user_list)).pack(side=tk.LEFT, padx=6)
+            tk.Label(pagination_frame, text=f"Page {current_page+1} / {total_pages}").pack(side=tk.LEFT, padx=6)
+            tk.Button(pagination_frame, text="Next >>",
+                      state=tk.NORMAL if current_page < total_pages - 1 else tk.DISABLED,
+                      command=lambda: change_page(1, user_list)).pack(side=tk.LEFT, padx=6)
 
         populate_user_list(filtered_users)
 
-        # Rahasia: tekan CTRL+A untuk menghapus filter role (tetap mengecualikan EXCLUDED_ROLE_ID)
         def secret_show_all(event=None):
             all_users = [u for u in users_data if u.get('roleId') != EXCLUDED_ROLE_ID]
             all_users.sort(key=lambda u: u.get('name', '').lower())
@@ -146,11 +197,8 @@ def main(parent_window):
             if not selected_user:
                 show_error_message("Error", ERROR_MESSAGES["USER_SELECTION_NOT_FOUND"])
                 return
-            
-            # Konfirmasi sekarang ada di dalam fungsi simpan_pengguna
             if not show_ask_message("Konfirmasi", ASK_MESSAGES["CONFIRM_SAVE_USER"]):
                 return
-                
             config['user_checked'] = {
                 'name': selected_user.get('name'),
                 '_id': selected_user.get('_id'),
