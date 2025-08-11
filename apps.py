@@ -78,6 +78,26 @@ def update_title(root_window):
             
     root_window.title(title)
 
+def toggle_main_controls(is_enabled: bool):
+    """
+    Mengaktifkan atau menonaktifkan semua tombol utama dan item menu terkait.
+    :param is_enabled: True untuk enable, False untuk disable.
+    """
+    state = 'normal' if is_enabled else 'disabled'
+
+    for button in main_buttons:
+        button.config(state=state)
+
+    bantuan_menu.entryconfig("Panduan Pengguna - Planner", state=state)
+    bantuan_menu.entryconfig("Panduan Pengguna - Driver", state=state)
+    bantuan_menu.entryconfig("Tentang", state=state)
+
+    konfigurasi_menu.entryconfig("Sinkronisasi Data", state=state)
+    
+    laporan_menu.entryconfig("Routing Summary", state=state)
+    laporan_menu.entryconfig("Delivery Summary", state=state)
+    laporan_menu.entryconfig("Data Kendaraan", state=state)
+
 def pilih_lokasi(parent_window, initial_setup=False):
     reverse_dict = {v: k for k, v in LOKASI_DISPLAY.items()}
     selected_display_name = list(LOKASI_DISPLAY.keys())[0]
@@ -99,6 +119,8 @@ def pilih_lokasi(parent_window, initial_setup=False):
     combo = ttk.Combobox(dialog, values=list(LOKASI_DISPLAY.keys()), textvariable=selected_var, font=("Arial", 12), state="readonly")
     combo.pack(pady=10)
     combo.set(selected_display_name)
+    
+    toggle_main_controls(False)
 
     def on_select():
         selected = combo.get()
@@ -120,6 +142,7 @@ def pilih_lokasi(parent_window, initial_setup=False):
     dialog.transient(parent_window)
     dialog.grab_set()
     parent_window.wait_window(dialog)
+    toggle_main_controls(True)
 
 def pilih_pengguna_awal(parent_window):
     check_user_main(parent_window)
@@ -207,12 +230,7 @@ def run_sync_in_background(root_window):
     progress.pack(pady=10, padx=20, fill=tk.X)
     progress.start()
     
-    for button in main_buttons:
-        button.config(state='disabled')
-    konfigurasi_menu.entryconfig("Sinkronisasi Data", state="disabled")
-    laporan_menu.entryconfig("Routing Summary", state="disabled")
-    laporan_menu.entryconfig("Delivery Summary", state="disabled")
-    laporan_menu.entryconfig("Data Kendaraan", state="disabled")
+    toggle_main_controls(False)
 
     start_time = time.time()
     timer_running = True
@@ -234,12 +252,7 @@ def run_sync_in_background(root_window):
             progress.stop()
             loading_window.destroy()
 
-        for button in main_buttons:
-            button.config(state='normal')
-        konfigurasi_menu.entryconfig("Sinkronisasi Data", state="normal")
-        laporan_menu.entryconfig("Routing Summary", state="normal")
-        laporan_menu.entryconfig("Delivery Summary", state="normal")
-        laporan_menu.entryconfig("Data Kendaraan", state="normal") 
+        toggle_main_controls(True)
 
     def thread_target():
         try:
