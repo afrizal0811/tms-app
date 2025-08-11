@@ -4,7 +4,7 @@ ERROR_MESSAGES = {
     "CONFIG_FILE_ERROR": "File konfigurasi (config) gagal dimuat.\n\nSilakan hubungi admin!",    
     "CONNECTION_ERROR": "Gagal terhubung ke API: \n{error_detail}\n\nSilakan hubungi admin!",
     "CONSTANT_FILE_ERROR": "File konfigurasi (constant) gagal dimuat.\n\nSilakan hubungi admin!",
-    "DATA_NOT_FOUND": "Data tidak ditemukan!",
+    "DATA_NOT_FOUND": "Data tidak ditemukan! \n\nPeriksa kembali data Anda!",
     "FAILED_OPENING_FILE": "Gagal membuka file: {error_detail}",
     "HTTP_ERROR_GENERIC": "Gagal mengambil data dari API (HTTP Status: {status_code}).\nPastikan Token atau Hub ID sudah benar.\n\nSilakan hubungi admin!",
     "HUB_ID_MISSING": "Hub ID tidak ditemukan.\n\nSilakan hubungi admin!",

@@ -279,7 +279,7 @@ def main():
         finally:
             if gui_instance and gui_instance.winfo_exists():
                 gui_instance.after(100, safe_close)
-    create_date_picker_window(title="Auto Routing Summary", process_callback=process_wrapper)
+    create_date_picker_window(title="Routing Summary", process_callback=process_wrapper)
 
 if __name__ == '__main__':
     main()

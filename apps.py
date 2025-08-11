@@ -290,8 +290,8 @@ def show_user_guide(link):
     webbrowser.open(link) 
 
 bantuan_menu = tk.Menu(menu_bar, tearoff=0)
-bantuan_menu.add_command(label="Panduan Pengguna (Planner)", command=lambda:show_user_guide(USER_GUIDE_PLANNER))
-bantuan_menu.add_command(label="Panduan Pengguna (Driver)", command=lambda: show_user_guide(USER_GUIDE_DRIVER))
+bantuan_menu.add_command(label="Panduan Pengguna - Planner", command=lambda:show_user_guide(USER_GUIDE_PLANNER))
+bantuan_menu.add_command(label="Panduan Pengguna - Driver", command=lambda: show_user_guide(USER_GUIDE_DRIVER))
 bantuan_menu.add_separator()
 bantuan_menu.add_command(label="Tentang", command=show_about)
 menu_bar.add_cascade(label="Bantuan", menu=bantuan_menu)

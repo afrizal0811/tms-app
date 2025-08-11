@@ -302,7 +302,6 @@ def panggil_api_dan_simpan(dates, app_instance):
         return False
 
 def main():
-    """Fungsi utama untuk modul Auto Delivery Summary."""
     def process_wrapper(dates, app_instance):
 
         # Buat fungsi untuk menutup GUI dengan aman
@@ -323,7 +322,7 @@ def main():
             if app_instance and app_instance.winfo_exists():
                 app_instance.after(100, safe_close) # Diberi jeda sedikit (100ms)
 
-    create_date_picker_window("Auto Delivery Summary", process_wrapper)
+    create_date_picker_window("Delivery Summary", process_wrapper)
 
 if __name__ == "__main__":
     main()

@@ -83,7 +83,7 @@ def main(parent_window):
 
         # === Dialog Pilihan User ===
         dialog = tk.Toplevel(parent_window)
-        dialog.title("Pilih Akun Pengguna")
+        dialog.title("Pilih Akun Anda")
         dialog_width, dialog_height = 500, 500
         x = (dialog.winfo_screenwidth() // 2) - (dialog_width // 2)
         y = (dialog.winfo_screenheight() // 2) - (dialog_height // 2)
