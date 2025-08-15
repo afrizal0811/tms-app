@@ -2,23 +2,20 @@ import requests
 import json
 import os
 import tkinter as tk
-from tkinter import simpledialog
 import traceback
 from utils.function import (
-    BASE_DIR,
     MASTER_JSON_PATH,
+    TYPE_MAP_PATH,
     load_config,
     load_constants,
     load_master_data,
     load_secret,
     save_json_data,
     show_error_message,
-    show_info_message
+    show_ask_message
 )
-from utils.messages import ERROR_MESSAGES, INFO_MESSAGES
+from utils.messages import ERROR_MESSAGES, ASK_MESSAGES
 from utils.api_handler import handle_requests_error
-
-TYPE_MAP_PATH = os.path.join(BASE_DIR, "type_map.json")
 
 # =============================================================================
 # LOAD / SAVE TYPE MAP
@@ -43,7 +40,7 @@ def save_type_map(type_map):
 # =============================================================================
 # ASK USER UNTUK SUBSTITUSI TYPE (hanya saat type_map kosong)
 # =============================================================================
-def ask_type_substitution(plat, original_type, assignee_email, driver_users, constants):
+def ask_type_substitution(plat, original_type, assignee_email, driver_users, constants, rest_config):
     prefix = original_type.split("-")[0] if "-" in original_type else original_type
     assignee_email = assignee_email.lower()
 
@@ -66,10 +63,12 @@ def ask_type_substitution(plat, original_type, assignee_email, driver_users, con
     root.title("Pilih Tipe Kendaraan")
 
     def on_close():
-        show_info_message("Dibatalkan", INFO_MESSAGES["CANCELED_BY_USER"])
-        selected.set("")
-        root.quit()
-
+        if show_ask_message("Konfirmasi", ASK_MESSAGES["CONFIRM_CANCEL_SETUP"]):
+            rest_config()
+            root.quit()
+        else:
+            return 
+        
     root.protocol("WM_DELETE_WINDOW", on_close)
 
     window_width = 300
@@ -83,7 +82,7 @@ def ask_type_substitution(plat, original_type, assignee_email, driver_users, con
 
     label = tk.Label(
         root,
-        text=f"Plat '{plat}' memiliki tipe tidak standar:\n'{original_type}'\n\nPilih tipe pengganti:",
+        text=f"Plat '{plat}' memiliki tipe tidak standar:\n'{original_type}'\n\nPilih tipe kendaraan:",
         wraplength=280,
         justify="left",
         font=("Segoe UI", 12)
@@ -110,7 +109,6 @@ def ask_type_substitution(plat, original_type, assignee_email, driver_users, con
     action_frame.pack(pady=10)
 
     tk.Button(action_frame, text="OK", width=10, command=root.quit, font=("Segoe UI", 12)).pack(side="left", padx=10)
-    tk.Button(action_frame, text="Batal", width=10, command=lambda: (selected.set(""), root.quit()), font=("Segoe UI", 12)).pack(side="right", padx=10)
 
     root.mainloop()
     root.destroy()
@@ -152,7 +150,7 @@ def sync_hub(api_token, constants):
 # =============================================================================
 # FETCH VEHICLES (gunakan type_map + substitusi manual pertama kali)
 # =============================================================================
-def fetch_and_process_vehicle_data(api_token, hub_id, constants, type_map, driver_users):
+def fetch_and_process_vehicle_data(api_token, hub_id, constants, type_map, driver_users, rest_config):
     base_url = constants.get('base_url')
     api_url = f'{base_url}/vehicles'
     headers = {'Authorization': f'Bearer {api_token}'}
@@ -181,7 +179,8 @@ def fetch_and_process_vehicle_data(api_token, hub_id, constants, type_map, drive
                         original_type=raw_type,
                         assignee_email=v.get('assignee', ''),
                         driver_users=driver_users,
-                        constants=constants
+                        constants=constants,
+                        rest_config=rest_config
                     )
                     if substitute:
                         type_map[raw_type] = substitute
@@ -280,7 +279,7 @@ def update_driver_master(master_driver, users, vehicles):
 # =============================================================================
 # MAIN
 # =============================================================================
-def main():
+def main(rest_config):
     try:
         constants = load_constants()
         config = load_config()
@@ -331,7 +330,7 @@ def main():
 
         # Ambil users & vehicles (boleh saja master_df None — fungsi aman terhadap itu)
         users = fetch_driver_users(api_token, hub_id, constants)
-        vehicles = fetch_and_process_vehicle_data(api_token, hub_id, constants, type_map, users)
+        vehicles = fetch_and_process_vehicle_data(api_token, hub_id, constants, type_map, users, rest_config)
 
         # Siapkan master records aman untuk update_driver_master
         if master_df is not None and hasattr(master_df, "to_dict"):

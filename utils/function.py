@@ -57,6 +57,7 @@ def resource_path(relative_path):
 BASE_DIR = get_base_path()
 CONFIG_PATH = os.path.join(BASE_DIR, 'config.json')
 MASTER_JSON_PATH = os.path.join(BASE_DIR, 'master.json')
+TYPE_MAP_PATH = os.path.join(BASE_DIR, 'type_map.json')
 CONSTANT_PATH = resource_path('constant.json')
 
 

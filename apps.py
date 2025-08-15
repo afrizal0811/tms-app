@@ -12,6 +12,7 @@ import time
 from utils.function import (
     CONFIG_PATH,
     MASTER_JSON_PATH,
+    TYPE_MAP_PATH,
     ensure_config_exists,
     load_config,
     load_constants,
@@ -19,10 +20,12 @@ from utils.function import (
     save_json_data,
     show_error_message,
     show_info_message,
+    show_ask_message
 )
 from utils.messages import (
     ERROR_MESSAGES,
-    INFO_MESSAGES
+    INFO_MESSAGES,
+    ASK_MESSAGES,
 )
 
 # --- Impor Modul Aplikasi ---
@@ -53,16 +56,18 @@ USER_GUIDE_PLANNER = CONSTANTS.get('guide_planner', '')
 USER_GUIDE_DRIVER = CONSTANTS.get('guide_driver', '')
 
 def reset_config_and_exit():
-    """Menghapus config.json dan master.json agar setup wajib diulang, lalu keluar aplikasi."""
+    """Menghapus config.json, master.json, dan type_map agar setup wajib diulang, lalu keluar aplikasi."""
     try:
         if os.path.exists(CONFIG_PATH):
             os.remove(CONFIG_PATH)
         if os.path.exists(MASTER_JSON_PATH):
             os.remove(MASTER_JSON_PATH)
+        if os.path.exists(TYPE_MAP_PATH):
+            os.remove(TYPE_MAP_PATH)
+        show_error_message("Setup Tidak Lengkap", ERROR_MESSAGES["SETUP_CANCELED"])
+        on_closing()
     except Exception:
         pass
-    show_error_message("Setup Tidak Lengkap", ERROR_MESSAGES["SETUP_CANCELED"])
-    on_closing()
 
 
 def update_title(root_window):
@@ -129,13 +134,19 @@ def pilih_lokasi(parent_window, initial_setup=False):
             config_data['lokasi'] = kode
             save_json_data(config_data, CONFIG_PATH)
             dialog.destroy()
-            sync_data_main()
+            sync_data_main(reset_config_and_exit)
 
     # --- Tambahkan handler close ---
     def on_cancel():
-        dialog.destroy()
-        if initial_setup:  # hanya reset jika memang setup awal
-            reset_config_and_exit()
+        """Handler saat user menutup jendela konfigurasi."""
+        if initial_setup:
+            # Tampilkan konfirmasi
+            if show_ask_message("Konfirmasi", ASK_MESSAGES["CONFIRM_CANCEL_SETUP"]):
+                reset_config_and_exit()  # jika YA
+                return
+            else:
+                return  # jika TIDAK, tetap di window ini (tidak destroy)
+        dialog.destroy()  # jika bukan setup awal, cukup tutup dialog
 
     dialog.protocol("WM_DELETE_WINDOW", on_cancel)
     tk.Button(dialog, text="Pilih", command=on_select, font=("Arial", 12)).pack(pady=10)
@@ -145,10 +156,15 @@ def pilih_lokasi(parent_window, initial_setup=False):
     toggle_main_controls(True)
 
 def pilih_pengguna_awal(parent_window):
-    check_user_main(parent_window)
+    check_user_main(parent_window)  # buka GUI pilih pengguna
     config_after = load_config()
     if not config_after or not config_after.get("user_checked"):
-        reset_config_and_exit()
+        # User belum menyelesaikan setup pengguna
+        if show_ask_message("Konfirmasi", ASK_MESSAGES["CONFIRM_CANCEL_SETUP"]):
+            reset_config_and_exit()  # kalau YA → reset dan keluar
+        else:
+            # kalau TIDAK → buka lagi proses pilih pengguna
+            pilih_pengguna_awal(parent_window)
 
 def on_closing():
     try:
@@ -256,7 +272,7 @@ def run_sync_in_background(root_window):
 
     def thread_target():
         try:
-            sync_data_main()
+            sync_data_main(reset_config_and_exit) # PERBAIKAN: Berikan argumen yang sesuai
         finally:
             root_window.after(0, on_sync_complete)
             

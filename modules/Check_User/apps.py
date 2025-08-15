@@ -197,7 +197,7 @@ def main(parent_window):
             if not selected_user:
                 show_error_message("Error", ERROR_MESSAGES["USER_SELECTION_NOT_FOUND"])
                 return
-            if not show_ask_message("Konfirmasi", ASK_MESSAGES["CONFIRM_SAVE_USER"]):
+            if not show_ask_message("Konfirmasi", ASK_MESSAGES["CONFIRM_SAVE_USER"].format(name=selected_user.get('name'))):
                 return
             config['user_checked'] = {
                 'name': selected_user.get('name'),

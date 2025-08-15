@@ -31,5 +31,6 @@ INFO_MESSAGES = {
 
 ASK_MESSAGES = {
     "ASK_ANOTHER_FILE": "Apakah ada file lain yang ingin diproses?",
-    "CONFIRM_SAVE_USER": "Pengguna yang dipilih tidak dapat diganti lagi. Apakah Anda yakin untuk menyimpannya?",
+    "CONFIRM_SAVE_USER": "Pengguna yang dipilih tidak dapat diganti lagi. Apakah Anda yakin untuk menyimpan `{name}`?",
+    "CONFIRM_CANCEL_SETUP": "Apakah Anda yakin untuk membatalkan setup akun?",
 }
