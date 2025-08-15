@@ -153,26 +153,38 @@ def main(parent_window):
             content_frame = tk.Frame(container)
             content_frame.grid(row=1, column=0, columnspan=2)
 
+            current_selection = selected_var.get()
+
+            def create_user_button(user, i, col, row, content_frame):
+                name_cap = user.get('name', 'Nama tidak ditemukan').title()
+                btn = tk.Button(content_frame, text=name_cap, font=("Arial", 11, "bold"),
+                                width=18, height=2, relief="raised")
+                btn.grid(row=row, column=col, padx=8, pady=6)
+                btn.config(command=lambda u=user, b=btn: set_selected(u.get('_id'), b))
+                
+                # Cek apakah user ini adalah yang terpilih, jika ya, atur statusnya
+                if user.get('_id') == current_selection:
+                    btn.config(relief="sunken", bg="#d0e0ff")
+                    
+                user_buttons.append(btn)
+
             if len(page_users) <= 5:
                 for i, user in enumerate(page_users):
                     name_cap = user.get('name', 'Nama tidak ditemukan').title()
-                    btn = tk.Button(content_frame, text=name_cap, font=("Arial", 11, "bold"),  # Bold
+                    btn = tk.Button(content_frame, text=name_cap, font=("Arial", 11, "bold"),
                                     width=24, height=2, relief="raised")
                     btn.grid(row=i, column=0, columnspan=2, padx=8, pady=6)
                     btn.config(command=lambda u=user, b=btn: set_selected(u.get('_id'), b))
+                    # Cek apakah user ini adalah yang terpilih
+                    if user.get('_id') == current_selection:
+                        btn.config(relief="sunken", bg="#d0e0ff")
+                        
                     user_buttons.append(btn)
             else:
                 for i, user in enumerate(page_users):
                     col = 0 if i < 5 else 1
                     row = i if i < 5 else i - 5
-                    name_cap = user.get('name', 'Nama tidak ditemukan').title()
-                    btn = tk.Button(content_frame, text=name_cap, font=("Arial", 11, "bold"),  # Bold
-                                    width=18, height=2, relief="raised")
-                    btn.grid(row=row, column=col, padx=8, pady=6)
-                    btn.config(command=lambda u=user, b=btn: set_selected(u.get('_id'), b))
-                    user_buttons.append(btn)
-
-            # Pagination fixed di bawah
+                    create_user_button(user, i, col, row, content_frame)
             tk.Button(pagination_frame, text="<< Prev",
                       state=tk.NORMAL if current_page > 0 else tk.DISABLED,
                       command=lambda: change_page(-1, user_list)).pack(side=tk.LEFT, padx=6)
