@@ -24,11 +24,15 @@
         "08. Makasar": "plmks",
         "09. Jember": "pljbr"
     },
-    "restricted_role_ids": {
-        "planner": "6703410af6be892f3208ecdd",
-        "checker": "675a95be8fbcd91803047cc2"
-    },
     "vehicle_type": [
         "L300", "CDE", "CDE-LONG", "CDD", "CDD-LONG", "FUSO", "FUSO-LONG"
-    ]
+    ],
+    "role_ids": {
+        "owner": "6703410af6be892f3208ecdb",
+        "admin": "6703410af6be892f3208ecdc",
+        "driver": "6703410af6be892f3208ecde",
+        "planner": "6703410af6be892f3208ecdd",
+        "checker": "675a95be8fbcd91803047cc2",
+        "superadmin": "677c940ee491a8634b09defe"
+    }
 }

@@ -15,11 +15,11 @@ from utils.messages import ERROR_MESSAGES, ASK_MESSAGES
 from utils.api_handler import handle_requests_error
 
 # Role ID yang harus dikecualikan
-EXCLUDED_ROLE_ID = "6703410af6be892f3208ecde"
-
+constants = load_constants()
+role_ids = constants.get("role_ids", {})
+driver_id = role_ids.get("driver")
 def main(parent_window):
     try:
-        constants = load_constants()
         config = load_config()
         secrets = load_secret()
 
@@ -53,7 +53,11 @@ def main(parent_window):
             show_error_message("Gagal", ERROR_MESSAGES["HUB_ID_MISSING"])
             return
 
-        restricted_roles = list(constants.get('restricted_role_ids', {}).values())
+        restricted_roles = [
+            role_ids.get("planner"),
+            role_ids.get("checker")
+        ]
+        
         base_url = constants.get('base_url')
         api_url = f"{base_url}/users"
         headers = {'Authorization': f'Bearer {api_token}'}
@@ -73,7 +77,7 @@ def main(parent_window):
 
         # Filter default
         def filter_users():
-            return [u for u in users_data if u.get('roleId') in restricted_roles and u.get('roleId') != EXCLUDED_ROLE_ID]
+            return [u for u in users_data if u.get('roleId') in restricted_roles and u.get('roleId') != driver_id]
 
         filtered_users = filter_users()
         filtered_users.sort(key=lambda u: u.get('name', '').lower())
@@ -196,7 +200,7 @@ def main(parent_window):
         populate_user_list(filtered_users)
 
         def secret_show_all(event=None):
-            all_users = [u for u in users_data if u.get('roleId') != EXCLUDED_ROLE_ID]
+            all_users = [u for u in users_data if u.get('roleId') != driver_id]
             all_users.sort(key=lambda u: u.get('name', '').lower())
             populate_user_list(all_users)
             return "break"

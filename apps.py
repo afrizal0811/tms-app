@@ -203,13 +203,13 @@ def atur_visibilitas_menu(menu_bar):
     """Mengatur visibilitas item menu berdasarkan role pengguna."""
     config = load_config()
     constants = load_constants()
-
     user_info = config.get("user_checked", {})
     user_role_id = user_info.get("role_id")
-    
-    restricted_roles = constants.get("restricted_role_ids", {})
-    
-    restricted_role_id_list = list(restricted_roles.values())
+    role_ids = constants.get("role_ids", {})
+    restricted_role_id_list = [
+        role_ids.get("planner"),
+        role_ids.get("checker")
+    ]
 
     try:
         if user_role_id and user_role_id in restricted_role_id_list:

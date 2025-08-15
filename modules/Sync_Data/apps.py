@@ -217,10 +217,12 @@ def fetch_and_process_vehicle_data(api_token, hub_id, constants, type_map, drive
 # =============================================================================
 def fetch_driver_users(api_token, hub_id, constants):
     base_url = constants.get("base_url")
+    role_ids = constants.get("role_ids", {})
+    driver_id = role_ids.get("driver")
     api_url = f"{base_url}/users"
     headers = {"Authorization": f"Bearer {api_token}"}
     params = {
-        "roleId": "6703410af6be892f3208ecde",
+        "roleId": driver_id,
         "hubId": hub_id,
         "status": "active",
         "limit": 500
