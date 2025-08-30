@@ -28,12 +28,19 @@ def extract_email_from_id(_id):
     return parts[1] if len(parts) > 1 else _id
 
 def convert_to_jam(menit):
+    menit = int(round(menit)) 
     jam = menit // 60
     sisa_menit = menit % 60
-    return f"{jam}:{sisa_menit:02}"
+    return f"{jam}:{sisa_menit:02d}"
+
 
 def tambah_7_jam(waktu_str):
-    waktu = datetime.strptime(waktu_str, "%Y-%m-%d %H:%M:%S")
+    try:
+        # parse langsung ISO8601 (dengan timezone offset)
+        waktu = datetime.fromisoformat(waktu_str)
+    except ValueError:
+        # fallback kalau formatnya tanpa offset
+        waktu = datetime.strptime(waktu_str, "%Y-%m-%d %H:%M:%S")
     return (waktu + timedelta(hours=7)).strftime("%Y-%m-%d %H:%M:%S")
 
 def simpan_file_excel(dataframe, lokasi_name, tanggal_str):
@@ -53,11 +60,11 @@ def simpan_file_excel(dataframe, lokasi_name, tanggal_str):
 
     if 'Start Trip' in dataframe.columns:
         dataframe.insert(dataframe.columns.get_loc('Start Trip'), 'Start Date', dataframe['Start Trip'].dt.strftime('%d-%m-%Y'))
-        dataframe['Start Trip'] = dataframe['Start Trip'].dt.strftime('%H:%M')
+        dataframe['Start Trip'] = dataframe['Start Trip'].dt.strftime("'%H:%M")
 
     if 'Finish Trip' in dataframe.columns:
         dataframe.insert(dataframe.columns.get_loc('Finish Trip'), 'Finish Date', dataframe['Finish Trip'].dt.strftime('%d-%m-%Y'))
-        dataframe['Finish Trip'] = dataframe['Finish Trip'].dt.strftime('%H:%M')
+        dataframe['Finish Trip'] = dataframe['Finish Trip'].dt.strftime("'%H:%M")
 
     dataframe = dataframe.rename(columns={'Start Trip': 'Start Time', 'Finish Trip': 'Finish Time'})
 
@@ -172,7 +179,7 @@ def ambil_data(dates, app_instance=None):
     base_url = constants.get('base_url')
     url = f"{base_url}/location-histories"
     params = {
-        "limit": 150, "startFinish": "true", "fields": "finish,startTime",
+        "limit": 500, "startFinish": "true", "fields": "finish,startTime",
         "timeTo": f"{tanggal_input} 23:59:59", "timeFrom": f"{tanggal_from} 00:00:00",
         "timeBy": "createdTime"
     }
@@ -198,21 +205,30 @@ def ambil_data(dates, app_instance=None):
 
     filtered_items = []
     for item in items:
-        if item.get("trackedTime") not in [None, 0] and item.get("trackedTime", 0) >= 10 and item.get("finish", {}).get("totalDistance", float('inf')) > 5:
+        tracked_time = item.get("trackedTime", 0)
+        if tracked_time not in [None, 0] \
+        and abs(tracked_time) >= 10 \
+        and item.get("finish", {}).get("totalDistance", float('inf')) > 5:
+            
             item_copy = item.copy()
             item_copy["_id"] = extract_email_from_id(item_copy["_id"])
             item_copy["startTime"] = tambah_7_jam(item_copy["startTime"])
+            
             if item_copy.get("finish"):
                 item_copy["finish"]["finishTime"] = tambah_7_jam(item_copy["finish"]["finishTime"])
                 if "totalDuration" in item_copy["finish"]:
                     item_copy["finish"]["totalDuration"] = convert_to_jam(item_copy["finish"]["totalDuration"])
+            
             if "trackedTime" in item_copy:
+                # Pastikan trackedTime selalu positif sebelum diubah ke jam:menit
+                item_copy["trackedTime"] = abs(item_copy["trackedTime"])
                 item_copy["trackedTime"] = convert_to_jam(item_copy["trackedTime"])
+            
             filtered_items.append(item_copy)
 
     df_api_data = pd.json_normalize(filtered_items)
     if df_api_data.empty:
-        show_error_message("Gagal", ERROR_MESSAGES["DATA_NOT_FOUND"])
+        show_error_message("Error", ERROR_MESSAGES["DATA_NOT_FOUND"])
         return
 
     df_api_data.rename(columns={"_id": "Email"}, inplace=True)
