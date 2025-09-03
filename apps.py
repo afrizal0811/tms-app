@@ -173,18 +173,90 @@ def on_closing():
         import os
         os._exit(0)
 
-def check_update():
-    """Memeriksa versi baru dari URL remote."""
+def show_update_dialog(latest_version, current_version, download_link, show_checkbox=True):
+    """Menampilkan dialog update dengan opsi 'Jangan tampilkan lagi'."""
+    dialog = tk.Toplevel(root)
+    dialog.title("Update Tersedia")
+    dialog.resizable(False, False)
+    dialog.transient(root)
+    dialog.grab_set()
+
+    # --- posisi dialog di tengah layar ---
+    dialog.update_idletasks()
+    w, h = 300, 150
+    x = (dialog.winfo_screenwidth() // 2) - (w // 2)
+    y = (dialog.winfo_screenheight() // 2) - (h // 2)
+    dialog.geometry(f"{w}x{h}+{x}+{y}")
+
+    # --- isi pesan ---
+    message = f"Versi terbaru {latest_version} tersedia.\nSaat ini Anda menggunakan versi {current_version}."
+    tk.Label(
+        dialog,
+        text=message,
+        font=("Arial", 10),
+        wraplength=320,
+        justify="left"
+    ).pack(pady=10, padx=10)
+
+    # --- frame tombol (tengah) ---
+    btn_frame = tk.Frame(dialog)
+    if show_checkbox:
+        btn_frame.pack(pady=5)
+    else:
+        btn_frame.pack(pady=25)
+    btn_update = tk.Button(btn_frame, text="Update", width=10)
+    btn_update.grid(row=0, column=0, padx=5)
+    btn_skip = tk.Button(btn_frame, text="Nanti Saja", width=10)
+    btn_skip.grid(row=0, column=1, padx=5)
+
+    # --- checkbox di pojok kiri bawah (opsional) ---
+    if show_checkbox:
+        skip_var = tk.BooleanVar(value=False)
+        chk = tk.Checkbutton(
+            dialog,
+            text="Jangan tampilkan lagi untuk versi ini",
+            variable=skip_var,
+            font=("Arial", 8),
+            anchor="w",
+            justify="left"
+        )
+        chk.pack(side="left", anchor="sw", padx=8, pady=5)
+    else:
+        skip_var = None  # dummy
+
+    # --- handler tombol ---
+    def on_update():
+        webbrowser.open(download_link)
+        dialog.destroy()  # tidak simpan skip_update_version
+
+    def on_skip():
+        if show_checkbox and skip_var.get():
+            config = load_config() or {}
+            config["skip_update_version"] = latest_version
+            save_json_data(config, CONFIG_PATH)
+        dialog.destroy()
+
+    btn_update.config(command=on_update)
+    btn_skip.config(command=on_skip)
+
+    dialog.wait_window(dialog)
+
+def check_update(ignore_skip=False, show_checkbox=True):
+    """Memeriksa versi baru dan tampilkan dialog update."""
     try:
         response = requests.get(REMOTE_VERSION_URL, timeout=5)
         response.raise_for_status()
         latest_version = response.text.strip()
-        if latest_version > CURRENT_VERSION:
-            message = INFO_MESSAGES["UPDATE_AVAILABLE"].format(latest_version=latest_version, current_version=CURRENT_VERSION)
-            if show_info_message("Update Tersedia", message):
-                webbrowser.open(DOWNLOAD_LINK)
+
+        config = load_config() or {}
+        skipped_version = config.get("skip_update_version")
+
+        if latest_version > CURRENT_VERSION and (ignore_skip or skipped_version != latest_version):
+            show_update_dialog(latest_version, CURRENT_VERSION, DOWNLOAD_LINK, show_checkbox=show_checkbox)
+
     except requests.exceptions.RequestException:
         pass
+
 
 def periksa_konfigurasi_awal(parent_window):
     config = load_config()
@@ -322,6 +394,10 @@ bantuan_menu = tk.Menu(menu_bar, tearoff=0)
 bantuan_menu.add_command(label="Panduan Pengguna - Planner", command=lambda:show_user_guide(USER_GUIDE_PLANNER))
 bantuan_menu.add_command(label="Panduan Pengguna - Driver", command=lambda: show_user_guide(USER_GUIDE_DRIVER))
 bantuan_menu.add_separator()
+bantuan_menu.add_command(
+    label="Periksa Pembaruan",
+    command=lambda: check_update(ignore_skip=True, show_checkbox=False)
+)
 bantuan_menu.add_command(label="Tentang", command=show_about)
 menu_bar.add_cascade(label="Bantuan", menu=bantuan_menu)
 
