@@ -242,7 +242,7 @@ def show_update_dialog(latest_version, current_version, download_link, show_chec
     dialog.wait_window(dialog)
 
 def check_update(ignore_skip=False, show_checkbox=True):
-    """Memeriksa versi baru dan tampilkan dialog update."""
+    """Memeriksa versi baru dan tampilkan dialog update jika perlu."""
     try:
         response = requests.get(REMOTE_VERSION_URL, timeout=5)
         response.raise_for_status()
@@ -253,9 +253,13 @@ def check_update(ignore_skip=False, show_checkbox=True):
 
         if latest_version > CURRENT_VERSION and (ignore_skip or skipped_version != latest_version):
             show_update_dialog(latest_version, CURRENT_VERSION, DOWNLOAD_LINK, show_checkbox=show_checkbox)
+        else:
+            if ignore_skip:  # dipanggil dari menu Bantuan
+                show_info_message("Update", "Anda sudah menggunakan versi terbaru.")
 
     except requests.exceptions.RequestException:
-        pass
+        if ignore_skip:  # kalau dicek manual tapi gagal koneksi
+            show_error_message("Update", INFO_MESSAGES["ALREADY_UPDATED"])
 
 
 def periksa_konfigurasi_awal(parent_window):

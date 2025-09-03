@@ -20,17 +20,18 @@ ERROR_MESSAGES = {
 }
 
 INFO_MESSAGES = {
+    "ALREADY_UPDATED" : "Anda sudah menggunakan versi terbaru.",
     "APP_BUILD_BY": "Dibuat oleh: Afrizal Maulana - EDP © 2025",
     "APP_VERSION": "Versi {version}",
     "CANCELED_BY_USER": "Proses dibatalkan oleh user!",
+    "LOCATION_SETUP": "Selamat datang!\n\nSilakan atur lokasi terlebih dahulu!",
     "SELECT_FILE": "Silakan pilih file {text}",
     "UPDATE_AVAILABLE": "Versi baru {latest_version} tersedia.\nVersi Anda saat ini adalah {current_version}.\n\nApakah Anda ingin membuka halaman unduhan untuk memperbarui?",
     "USER_SETUP": "Silakan pilih user terlebih dahulu!",
-    "LOCATION_SETUP": "Selamat datang!\n\nSilakan atur lokasi terlebih dahulu!",
 }
 
 ASK_MESSAGES = {
     "ASK_ANOTHER_FILE": "Apakah ada file lain yang ingin diproses?",
-    "CONFIRM_SAVE_USER": "Pengguna yang dipilih tidak dapat diganti lagi. Apakah Anda yakin untuk menyimpan `{name}`?",
     "CONFIRM_CANCEL_SETUP": "Apakah Anda yakin untuk membatalkan setup akun?",
+    "CONFIRM_SAVE_USER": "Pengguna yang dipilih tidak dapat diganti lagi. Apakah Anda yakin untuk menyimpan `{name}`?",
 }
