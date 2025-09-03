@@ -56,7 +56,7 @@ def ask_type_substitution(plat, original_type, assignee_email, driver_users, con
     elif driver_name.startswith("'DRY'"):
         prefix = "DRY"
 
-    type_options = [f"{prefix}-{suffix}" for suffix in constants.get("vehicle_type", [])]
+    type_options = [f"{prefix}-{suffix}" for suffix in constants.get("vehicle_types", [])]
     selected = tk.StringVar(value="")
 
     root = tk.Tk()
@@ -159,7 +159,7 @@ def fetch_and_process_vehicle_data(api_token, hub_id, constants, type_map, drive
         response = requests.get(api_url, headers=headers, params=params, timeout=30)
         response.raise_for_status()
         vehicle_data = response.json().get('data', [])
-        valid_types = constants.get("vehicle_type", [])
+        valid_types = constants.get("vehicle_types", [])
         type_map_updated = False
 
         vehicles = []

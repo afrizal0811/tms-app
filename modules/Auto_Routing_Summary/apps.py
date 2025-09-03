@@ -219,8 +219,7 @@ def process_routing_data(date_formats, gui_instance):
         dry_dist_m = df_final[df_final['Assignee'].str.contains("DRY", na=False)]['Total Distance (m)'].sum(skipna=True)
         frz_dist_m = df_final[df_final['Assignee'].str.contains("FRZ", na=False)]['Total Distance (m)'].sum(skipna=True)
         df_summary = pd.DataFrame({'DRY': [round((dry_dist_m or 0) / 1000, 2)], 'FRZ': [round((frz_dist_m or 0) / 1000, 2)]})
-
-        vehicle_types = ["L300", "CDE", "CDE-LONG", "CDD", "CDD-LONG", "FUSO", "FUSO-LONG"]
+        vehicle_types = constants.get("vehicle_types", [])
         usage_counts = {v_type: {'DRY': 0, 'FROZEN': 0} for v_type in vehicle_types}
         sorted_vehicle_types = sorted(vehicle_types, key=len, reverse=True)
         for tag in first_tags_list:
