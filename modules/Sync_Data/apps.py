@@ -129,13 +129,13 @@ def sync_hub(api_token, constants):
         resp.raise_for_status()
         data = resp.json().get("data", [])
         excluded_id = "683924970c29c079e30d862f"
-        lokasi_mapping = constants.get("lokasi_mapping", {})
+        location_id = constants.get("location_id", {})
         result = {}
         for hub in data:
             if hub.get("_id") == excluded_id:
                 continue
             hub_name = hub.get("name", "")
-            for nama, kode in lokasi_mapping.items():
+            for nama, kode in location_id.items():
                 if nama in hub_name:
                     result[kode] = hub.get("_id")
         return dict(sorted(result.items()))

@@ -123,7 +123,7 @@ def panggil_api_dan_simpan(dates, app_instance):
     API_TOKEN = secrets.get('token')
     LOKASI_FILTER = config.get('lokasi')
     HUB_ID = hub_ids.get(LOKASI_FILTER)
-    LOKASI_MAPPING = constants.get('lokasi_mapping', {})
+    location_id = constants.get('location_id', {})
 
     if not API_TOKEN:
         show_error_message("Error Token API", ERROR_MESSAGES["API_TOKEN_MISSING"])
@@ -271,7 +271,7 @@ def panggil_api_dan_simpan(dates, app_instance):
         df_longlat = pd.DataFrame({"": ["Tidak Ada Update Longlat"]})
 
     # Mendapatkan nama lokasi dari mapping
-    lokasi_name = next((name for name, code in LOKASI_MAPPING.items() if code == LOKASI_FILTER), LOKASI_FILTER)
+    lokasi_name = next((name for name, code in location_id.items() if code == LOKASI_FILTER), LOKASI_FILTER)
     selected_date_for_filename = dates["dmy"].replace("-", ".")
     base_name = f"Delivery Summary {lokasi_name} - {selected_date_for_filename}"
 

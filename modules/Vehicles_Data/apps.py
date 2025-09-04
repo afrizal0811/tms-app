@@ -51,7 +51,7 @@ def fetch_and_prepare_data():
     api_token = secrets.get("token")
     lokasi_code = config.get("lokasi")
     hub_ids = master_data.get("hub_ids", {})
-    lokasi_mapping = constants.get("lokasi_mapping", {})
+    location_id = constants.get("location_id", {})
 
     if not (api_token and lokasi_code and lokasi_code in hub_ids):
         return None, None
@@ -125,7 +125,7 @@ def fetch_and_prepare_data():
         # conditional vehicle dikelola juga kalau ada
         # (aku potong biar singkat, bisa disalin dari kode lama)
 
-        lokasi_name = next((n for n, c in lokasi_mapping.items() if c == lokasi_code), lokasi_code)
+        lokasi_name = next((n for n, c in location_id.items() if c == lokasi_code), lokasi_code)
         return dfs, lokasi_name
 
     except requests.exceptions.RequestException as e:

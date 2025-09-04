@@ -2,29 +2,19 @@
     "base_url": "https://apiweb.mile.app/api/v3",
     "guide_planner": "https://docs.google.com/document/d/1vcd1ZXjIvvLvax4KW-cHNssqRo8bzsXJOWIElIZg9cM/edit?tab=t.0",
     "guide_driver": "https://docs.google.com/document/d/1ZPej_S8DTNWbH17W-IMIqAAWFirMGfXbjKGqM1Z4HNA/edit?tab=t.0",
-    "lokasi_mapping": {
-        "Sidoarjo": "plsda",
-        "Jakarta": "pljkt",
+    "location_id": {
         "Bandung": "plbdg",
-        "Semarang": "plsmg",
-        "Yogyakarta": "plygy",
-        "Malang": "plmlg",
+        "Cikarang": "plckg",
+        "Daan Mogot": "pldmg",
         "Denpasar": "pldps",
+        "Jember": "pljbr",
         "Makasar": "plmks",
-        "Jember": "pljbr"
+        "Malang": "plmlg",
+        "Semarang": "plsmg",
+        "Sidoarjo": "plsda",
+        "Yogyakarta": "plygy"
     },
-    "lokasi_display": {
-        "01. Sidoarjo": "plsda",
-        "02. Jakarta": "pljkt",
-        "03. Bandung": "plbdg",
-        "04. Semarang": "plsmg",
-        "05. Yogyakarta": "plygy",
-        "06. Malang": "plmlg",
-        "07. Denpasar": "pldps",
-        "08. Makasar": "plmks",
-        "09. Jember": "pljbr"
-    },
-    "vehicle_type": [
+    "vehicle_types": [
         "L300", "CDE", "CDE-LONG", "CDD", "CDD-LONG", "FUSO", "FUSO-LONG"
     ],
     "role_ids": {

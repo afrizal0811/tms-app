@@ -84,8 +84,8 @@ def process_routing_data(date_formats, gui_instance):
         master_data_map = dict(zip(master_data_df['Email'], master_data_df['Driver']))
         hub_id = hub_ids.get(lokasi_code)
         api_token = secrets.get('token')
-        lokasi_mapping = constants.get('lokasi_mapping', {})
-        lokasi_name = next((name for name, code in lokasi_mapping.items() if code == lokasi_code), lokasi_code)
+        location_id = constants.get('location_id', {})
+        lokasi_name = next((name for name, code in location_id.items() if code == lokasi_code), lokasi_code)
 
         if not api_token:
             show_error_message("Error Token API", ERROR_MESSAGES["API_TOKEN_MISSING"])

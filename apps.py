@@ -43,15 +43,12 @@ ensure_config_exists()
 # FUNGSI BANTUAN LOKAL DAN KONFIGURASI AWAL
 # ==============================================================================
 
-# Muat konstanta di awal menggunakan shared_utils
 CONSTANTS = load_constants()
 if CONSTANTS is None:
-    # Pesan error sudah ditampilkan di dalam shared_utils, kita hanya perlu keluar.
     sys.exit(1)
 
-LOKASI_MAPPING = CONSTANTS.get('lokasi_mapping', {})
-LOKASI_DISPLAY = CONSTANTS.get('lokasi_display', {})
-KODE_KE_LOKASI = {v: k for k, v in LOKASI_MAPPING.items()}
+LOCATION_ID = CONSTANTS.get('location_id', {})
+KODE_KE_LOKASI = {v: k for k, v in LOCATION_ID.items()}
 USER_GUIDE_PLANNER = CONSTANTS.get('guide_planner', '')
 USER_GUIDE_DRIVER = CONSTANTS.get('guide_driver', '')
 
@@ -104,8 +101,8 @@ def toggle_main_controls(is_enabled: bool):
     laporan_menu.entryconfig("Data Kendaraan", state=state)
 
 def pilih_lokasi(parent_window, initial_setup=False):
-    reverse_dict = {v: k for k, v in LOKASI_DISPLAY.items()}
-    selected_display_name = list(LOKASI_DISPLAY.keys())[0]
+    reverse_dict = {v: k for k, v in LOCATION_ID.items()}
+    selected_display_name = list(LOCATION_ID.keys())[0]
 
     config_data = load_config() or {}
     kode_lokasi = config_data.get("lokasi", "")
@@ -121,7 +118,7 @@ def pilih_lokasi(parent_window, initial_setup=False):
 
     tk.Label(dialog, text="Pilih Lokasi Cabang:", font=("Arial", 14)).pack(pady=10)
     selected_var = tk.StringVar(value=selected_display_name)
-    combo = ttk.Combobox(dialog, values=list(LOKASI_DISPLAY.keys()), textvariable=selected_var, font=("Arial", 12), state="readonly")
+    combo = ttk.Combobox(dialog, values=list(LOCATION_ID.keys()), textvariable=selected_var, font=("Arial", 12), state="readonly")
     combo.pack(pady=10)
     combo.set(selected_display_name)
     
@@ -129,8 +126,8 @@ def pilih_lokasi(parent_window, initial_setup=False):
 
     def on_select():
         selected = combo.get()
-        if selected in LOKASI_DISPLAY:
-            kode = LOKASI_DISPLAY[selected]
+        if selected in LOCATION_ID:
+            kode = LOCATION_ID[selected]
             config_data['lokasi'] = kode
             save_json_data(config_data, CONFIG_PATH)
             dialog.destroy()
@@ -138,15 +135,13 @@ def pilih_lokasi(parent_window, initial_setup=False):
 
     # --- Tambahkan handler close ---
     def on_cancel():
-        """Handler saat user menutup jendela konfigurasi."""
         if initial_setup:
-            # Tampilkan konfirmasi
             if show_ask_message("Konfirmasi", ASK_MESSAGES["CONFIRM_CANCEL_SETUP"]):
-                reset_config_and_exit()  # jika YA
+                reset_config_and_exit()
                 return
             else:
-                return  # jika TIDAK, tetap di window ini (tidak destroy)
-        dialog.destroy()  # jika bukan setup awal, cukup tutup dialog
+                return
+        dialog.destroy()
 
     dialog.protocol("WM_DELETE_WINDOW", on_cancel)
     tk.Button(dialog, text="Pilih", command=on_select, font=("Arial", 12)).pack(pady=10)

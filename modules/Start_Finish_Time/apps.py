@@ -158,7 +158,7 @@ def ambil_data(dates, app_instance=None):
     api_token = secrets.get('token')
     lokasi_code = config.get('lokasi')
     hub_ids = master_data.get('hub_ids', {})
-    lokasi_mapping = constants.get('lokasi_mapping', {})
+    location_id = constants.get('location_id', {})
 
     if not api_token:
         show_error_message("Error Token API", ERROR_MESSAGES["API_TOKEN_MISSING"])
@@ -170,7 +170,7 @@ def ambil_data(dates, app_instance=None):
         show_error_message("Error Hub ID", ERROR_MESSAGES["HUB_ID_MISSING"])
         return False
 
-    lokasi_name = next((name for name, code in lokasi_mapping.items() if code == lokasi_code), lokasi_code)
+    lokasi_name = next((name for name, code in location_id.items() if code == lokasi_code), lokasi_code)
 
     tanggal_obj = datetime.strptime(tanggal_str, "%d-%m-%Y")
     tanggal_input = tanggal_obj.strftime("%Y-%m-%d")

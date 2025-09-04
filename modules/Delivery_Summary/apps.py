@@ -259,8 +259,8 @@ def main():
     }
     if results_to_save['Update Longlat'].empty:
         results_to_save['Update Longlat'] = pd.DataFrame([{"Customer ID":"Tidak Ada Update Longlat","Customer Name":"","Location ID":"","New Longlat":""}])
-    lokasi_mapping = constants.get('lokasi_mapping', {})
-    lokasi_name = next((n for n,c in lokasi_mapping.items() if c == lokasi_code), lokasi_code)
+    location_id = constants.get('location_id', {})
+    lokasi_name = next((n for n,c in location_id.items() if c == lokasi_code), lokasi_code)
     input_filename = os.path.basename(input_file)
     date_match = re.search(r'(\d{2}-\d{2}-\d{4})', input_filename)
     date_str = date_match.group(1).replace('-', '.') if date_match else datetime.now().strftime('%d.%m.%Y')
