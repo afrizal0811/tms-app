@@ -70,7 +70,7 @@ def fetch_and_prepare_data():
         if not vehicles_data:
             return None, None
 
-        # --- olah data sama seperti kode lamamu ---
+        # --- olah data ---
         master_df = master_data["df"]
         driver_mapping = dict(zip(master_df["Email"].str.lower(), master_df["Driver"]))
 
@@ -120,10 +120,13 @@ def fetch_and_prepare_data():
         df_template = pd.DataFrame(template_data)
         df_master = pd.DataFrame(master_data_list)
 
-        # --- buat dict sheet ---
+        # --- sorting sesuai requirement ---
+        if not df_master.empty and "Email" in df_master.columns:
+            df_master = df_master.sort_values(by="Email", ascending=True).reset_index(drop=True)
+        if not df_template.empty and "Assignee" in df_template.columns:
+            df_template = df_template.sort_values(by="Assignee", ascending=True).reset_index(drop=True)
+
         dfs = {"Master Vehicle": df_master, "Template Vehicle": df_template}
-        # conditional vehicle dikelola juga kalau ada
-        # (aku potong biar singkat, bisa disalin dari kode lama)
 
         lokasi_name = next((n for n, c in location_id.items() if c == lokasi_code), lokasi_code)
         return dfs, lokasi_name
@@ -148,11 +151,10 @@ def show_excel_viewer(dfs, lokasi_name):
     x, y = (sw - w) // 2, (sh - h) // 2
     viewer.geometry(f"{w}x{h}+{x}+{y}")
 
-    # --- notebook (atas) ---
     notebook = ttk.Notebook(viewer)
     notebook.pack(fill="both", expand=True, padx=5, pady=(5, 0))
 
-    # Tampilkan semua DataFrame di tab
+    # tampilkan DataFrame ke tab
     for sheet_name, df in dfs.items():
         frame = ttk.Frame(notebook)
         notebook.add(frame, text=sheet_name)
@@ -163,27 +165,23 @@ def show_excel_viewer(dfs, lokasi_name):
         tree = ttk.Treeview(frame, columns=list(df.columns), show="headings")
         tree.grid(row=0, column=0, sticky="nsew")
 
-        # Scrollbar vertikal
         v_scroll = ttk.Scrollbar(frame, orient="vertical", command=tree.yview)
         v_scroll.grid(row=0, column=1, sticky="ns")
         tree.configure(yscrollcommand=v_scroll.set)
 
-        # Scrollbar horizontal
         h_scroll = ttk.Scrollbar(frame, orient="horizontal", command=tree.xview)
         h_scroll.grid(row=1, column=0, sticky="ew")
         tree.configure(xscrollcommand=h_scroll.set)
 
-        # Heading dan lebar kolom
         for col in df.columns:
             tree.heading(col, text=col)
             tree.column(col, width=120, anchor="center")
 
-        # Isi data
         for _, row in df.iterrows():
             values = [("" if pd.isna(x) else x) for x in row]
             tree.insert("", "end", values=values)
 
-    # --- tombol download (bawah) ---
+    # tombol download
     button_frame = ttk.Frame(viewer)
     button_frame.pack(pady=8)
 
@@ -201,6 +199,7 @@ def show_excel_viewer(dfs, lokasi_name):
             auto_size_columns(workbook)
             workbook.save(save_path)
             open_file_externally(save_path)
+            viewer.destroy()   # <<< tutup viewer setelah download
         except Exception as e:
             messagebox.showerror("Error", f"Gagal menyimpan file:\n{e}")
 
