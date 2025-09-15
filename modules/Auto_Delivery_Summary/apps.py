@@ -254,12 +254,12 @@ def panggil_api_dan_simpan(dates, app_instance):
 
         # Ekstrak Location ID (setelah tanda hubung terakhir)
         parts = title.split(' - ')
-        location_id = parts[-1].strip() if len(parts) > 2 else 'N/A'
+        location_code = parts[-1].strip() if len(parts) > 2 else 'N/A'
 
         update_longlat_data.append({
             'Customer ID': customer_id,
             'Customer Name': customer_name,
-            'Location ID': location_id,
+            'Location ID': location_code,
             'New Longlat': longlat
         })
 
