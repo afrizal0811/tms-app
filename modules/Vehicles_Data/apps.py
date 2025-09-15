@@ -141,11 +141,10 @@ def fetch_and_prepare_data():
 
 
 def show_excel_viewer(dfs, lokasi_name):
-    """Menampilkan hasil DataFrame ke GUI viewer dengan opsi download."""
+    """Menampilkan hasil DataFrame ke GUI viewer dengan opsi download dan filtering."""
     viewer = tk.Toplevel()
     viewer.title(f"Vehicle Data Viewer - {lokasi_name}")
 
-    # --- ukuran dan posisi tengah layar ---
     w, h = 900, 600
     sw, sh = viewer.winfo_screenwidth(), viewer.winfo_screenheight()
     x, y = (sw - w) // 2, (sh - h) // 2
@@ -154,34 +153,92 @@ def show_excel_viewer(dfs, lokasi_name):
     notebook = ttk.Notebook(viewer)
     notebook.pack(fill="both", expand=True, padx=5, pady=(5, 0))
 
-    # tampilkan DataFrame ke tab
+    # --- Start of the modification ---
+    allowed_filters = {
+        "Master Vehicle": ["License Plat", "Email",  "Name", "Type"],
+        "Template Vehicle": ["Name*", "Assignee"]
+    }
+    # --- End of the modification ---
+
     for sheet_name, df in dfs.items():
         frame = ttk.Frame(notebook)
         notebook.add(frame, text=sheet_name)
 
-        frame.rowconfigure(0, weight=1)
-        frame.columnconfigure(0, weight=1)
+        filter_frame = ttk.Frame(frame)
+        filter_frame.pack(fill="x", padx=5, pady=5)
 
-        tree = ttk.Treeview(frame, columns=list(df.columns), show="headings")
+        ttk.Label(filter_frame, text="Filter by Column:").pack(side="left", padx=(0, 5))
+        
+        # --- Start of the modification ---
+        columns_to_show = allowed_filters.get(sheet_name, [])
+        filter_column = ttk.Combobox(filter_frame, values=columns_to_show, state="readonly")
+        # --- End of the modification ---
+        filter_column.pack(side="left", padx=5)
+        if columns_to_show:
+            filter_column.current(0)
+
+        ttk.Label(filter_frame, text="Keyword:").pack(side="left", padx=(10, 5))
+        
+        filter_entry = ttk.Entry(filter_frame)
+        filter_entry.pack(side="left", fill="x", expand=True, padx=5)
+
+        tree_frame = ttk.Frame(frame)
+        tree_frame.pack(fill="both", expand=True)
+
+        tree = ttk.Treeview(tree_frame, columns=list(df.columns), show="headings")
         tree.grid(row=0, column=0, sticky="nsew")
 
-        v_scroll = ttk.Scrollbar(frame, orient="vertical", command=tree.yview)
+        v_scroll = ttk.Scrollbar(tree_frame, orient="vertical", command=tree.yview)
         v_scroll.grid(row=0, column=1, sticky="ns")
         tree.configure(yscrollcommand=v_scroll.set)
 
-        h_scroll = ttk.Scrollbar(frame, orient="horizontal", command=tree.xview)
+        h_scroll = ttk.Scrollbar(tree_frame, orient="horizontal", command=tree.xview)
         h_scroll.grid(row=1, column=0, sticky="ew")
         tree.configure(xscrollcommand=h_scroll.set)
+        
+        tree_frame.rowconfigure(0, weight=1)
+        tree_frame.columnconfigure(0, weight=1)
 
-        for col in df.columns:
-            tree.heading(col, text=col)
-            tree.column(col, width=120, anchor="center")
+        def populate_tree(tree_widget, dataframe):
+            for i in tree_widget.get_children():
+                tree_widget.delete(i)
+            for col in dataframe.columns:
+                tree_widget.heading(col, text=col)
+                tree_widget.column(col, width=120, anchor="center")
+            for _, row in dataframe.iterrows():
+                values = [("" if pd.isna(x) else x) for x in row]
+                tree_widget.insert("", "end", values=values)
 
-        for _, row in df.iterrows():
-            values = [("" if pd.isna(x) else x) for x in row]
-            tree.insert("", "end", values=values)
+        populate_tree(tree, df)
 
-    # tombol download
+        def apply_filter(dataframe, tree_widget, column_widget, entry_widget):
+            keyword = entry_widget.get().strip()
+            column = column_widget.get()
+            # Ensure a valid column is selected before filtering
+            if not keyword or not column:
+                populate_tree(tree_widget, dataframe)
+                return
+            filtered_df = dataframe[dataframe[column].astype(str).str.contains(keyword, case=False, na=False)]
+            populate_tree(tree_widget, filtered_df)
+
+        def reset_filter(dataframe, tree_widget, entry_widget):
+            entry_widget.delete(0, 'end')
+            populate_tree(tree_widget, dataframe)
+
+        filter_button = ttk.Button(
+            filter_frame,
+            text="Filter",
+            command=lambda d=df, t=tree, fc=filter_column, fe=filter_entry: apply_filter(d, t, fc, fe)
+        )
+        filter_button.pack(side="left", padx=5)
+        
+        reset_button = ttk.Button(
+            filter_frame,
+            text="Reset",
+            command=lambda d=df, t=tree, fe=filter_entry: reset_filter(d, t, fe)
+        )
+        reset_button.pack(side="left", padx=5)
+
     button_frame = ttk.Frame(viewer)
     button_frame.pack(pady=8)
 
@@ -193,13 +250,13 @@ def show_excel_viewer(dfs, lokasi_name):
             return
         try:
             with pd.ExcelWriter(save_path, engine="openpyxl") as writer:
-                for sheet_name, df in dfs.items():
-                    df.to_excel(writer, index=False, sheet_name=sheet_name, na_rep="")
+                for sheet_name, df_item in dfs.items():
+                    df_item.to_excel(writer, index=False, sheet_name=sheet_name, na_rep="")
             workbook = openpyxl.load_workbook(save_path)
             auto_size_columns(workbook)
             workbook.save(save_path)
             open_file_externally(save_path)
-            viewer.destroy()   # <<< tutup viewer setelah download
+            viewer.destroy()
         except Exception as e:
             messagebox.showerror("Error", f"Gagal menyimpan file:\n{e}")
 
