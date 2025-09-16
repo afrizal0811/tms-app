@@ -1,6 +1,12 @@
 {
     "driver": [
         {
+            "Email": "afrizalmaulanamuh@gmail.com",
+            "Driver": "'DRY' Afrizal Driver",
+            "Plat": "Mobil Demo",
+            "Type": "DRY-CDD-LONG-5000"
+        },
+        {
             "Email": "kendaraan.plsda01@panganlestari.com",
             "Driver": "'DRY' Agung Setiawan",
             "Plat": "W 8261 QA",
@@ -242,6 +248,8 @@
         }
     ],
     "hub_ids": {
+        "plck": "6895a281bc530d4a4908f5ef",
+        "pldm": "68b8038b1aa98343380e3ab2",
         "pljkt": "6895a281bc530d4a4908f5ef",
         "plsda": "670369a8a5d2d4b5ee0b020d",
         "plsmg": "67a41cb1480d2d3b580fc61c"

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from openpyxl import load_workbook
 from openpyxl.styles import Alignment
 from openpyxl.utils import get_column_letter
@@ -98,35 +98,39 @@ def process_routing_data(date_formats, gui_instance):
         api_url = f"{base_url}/results"
         headers = {'Authorization': f'Bearer {api_token}'}
 
-        # === Multi-format tanggal ===
-        date_formats_to_try = [
-            date_obj.strftime('%d/%m/%Y'),                         # 05/08/2025
-            date_obj.strftime('%d/%m/%y'),                         # 05/08/25
-            f"{date_obj.day}/{date_obj.month}/{date_obj.year}",    # 5/8/2025
-            f"{date_obj.day}/{date_obj.month}/{str(date_obj.year)[2:]}"  # 5/8/25
-        ]
+        # kalau user pilih hari Minggu, langsung dipakai
+        if date_obj.weekday() == 6:  # 6 = Minggu
+            adjusted_date = date_obj
+        else:
+            # default kurangi 1 hari
+            adjusted_date = date_obj - timedelta(days=1)
+            # kalau hasilnya jatuh Minggu, mundur lagi jadi -2
+            if adjusted_date.weekday() == 6:
+                adjusted_date = date_obj - timedelta(days=2)
+
+        date_str = adjusted_date.strftime('%Y-%m-%d')
+
+        params = {
+            'dateFrom': date_str,
+            'dateTo': date_str,
+            'limit': 100,
+            'hubId': hub_id
+        }
+
         response_data = None
-        request_success = False
 
-        for i, date_str in enumerate(date_formats_to_try, start=1):
-            params = {'s': date_str, 'limit': 1000, 'hubId': hub_id}
-            try:
-                response = requests.get(api_url, headers=headers, params=params, timeout=30)
-                response.raise_for_status()
-                data_check = response.json()
+        try:
+            response = requests.get(api_url, headers=headers, params=params, timeout=30)
+            response.raise_for_status()
+            data_check = response.json()
 
-                if 'data' in data_check and 'data' in data_check['data'] and data_check['data']['data']:
-                    response_data = data_check
-                    request_success = True
-                    break
-            except requests.exceptions.RequestException as e:
-                last_exception = e 
-
-        if not request_success:
-            if 'last_exception' in locals():
-                handle_requests_error(last_exception)
+            if 'data' in data_check and 'data' in data_check['data'] and data_check['data']['data']:
+                response_data = data_check
             else:
                 show_error_message("Data Tidak Ditemukan", ERROR_MESSAGES["DATA_NOT_FOUND"])
+                return
+        except requests.exceptions.RequestException as e:
+            handle_requests_error(e)
             return
 
         # === Proses routing data ===
@@ -134,7 +138,10 @@ def process_routing_data(date_formats, gui_instance):
         first_tags_list = []
         processed_assignees_for_usage = set()
 
-        routing_results = response_data['data']['data']
+        routing_results = [
+            item for item in response_data['data']['data']
+            if item.get("dispatchStatus") == "done"
+        ]
         for item in routing_results:
             if 'result' in item and 'routing' in item['result']:
                 for route in item['result']['routing']:
