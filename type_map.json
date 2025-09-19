@@ -1,10 +1,10 @@
 {
     "type": {
-        "FROZEN-KFC": "FROZEN-CDD-LONG-5000",
+        "FROZEN-KFC": "FROZEN-CDD-LONG",
         "DRY-HAVI": "DRY-FUSO-LONG",
-        "SAT-REMBANG": "DRY-CDE-2000",
-        "SAT-TEGAL": "DRY-CDD-5000",
-        "MENGINAP1": "DRY-CDD-5000",
-        "MENGINAP2": "DRY-CDD-5000"
+        "SAT-REMBANG": "DRY-CDE",
+        "SAT-TEGAL": "DRY-CDD",
+        "MENGINAP1": "DRY-CDD",
+        "MENGINAP2": "DRY-CDD"
     }
 }

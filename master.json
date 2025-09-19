@@ -7,6 +7,258 @@
             "Type": "DRY-CDD-LONG-5000"
         },
         {
+            "Email": "kendaraan.plck01@panganlestari.com",
+            "Driver": "'FRZ' HAERUL ANWAR",
+            "Plat": "B 9588 FCC",
+            "Type": "FROZEN-CDE-2000"
+        },
+        {
+            "Email": "kendaraan.plck02@panganlestari.com",
+            "Driver": "'FRZ' DIAN PRASETYA",
+            "Plat": "B 9598 FCC",
+            "Type": "FROZEN-CDE-2000"
+        },
+        {
+            "Email": "kendaraan.plck03@panganlestari.com",
+            "Driver": "'FRZ' HENDRIK",
+            "Plat": "B 9953 FXU",
+            "Type": "FROZEN-CDE-2000"
+        },
+        {
+            "Email": "kendaraan.plck04@panganlestari.com",
+            "Driver": "'FRZ' SUHENDAR",
+            "Plat": "B 9382 FCE",
+            "Type": "FROZEN-CDE-2000"
+        },
+        {
+            "Email": "kendaraan.plck05@panganlestari.com",
+            "Driver": "'FRZ' AGUNG NUGROHO",
+            "Plat": "B 9384 FCE",
+            "Type": "FROZEN-CDE-2000"
+        },
+        {
+            "Email": "kendaraan.plck06@panganlestari.com",
+            "Driver": "'FRZ' SANDY NUGRAHA",
+            "Plat": "B 9021 FCJ",
+            "Type": "FROZEN-CDE-2000"
+        },
+        {
+            "Email": "kendaraan.plck07@panganlestari.com",
+            "Driver": "'FRZ' WALUYO",
+            "Plat": "B 9624 FCG",
+            "Type": "FROZEN-FUSO-10000"
+        },
+        {
+            "Email": "kendaraan.plck08@panganlestari.com",
+            "Driver": "'FRZ' NGISOMUDIN",
+            "Plat": "B 9802 FXW",
+            "Type": "FROZEN-CDE-LONG-2500"
+        },
+        {
+            "Email": "kendaraan.plck09@panganlestari.com",
+            "Driver": "'FRZ' DADAN HIDAYAT",
+            "Plat": "B 9793 FXW",
+            "Type": "FROZEN-CDE-LONG-2500"
+        },
+        {
+            "Email": "kendaraan.plck10@panganlestari.com",
+            "Driver": "'FRZ' MAZHAR",
+            "Plat": "B 9170 FFX",
+            "Type": "FROZEN-CDE-2000"
+        },
+        {
+            "Email": "kendaraan.plck11@panganlestari.com",
+            "Driver": "'FRZ' ANGGA FITRAH",
+            "Plat": "B 9171 FFX",
+            "Type": "FROZEN-CDE-2000"
+        },
+        {
+            "Email": "kendaraan.plck12@panganlestari.com",
+            "Driver": "'FRZ' M. NUR IKHSAN",
+            "Plat": "B 9172 FFX",
+            "Type": "FROZEN-CDE-2000"
+        },
+        {
+            "Email": "kendaraan.plck13@panganlestari.com",
+            "Driver": "'FRZ' AHDI",
+            "Plat": "B 9201 FFX",
+            "Type": "FROZEN-CDE-2000"
+        },
+        {
+            "Email": "kendaraan.plck14@panganlestari.com",
+            "Driver": "'DRY' YUNUS",
+            "Plat": "B 9402 FCA",
+            "Type": "DRY-CDD-5000"
+        },
+        {
+            "Email": "kendaraan.plck15@panganlestari.com",
+            "Driver": "'DRY' ASEP MAULAHASUBHI",
+            "Plat": "B 9732 FCC",
+            "Type": "DRY-CDD-5000"
+        },
+        {
+            "Email": "kendaraan.plck16@panganlestari.com",
+            "Driver": "'DRY' TARMIDI",
+            "Plat": "B 9508 FCI",
+            "Type": "DRY-CDD-5000"
+        },
+        {
+            "Email": "kendaraan.plck17@panganlestari.com",
+            "Driver": "'DRY' SUWARDI",
+            "Plat": "B 9125 FFX",
+            "Type": "DRY-CDD-5000"
+        },
+        {
+            "Email": "kendaraan.plck18@panganlestari.com",
+            "Driver": "'DRY' ARIYANTO",
+            "Plat": "B 9205 FCM",
+            "Type": "DRY-CDD-LONG-5000"
+        },
+        {
+            "Email": "kendaraan.plck19@panganlestari.com",
+            "Driver": "'DRY' AJIANTO",
+            "Plat": "B 9511 DO",
+            "Type": "DRY-CDE-2000"
+        },
+        {
+            "Email": "kendaraan.plck20@panganlestari.com",
+            "Driver": "'DRY' SISWANTO",
+            "Plat": "B 9565 FCB",
+            "Type": "DRY-CDE-2000"
+        },
+        {
+            "Email": "kendaraan.plck21@panganlestari.com",
+            "Driver": "'DRY' FIKRI AZIZ",
+            "Plat": "B 9723 FCB",
+            "Type": "DRY-CDE-2000"
+        },
+        {
+            "Email": "kendaraan.plck22@panganlestari.com",
+            "Driver": "'DRY' FAHMI ILYAS",
+            "Plat": "B 9177 FCC",
+            "Type": "DRY-CDE-2000"
+        },
+        {
+            "Email": "kendaraan.plck23@panganlestari.com",
+            "Driver": "'DRY' BUDI MULYANA",
+            "Plat": "B 9179 FCC",
+            "Type": "DRY-CDE-2000"
+        },
+        {
+            "Email": "kendaraan.plck24@panganlestari.com",
+            "Driver": "'DRY' NARSUN LAMPARD",
+            "Plat": "B 9464 FXU",
+            "Type": "DRY-CDE-2000"
+        },
+        {
+            "Email": "kendaraan.plck25@panganlestari.com",
+            "Driver": "'DRY' ASEP SAIPUL",
+            "Plat": "B 9587 FCC",
+            "Type": "DRY-CDE-2000"
+        },
+        {
+            "Email": "kendaraan.plck26@panganlestari.com",
+            "Driver": "'DRY' SAEFUL ANWAR",
+            "Plat": "B 9481 FCD",
+            "Type": "DRY-CDE-2000"
+        },
+        {
+            "Email": "kendaraan.plck27@panganlestari.com",
+            "Driver": "'DRY' DIAN ANDRIANA",
+            "Plat": "B 9845 FXX",
+            "Type": "DRY-CDE-2000"
+        },
+        {
+            "Email": "kendaraan.plck28@panganlestari.com",
+            "Driver": "'DRY' RAMA",
+            "Plat": "B 9846 FXX",
+            "Type": "DRY-CDE-2000"
+        },
+        {
+            "Email": "kendaraan.plck29@panganlestari.com",
+            "Driver": "'DRY' DEDE ISKANDAR",
+            "Plat": "B 9307 FCG",
+            "Type": "DRY-CDE-LONG-2500"
+        },
+        {
+            "Email": "kendaraan.plck30@panganlestari.com",
+            "Driver": "'DRY' WANDA",
+            "Plat": "B 9208 BCX",
+            "Type": "DRY-CDE-LONG-2500"
+        },
+        {
+            "Email": "kendaraan.plck31@panganlestari.com",
+            "Driver": "'DRY' ONDRI YUNI",
+            "Plat": "B 9567 FXU",
+            "Type": "DRY-CDE-LONG-2500"
+        },
+        {
+            "Email": "kendaraan.plck32@panganlestari.com",
+            "Driver": "'DRY' TANDRI RAHMAN",
+            "Plat": "B 9576 FXU",
+            "Type": "DRY-CDE-LONG-2500"
+        },
+        {
+            "Email": "kendaraan.plck33@panganlestari.com",
+            "Driver": "'DRY' RICKI ADIANSYAH",
+            "Plat": "B 9243 FXW",
+            "Type": "DRY-CDE-LONG-2500"
+        },
+        {
+            "Email": "kendaraan.plck34@panganlestari.com",
+            "Driver": "'DRY' ILHAM SAPUTRA",
+            "Plat": "B 9244 FXW",
+            "Type": "DRY-CDE-LONG-2500"
+        },
+        {
+            "Email": "kendaraan.plck35@panganlestari.com",
+            "Driver": "'DRY' ASNEN",
+            "Plat": "B 9207 FCM",
+            "Type": "DRY-FUSO-10000"
+        },
+        {
+            "Email": "kendaraan.plck36@panganlestari.com",
+            "Driver": "'DRY' SAEFUL",
+            "Plat": "B 9246 FXW",
+            "Type": "DRY-L300-1500"
+        },
+        {
+            "Email": "kendaraan.pldm01@panganlestari.com",
+            "Driver": "'DRY' ZAENURI",
+            "Plat": "B 9722 FCB",
+            "Type": "DRY-CDE-2000"
+        },
+        {
+            "Email": "kendaraan.pldm02@panganlestari.com",
+            "Driver": "'DRY' SAMSURI",
+            "Plat": "B 9181 FCC",
+            "Type": "DRY-CDE-2000"
+        },
+        {
+            "Email": "kendaraan.pldm03@panganlestari.com",
+            "Driver": "'DRY' BURHAN",
+            "Plat": "B 9733 FCC",
+            "Type": "DRY-CDD-5000"
+        },
+        {
+            "Email": "kendaraan.pldm04@panganlestari.com",
+            "Driver": "'DRY' ABDULLAH",
+            "Plat": "B 9462 FXU",
+            "Type": "DRY-CDE-2000"
+        },
+        {
+            "Email": "kendaraan.pldm05@panganlestari.com",
+            "Driver": "'DRY' SAIMAN",
+            "Plat": "B 9569 FXU",
+            "Type": "DRY-CDE-LONG-2500"
+        },
+        {
+            "Email": "kendaraan.pldm06@panganlestari.com",
+            "Driver": "'DRY' ROKHIM",
+            "Plat": "B 9574 FXU",
+            "Type": "DRY-CDE-LONG-2500"
+        },
+        {
             "Email": "kendaraan.plsda01@panganlestari.com",
             "Driver": "'DRY' Agung Setiawan",
             "Plat": "W 8261 QA",
@@ -34,7 +286,7 @@
             "Email": "kendaraan.plsda05@panganlestari.com",
             "Driver": "'FRZ' Buckhori Muslim",
             "Plat": "W 8137 PI",
-            "Type": "FROZEN-CDD-LONG-5000"
+            "Type": "FROZEN-CDD-LONG"
         },
         {
             "Email": "kendaraan.plsda06@panganlestari.com",
@@ -250,7 +502,6 @@
     "hub_ids": {
         "plck": "6895a281bc530d4a4908f5ef",
         "pldm": "68b8038b1aa98343380e3ab2",
-        "pljkt": "6895a281bc530d4a4908f5ef",
         "plsda": "670369a8a5d2d4b5ee0b020d",
         "plsmg": "67a41cb1480d2d3b580fc61c"
     }

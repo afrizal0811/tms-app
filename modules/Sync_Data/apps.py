@@ -164,10 +164,10 @@ def fetch_and_process_vehicle_data(api_token, hub_id, constants, type_map, drive
 
         vehicles = []
         for v in vehicle_data:
-            if not v.get('assignee') or not v.get('name'):
+            if not v.get('assignee') or not v.get('name') or not v.get('tags'):
                 continue
 
-            raw_type = (v.get('tags', [])[0] if v.get('tags') else '')
+            raw_type = v.get('tags')[0]
             mapped_type = type_map.get(raw_type)
 
             if not mapped_type:
@@ -251,9 +251,14 @@ def update_driver_master(master_driver, users, vehicles):
     vehicle_map = {v['Email']: (v['Plat'], v.get('Type', '')) for v in vehicles}
 
     was_updated = False
+    users_with_vehicles = {v['Email'] for v in vehicles}
+
     for user in users:
         email = user.get("email", "").lower()
         name = user.get("name", "")
+        if email not in users_with_vehicles:
+            continue
+        
         plat, vtype = vehicle_map.get(email, ("", ""))
 
         if email in master_map:
