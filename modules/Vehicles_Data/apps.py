@@ -70,9 +70,8 @@ def fetch_and_prepare_data():
         if not vehicles_data:
             return None, None
 
-        # --- olah data ---
-        master_df = master_data["df"]
-        driver_mapping = dict(zip(master_df["Email"].str.lower(), master_df["Driver"]))
+        master_df_config = master_data["df"]
+        driver_mapping = dict(zip(master_df_config["Email"].str.lower(), master_df_config["Driver"]))
 
         template_data = []
         master_data_list = []
@@ -119,14 +118,35 @@ def fetch_and_prepare_data():
 
         df_template = pd.DataFrame(template_data)
         df_master = pd.DataFrame(master_data_list)
+        df_conditional = pd.DataFrame()
 
-        # --- sorting sesuai requirement ---
+        if not df_master.empty and "Email" in df_master.columns and "License Plat" in df_master.columns:
+            df_master['plat_len'] = df_master['License Plat'].astype(str).str.len()
+            df_master = df_master.sort_values(by=['Email', 'plat_len'], ascending=[True, True])
+            duplicate_mask = df_master.duplicated(subset='Email', keep='first')
+            
+            if duplicate_mask.any():
+                df_conditional = df_master[duplicate_mask].copy()
+                df_master = df_master[~duplicate_mask].copy()
+
+            df_master = df_master.drop(columns=['plat_len'])
+            if not df_conditional.empty:
+                df_conditional = df_conditional.drop(columns=['plat_len'])
+
         if not df_master.empty and "Email" in df_master.columns:
             df_master = df_master.sort_values(by="Email", ascending=True).reset_index(drop=True)
         if not df_template.empty and "Assignee" in df_template.columns:
             df_template = df_template.sort_values(by="Assignee", ascending=True).reset_index(drop=True)
 
-        dfs = {"Master Vehicle": df_master, "Template Vehicle": df_template}
+        # Mulai dengan Master Vehicle
+        dfs = {"Master Vehicle": df_master}
+
+        # Jika ada data duplikat, sisipkan Conditional Vehicle di urutan kedua
+        if not df_conditional.empty:
+            dfs["Conditional Vehicle"] = df_conditional.sort_values(by="Email", ascending=True).reset_index(drop=True)
+        
+        # Tambahkan Template Vehicle di urutan terakhir
+        dfs["Template Vehicle"] = df_template
 
         lokasi_name = next((n for n, c in location_id.items() if c == lokasi_code), lokasi_code)
         return dfs, lokasi_name
@@ -152,13 +172,11 @@ def show_excel_viewer(dfs, lokasi_name):
 
     notebook = ttk.Notebook(viewer)
     notebook.pack(fill="both", expand=True, padx=5, pady=(5, 0))
-
-    # --- Start of the modification ---
     allowed_filters = {
         "Master Vehicle": ["License Plat", "Email",  "Name", "Type"],
+        "Conditional Vehicle": ["License Plat", "Email", "Name", "Type"],
         "Template Vehicle": ["Name*", "Assignee"]
     }
-    # --- End of the modification ---
 
     for sheet_name, df in dfs.items():
         frame = ttk.Frame(notebook)
@@ -169,10 +187,9 @@ def show_excel_viewer(dfs, lokasi_name):
 
         ttk.Label(filter_frame, text="Filter by Column:").pack(side="left", padx=(0, 5))
         
-        # --- Start of the modification ---
-        columns_to_show = allowed_filters.get(sheet_name, [])
+        columns_to_show = allowed_filters.get(sheet_name, list(df.columns))
         filter_column = ttk.Combobox(filter_frame, values=columns_to_show, state="readonly")
-        # --- End of the modification ---
+        
         filter_column.pack(side="left", padx=5)
         if columns_to_show:
             filter_column.current(0)
@@ -214,7 +231,6 @@ def show_excel_viewer(dfs, lokasi_name):
         def apply_filter(dataframe, tree_widget, column_widget, entry_widget):
             keyword = entry_widget.get().strip()
             column = column_widget.get()
-            # Ensure a valid column is selected before filtering
             if not keyword or not column:
                 populate_tree(tree_widget, dataframe)
                 return
