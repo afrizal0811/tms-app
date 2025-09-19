@@ -163,7 +163,7 @@ def process_routing_data(date_formats, gui_instance):
                         total_volume = sum(t.get("volume", 0) for t in trips)
                         total_distance = sum(t.get("distance", 0) for t in trips)
 
-                        total_minutes = sum((t.get("travelTime", 0) + t.get("visitTime", 0)) for t in trips)
+                        total_minutes = sum((t.get("travelTime", 0) + t.get("visitTime", 0) + t.get("waitingTime", 0)) for t in trips)
                         hours, minutes = divmod(total_minutes, 60)
                         ship_duration = f"'{hours}:{minutes:02d}"
 
