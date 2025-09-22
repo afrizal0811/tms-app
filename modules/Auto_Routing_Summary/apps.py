@@ -13,6 +13,7 @@ from utils.function import (
     load_constants,
     load_master_data,
     load_secret,
+    load_type_map,
     open_file_externally,
     show_error_message,
     show_info_message
@@ -229,17 +230,16 @@ def process_routing_data(date_formats, gui_instance):
         vehicle_types = constants.get("vehicle_types", [])
         usage_counts = {v_type: {'DRY': 0, 'FROZEN': 0} for v_type in vehicle_types}
         sorted_vehicle_types = sorted(vehicle_types, key=len, reverse=True)
+        type_map = load_type_map().get("type", {}) if load_type_map() else {}
+
         for tag in first_tags_list:
-            if "KFC" in tag:
-                if "FROZEN" in tag: usage_counts['CDD-LONG']['FROZEN'] += 1
-                elif "DRY" in tag: usage_counts['CDD-LONG']['DRY'] += 1
-                continue
-            if "DRY-HAVI" in tag:
-                usage_counts['FUSO']['DRY'] += 1
-                continue
+            tag = type_map.get(tag, tag)
             category = None
-            if "DRY" in tag: category = 'DRY'
-            elif "FROZEN" in tag: category = 'FROZEN'
+            if "DRY" in tag:
+                category = 'DRY'
+            elif "FROZEN" in tag:
+                category = 'FROZEN'
+
             if category:
                 for v_type in sorted_vehicle_types:
                     if v_type in tag:
@@ -253,7 +253,7 @@ def process_routing_data(date_formats, gui_instance):
             usage_data_for_df.append({'Tipe Kendaraan': v_type,'Jumlah (DRY)': dry_count,'Jumlah (FROZEN)': frozen_count})
         df_usage = pd.DataFrame(usage_data_for_df)
 
-        file_basename = f"Routing Summary {lokasi_name} - {selected_date_for_filename}"
+        file_basename = f"{lokasi_name} - Routing Summary - {selected_date_for_filename}"
         save_path = get_save_path(base_name=file_basename, extension=".xlsx")
         if not save_path:
             show_info_message("Dibatalkan", INFO_MESSAGES["CANCELED_BY_USER"])

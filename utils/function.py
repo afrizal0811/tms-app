@@ -110,6 +110,9 @@ def load_constants():
     """Memuat konstanta dari constant.json."""
     return load_json_data(CONSTANT_PATH)
 
+def load_type_map():
+    return load_json_data(TYPE_MAP_PATH)
+
 def ensure_config_exists():
     """
     Memastikan config.json ada di direktori aplikasi.

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from openpyxl.styles import Alignment
 from openpyxl.utils import get_column_letter
 from tkinter import filedialog
@@ -10,7 +10,9 @@ import traceback
 from utils.function import (
     get_save_path,
     load_config,
+    load_constants,
     load_master_data,
+    load_type_map,
     open_file_externally,
     show_ask_message,
     show_error_message,
@@ -22,6 +24,7 @@ from utils.messages import ASK_MESSAGES, ERROR_MESSAGES, INFO_MESSAGES
 # FUNGSI-FUNGSI UTAMA (HELPER FUNCTIONS)
 # ==============================================================================
 
+constants = load_constants()
 def pilih_file_excel():
     root = tk.Tk()
     root.withdraw()
@@ -158,21 +161,26 @@ def proses_truck_usage(workbook, source_df):
     df_master = master["df"]
     upload_df = source_df.copy()
     upload_df.drop_duplicates(subset=['Vehicle Name', 'Assignee'], inplace=True, ignore_index=True)
-
+    type_map = load_type_map().get("type", {}) if load_type_map() else {}
     plat_type_map = dict(zip(df_master["Plat"].astype(str), df_master["Type"]))
+
     def find_vehicle_tag(vehicle_name):
-        if pd.isna(vehicle_name): return ""
+        if pd.isna(vehicle_name):
+            return ""
         for plat, v_type in plat_type_map.items():
-            if plat in str(vehicle_name): return v_type
+            if plat in str(vehicle_name):
+                # cek substitusi dari type_map
+                return type_map.get(v_type.upper(), v_type.upper())
         return ""
+
     upload_df["Vehicle Tags"] = upload_df["Vehicle Name"].apply(find_vehicle_tag)
-    upload_df.loc[upload_df["Vehicle Tags"].str.contains("HAVI", na=False, case=False), "Vehicle Tags"] = "Fuso-DRY"
-    upload_df.loc[upload_df["Vehicle Tags"].str.contains("KFC", na=False, case=False), "Vehicle Tags"] = "CDD-LONG-FROZEN"
     upload_df["Vehicle Tags"] = upload_df["Vehicle Tags"].str.upper()
 
+    # Pisahkan DRY / FROZEN
     dry_df = upload_df[upload_df["Vehicle Tags"].str.contains("DRY", na=False)]
     frozen_df = upload_df[upload_df["Vehicle Tags"].str.contains("FROZEN", na=False)]
-    display_order = ["L300", "CDE", "CDE-LONG", "CDD", "CDD-LONG", "FUSO"]
+
+    display_order = constants.get("vehicle_types", [])
     counting_order = ["CDE-LONG", "CDD-LONG", "L300", "CDE", "CDD", "FUSO"]
 
     def count_types(df_tags):
@@ -193,9 +201,11 @@ def proses_truck_usage(workbook, source_df):
     dry_counts = count_types(dry_df["Vehicle Tags"].astype(str))
     frozen_counts = count_types(frozen_df["Vehicle Tags"].astype(str))
 
+    # Tulis ke sheet
     sheet_usage = workbook.create_sheet(title="Truck Usage")
     sheet_usage["A1"] = "Tipe Kendaraan"
-    sheet_usage["B1"] = "Jumlah (DRY)"; sheet_usage["C1"] = "Jumlah (FROZEN)"
+    sheet_usage["B1"] = "Jumlah (DRY)"
+    sheet_usage["C1"] = "Jumlah (FROZEN)"
     row = 2
     for v_type in display_order:
         sheet_usage[f"A{row}"] = v_type
@@ -206,6 +216,34 @@ def proses_truck_usage(workbook, source_df):
         row += 1
     for col_letter in ["A", "B", "C"]:
         sheet_usage.column_dimensions[col_letter].width = 25
+
+def get_adjusted_date_from_excel(file_path):
+    try:
+        wb = openpyxl.load_workbook(file_path, data_only=True, read_only=True)
+        if "Others" in wb.sheetnames:
+            ws = wb["Others"]
+            headers = [cell.value for cell in next(ws.iter_rows(min_row=1, max_row=1))]
+            if "Created Date" in headers:
+                col_idx = headers.index("Created Date") + 1
+                for row in ws.iter_rows(min_row=2, max_row=2, min_col=col_idx, max_col=col_idx, values_only=True):
+                    created_date = row[0]
+                    if isinstance(created_date, str):
+                        try:
+                            created_date = datetime.strptime(created_date.strip(), "%d/%m/%Y")
+                        except ValueError:
+                            return None
+                    elif not isinstance(created_date, datetime):
+                        return None
+
+                    # Tambah 1 hari
+                    new_date = created_date + timedelta(days=1)
+                    if new_date.weekday() == 6:  # Minggu
+                        new_date += timedelta(days=1)
+
+                    return new_date.strftime("%d.%m.%Y")
+        return None
+    except Exception:
+        return None
 
 # ==============================================================================
 # FUNGSI UTAMA
@@ -261,8 +299,10 @@ def main():
         proses_truck_detail(output_wb, combined_df, lokasi)
         proses_truck_usage(output_wb, combined_df)
 
-        tanggal_str = datetime.now().strftime("%d.%m.%Y")
-        file_basename = f"Routing Summary {lokasi.upper()} - {tanggal_str}"
+        tanggal_str = get_adjusted_date_from_excel(path) or datetime.now().strftime("%d.%m.%Y")
+        location_id = constants.get('location_id', {})
+        lokasi_name = next((name for name, code in location_id.items() if code == lokasi), lokasi)
+        file_basename = f"{lokasi_name} - Routing Summary - {tanggal_str}"
         save_path = get_save_path(file_basename)
         if save_path:
             output_wb.save(save_path)
