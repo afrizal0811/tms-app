@@ -86,7 +86,7 @@ def simpan_file_excel(dataframe, lokasi_name, tanggal_str):
     urutan_kolom_final = [col for col in urutan_kolom if col in dataframe.columns]
     dataframe = dataframe[urutan_kolom_final]
 
-    file_basename = f"Time Summary {lokasi_name} - {tanggal_str}"
+    file_basename = f"Time Summary - {tanggal_str} - {lokasi_name}"
     filename = get_save_path(file_basename)
     if not filename:
         show_info_message("Dibatalkan", INFO_MESSAGES["CANCELED_BY_USER"])

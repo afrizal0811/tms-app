@@ -260,7 +260,7 @@ def show_excel_viewer(dfs, lokasi_name):
 
     def download_excel():
         date_str = datetime.now().strftime("%d.%m.%Y")
-        file_basename = f"Vehicle Data {lokasi_name} - {date_str}"
+        file_basename = f"Vehicle Data - {date_str} - {lokasi_name}"
         save_path = get_save_path(file_basename)
         if not save_path:
             return

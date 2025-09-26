@@ -273,7 +273,7 @@ def panggil_api_dan_simpan(dates, app_instance):
     # Mendapatkan nama lokasi dari mapping
     lokasi_name = next((name for name, code in location_id.items() if code == LOKASI_FILTER), LOKASI_FILTER)
     selected_date_for_filename = dates["dmy"].replace("-", ".")
-    base_name = f"Delivery Summary {lokasi_name} - {selected_date_for_filename}"
+    base_name = f"Delivery Summary - {selected_date_for_filename} -{lokasi_name}"
 
     NAMA_FILE_OUTPUT = get_save_path(base_name)
 

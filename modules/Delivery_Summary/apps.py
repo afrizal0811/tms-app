@@ -217,6 +217,32 @@ def process_update_longlat(df):
         data.append({"Customer ID":customer_id,"Customer Name":customer_name,"Location ID":location_id,"New Longlat":longlat})
     return pd.DataFrame(data,columns=["Customer ID","Customer Name","Location ID","New Longlat"])
 
+def get_created_date(file_path):
+    try:
+        df_main = pd.read_excel(file_path, sheet_name="Main")
+        if "startTime" not in df_main.columns:
+            return datetime.now()
+
+        start_val = df_main["startTime"].dropna().iloc[0]
+
+        if isinstance(start_val, str):
+            try:
+                dt = datetime.strptime(start_val.strip(), "%Y-%m-%d %H:%M")
+            except ValueError:
+                dt = pd.to_datetime(start_val, errors="coerce")
+        elif isinstance(start_val, datetime):
+            dt = start_val
+        else:
+            dt = pd.to_datetime(str(start_val), errors="coerce")
+
+        if pd.isna(dt):
+            return datetime.now()
+
+        return dt
+    except Exception:
+        return datetime.now()
+
+
 # =============================================================================
 # MAIN
 # =============================================================================
@@ -261,10 +287,10 @@ def main():
         results_to_save['Update Longlat'] = pd.DataFrame([{"Customer ID":"Tidak Ada Update Longlat","Customer Name":"","Location ID":"","New Longlat":""}])
     location_id = constants.get('location_id', {})
     lokasi_name = next((n for n,c in location_id.items() if c == lokasi_code), lokasi_code)
-    input_filename = os.path.basename(input_file)
-    date_match = re.search(r'(\d{2}-\d{2}-\d{4})', input_filename)
-    date_str = date_match.group(1).replace('-', '.') if date_match else datetime.now().strftime('%d.%m.%Y')
-    file_basename = f"Delivery Summary {lokasi_name} - {date_str}"
+    # input_filename = os.path.basename(input_file)
+    created_date = get_created_date(input_file)
+    date_str = created_date.strftime('%d.%m.%Y')
+    file_basename = f"Delivery Summary - {date_str} - {lokasi_name}"
     save_file_path = get_save_path(file_basename)
     if not save_file_path: show_error_message("Proses Gagal", INFO_MESSAGES["CANCELED_BY_USER"]); return
     with pd.ExcelWriter(save_file_path, engine='openpyxl') as writer:

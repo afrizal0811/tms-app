@@ -253,7 +253,7 @@ def process_routing_data(date_formats, gui_instance):
             usage_data_for_df.append({'Tipe Kendaraan': v_type,'Jumlah (DRY)': dry_count,'Jumlah (FROZEN)': frozen_count})
         df_usage = pd.DataFrame(usage_data_for_df)
 
-        file_basename = f"{lokasi_name} - Routing Summary - {selected_date_for_filename}"
+        file_basename = f"Routing Summary - {selected_date_for_filename} - {lokasi_name}"
         save_path = get_save_path(base_name=file_basename, extension=".xlsx")
         if not save_path:
             show_info_message("Dibatalkan", INFO_MESSAGES["CANCELED_BY_USER"])

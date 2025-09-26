@@ -302,7 +302,7 @@ def main():
         tanggal_str = get_adjusted_date_from_excel(path) or datetime.now().strftime("%d.%m.%Y")
         location_id = constants.get('location_id', {})
         lokasi_name = next((name for name, code in location_id.items() if code == lokasi), lokasi)
-        file_basename = f"{lokasi_name} - Routing Summary - {tanggal_str}"
+        file_basename = f"Routing Summary - {tanggal_str} - {lokasi_name}"
         save_path = get_save_path(file_basename)
         if save_path:
             output_wb.save(save_path)
