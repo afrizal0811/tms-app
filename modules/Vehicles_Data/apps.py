@@ -78,7 +78,6 @@ def fetch_and_prepare_data():
 
         for vehicle in vehicles_data:
             working_time = vehicle.get("workingTime", {})
-            break_time = vehicle.get("breakTime", {})
             capacity = vehicle.get("capacity", {})
             weight_cap = capacity.get("weight", {})
             volume_cap = capacity.get("volume", {})
@@ -89,11 +88,11 @@ def fetch_and_prepare_data():
                 "Assignee": vehicle.get("assignee", ""),
                 "Start Time": working_time.get("startTime", ""),
                 "End Time": working_time.get("endTime", ""),
-                "Break Start": break_time.get("startTime") or 0,
-                "Break End": break_time.get("endTime") or 0,
+                "Break Start": "",
+                "Break End":  "",
                 "Multiday": working_time.get("multiday") or 0,
-                "Speed Km/h": vehicle.get("speed", 0),
-                "Cost Factor": vehicle.get("fixedCost", 0),
+                "Speed Km/h": "",
+                "Cost Factor": "",
                 "Vehicle Tags": "; ".join(tags),
                 "weight Min": weight_cap.get("min", ""),
                 "weight Max": weight_cap.get("max", ""),
