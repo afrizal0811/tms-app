@@ -158,11 +158,16 @@ def process_routing_data(date_formats, gui_instance):
 
                     driver_name = master_data_map.get(assignee_email, assignee_email)
                     trips = route.get("trips", [])
-
+                    def safe_float(value, default=0):
+                        try:
+                            return float(value)
+                        except (TypeError, ValueError):
+                            return default
+    
                     if trips:
-                        total_weight = sum(t.get("weight", 0) for t in trips)
-                        total_volume = sum(t.get("volume", 0) for t in trips)
-                        total_distance = sum(t.get("distance", 0) for t in trips)
+                        total_weight = sum(safe_float(t.get("weight", 0)) for t in trips)
+                        total_volume = sum(safe_float(t.get("volume", 0)) for t in trips)
+                        total_distance = sum(safe_float(t.get("distance", 0)) for t in trips)
 
                         total_minutes = sum((t.get("travelTime", 0) + t.get("visitTime", 0) + t.get("waitingTime", 0)) for t in trips)
                         hours, minutes = divmod(total_minutes, 60)
