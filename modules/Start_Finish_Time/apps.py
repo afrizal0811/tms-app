@@ -129,6 +129,7 @@ def simpan_file_excel(dataframe, lokasi_name, tanggal_str):
 
     wb.save(filename)
     open_file_externally(filename)
+    return True 
 
 # =============================================================================
 # BAGIAN 2: FUNGSI PEMROSESAN UTAMA
@@ -302,7 +303,7 @@ def ambil_data(dates, app_instance=None):
     final_df = final_df.sort_values(by='Driver', ascending=True)
 
     tanggal_format_titik = tanggal_str.replace('-', '.')
-    simpan_file_excel(final_df, lokasi_name, tanggal_format_titik)
+    return simpan_file_excel(final_df, lokasi_name, tanggal_format_titik)
 
 # =============================================================================
 # BAGIAN 3: FUNGSI GUI DAN EKSEKUSI
@@ -315,7 +316,12 @@ def main():
         return
 
     def process_wrapper(dates, app_instance):
-        ambil_data(dates, app_instance)
+        success = ambil_data(dates, app_instance)
+        if success and app_instance is not None:
+            try:
+                app_instance.destroy()   # tutup window setelah selesai
+            except Exception:
+                pass
 
     create_date_picker_window("Start-Finish Time", process_wrapper)
 
