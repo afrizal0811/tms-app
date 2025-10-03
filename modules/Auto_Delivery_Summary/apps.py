@@ -64,32 +64,45 @@ def process_task_data(task, master_map, real_sequence_map):
         'real_sequence': real_sequence,
         'is_same_sequence': "SAMA" if et_sequence == real_sequence else "TIDAK SAMA",
         'labels': task.get('label', []),
-        'alasan_batal': task.get('alasanBatal', ''),
-        'alasan_tolakan': task.get('alasanTolakan', '')
+        'alasan': task.get('alasan', '')
     }
 
 def format_excel_sheet(writer, df, sheet_name, centered_cols, colored_cols=None):
     """Menulis DataFrame ke sheet dan menerapkan format."""
     df.to_excel(writer, index=False, sheet_name=sheet_name)
+    workbook = writer.book
     worksheet = writer.sheets[sheet_name]
     center_align = Alignment(horizontal='center', vertical='center')
-
+    
+    # Apply style to all cells
     for idx, col_name in enumerate(df.columns):
         col_letter = chr(65 + idx)
+        
+        # Auto-fit column width
         try:
-            max_len = max(df[col_name].astype(str).map(len).max(), len(col_name)) + 2
+            # Mengambil max length dari data (row 1 ke bawah) dan nama kolom
+            data_lengths = df[col_name].astype(str).map(len).max() if not df[col_name].empty else 0
+            max_len = max(data_lengths, len(col_name)) + 2
             worksheet.column_dimensions[col_letter].width = max_len
         except (ValueError, TypeError):
              worksheet.column_dimensions[col_letter].width = len(col_name) + 2
 
+        # Apply center alignment
         if col_name in centered_cols:
             for cell in worksheet[col_letter][1:]:
                 cell.alignment = center_align
 
+        # Apply color fill
         if colored_cols and col_name in colored_cols:
             fill = PatternFill(start_color=colored_cols[col_name], end_color=colored_cols[col_name], fill_type="solid")
             for cell in worksheet[col_letter]:
                 cell.fill = fill
+                
+    # Center header cells
+    header_align = Alignment(horizontal='center', vertical='center')
+    for cell in worksheet[1]:
+        cell.alignment = header_align
+
 
 def panggil_api_dan_simpan(dates, app_instance):
     """
@@ -100,7 +113,7 @@ def panggil_api_dan_simpan(dates, app_instance):
     constants = load_constants()
     config = load_config()
     secrets = load_secret()
-    master_data  = load_master_data()
+    master_data = load_master_data()
 
     master_df = master_data["df"]
     hub_ids = master_data["hub_ids"]
@@ -160,7 +173,7 @@ def panggil_api_dan_simpan(dates, app_instance):
         ))
         return False
 
-    # --- Data Processing (No changes in this part) ---
+    # --- Data Processing ---
     tasks_by_assignee = {}
     for task in tasks_data:
         assignee_email = (task.get('assignedVehicle') or {}).get('assignee')
@@ -175,7 +188,9 @@ def panggil_api_dan_simpan(dates, app_instance):
 
     summary_data = {email: {'License Plat': record.get('Plat', 'N/A'), 'Driver': record.get('Driver', email), 'Total Visit': pd.NA, 'Total Delivered': pd.NA} for email, record in master_map.items() if LOKASI_FILTER in email}
     pending_so_data, ro_vs_real_data = [], []
-    undelivered_labels = ["PENDING", "BATAL", "TERIMA SEBAGIAN"]
+    
+    # Perbarui daftar label yang dianggap "undelivered"
+    undelivered_labels = ["PENDING", "PENDING GR", "BATAL", "TERIMA SEBAGIAN"]
 
     for task in tasks_data:
         processed = process_task_data(task, master_map, real_sequence_map)
@@ -193,20 +208,25 @@ def panggil_api_dan_simpan(dates, app_instance):
         if any(label in undelivered_labels for label in processed['labels']):
             match = re.search(r'(C0[0-9]+)', processed['customer_name'])
             reason = ''
-            if "BATAL" in processed['labels']: reason = processed['alasan_batal']
-            elif "TERIMA SEBAGIAN" in processed['labels']: reason = processed['alasan_tolakan']
-            elif "PENDING" in processed['labels']: reason = processed['alasan_batal']
+            
+            # Alasan hanya diisi jika ada di label yang relevan (misalnya BATAL, TERIMA SEBAGIAN, PENDING, PENDING GR)
+            if any(label in ["BATAL", "TERIMA SEBAGIAN", "PENDING", "PENDING GR"] for label in processed['labels']): 
+                reason = processed['alasan']
 
             pending_so_data.append({
                 'License Plat': processed['license_plat'], 'Driver': processed['driver_name'],
                 'Faktur Batal/ Tolakan SO': processed['customer_name'] if "BATAL" in processed['labels'] else '',
                 'Terkirim Sebagian': processed['customer_name'] if "TERIMA SEBAGIAN" in processed['labels'] else '',
-                'Pending': processed['customer_name'] if "PENDING" in processed['labels'] else '', 'Reason': reason,
+                # Pastikan PENDING hanya masuk ke kolom 'Pending'
+                'Pending': processed['customer_name'] if "PENDING" in processed['labels'] and "PENDING GR" not in processed['labels'] else '',
+                'Pending GR': processed['customer_name'] if "PENDING GR" in processed['labels'] else '',
+                'Reason': reason,
                 'Open Time': processed['open_time'], 'Close Time': processed['close_time'], 'ETA': processed['eta'], 'ETD': processed['etd'],
                 'Actual Arrival': processed['actual_arrival'], 'Actual Departure': processed['actual_departure'],
                 'Visit Time': processed['visit_time'], 'Actual Visit Time': processed['actual_visit_time'],
                 'Customer ID': match.group(1) if match else 'N/A', 'ET Sequence': processed['et_sequence'],
-                'Real Sequence': processed['real_sequence'], 'Temperature': 'DRY' if processed['driver_name'].startswith("'DRY'") else ('FRZ' if processed['driver_name'].startswith("'FRZ'") else 'N/A')
+                'Real Sequence': processed['real_sequence'], 
+                'Temperature': 'DRY' if processed['driver_name'].startswith("'DRY'") else ('FRZ' if processed['driver_name'].startswith("'FRZ'") else 'N/A')
             })
 
         ro_vs_real_data.append({
@@ -219,8 +239,22 @@ def panggil_api_dan_simpan(dates, app_instance):
 
     df_delivered = pd.DataFrame(list(summary_data.values())).sort_values(by='Driver', ascending=True)
     df_pending = pd.DataFrame(pending_so_data)
+    
     if not df_pending.empty:
-        df_pending.insert(df_pending.columns.get_loc('Reason') + 1, ' ', '')
+        # Pindahkan 'Pending GR' ke sebelah 'Pending'
+        cols = list(df_pending.columns)
+        pending_gr_idx = cols.index('Pending GR')
+        cols.insert(cols.index('Pending') + 1, cols.pop(pending_gr_idx))
+        df_pending = df_pending[cols]
+        
+        # --- KOREKSI LOKASI KOLOM PEMISAH ' ' ---
+        # Sisipkan kolom pemisah ' ' SETELAH kolom 'Reason'
+        # Urutan kolom sekarang: ..., Pending, Pending GR, Reason, Open Time, ...
+        # Kolom 'Reason' berada di index yang bisa didapatkan:
+        reason_loc = df_pending.columns.get_loc('Reason')
+        df_pending.insert(reason_loc + 1, ' ', '') # Sisipkan setelah 'Reason'
+        # ------------------------------------------
+
         df_pending = df_pending.sort_values(by='Driver', ascending=True)
 
     df_ro_vs_real = pd.DataFrame(ro_vs_real_data)
@@ -236,23 +270,16 @@ def panggil_api_dan_simpan(dates, app_instance):
         df_ro_vs_real = pd.DataFrame(final_ro_rows)
 
     # --- Generate Sheet "Update Longlat" ---
-    # --- Generate Sheet "Update Longlat" (tetap ada meskipun kosong) ---
     update_longlat_data = []
     for task in tasks_data:
         longlat = task.get('klikLokasiClient', '')
-        if not longlat:  # Skip jika klikLokasiClient kosong/null
+        if not longlat: 
             continue
 
         title = task.get('title', '')
-
-        # Ekstrak Customer ID
         match_id = re.search(r'C0\d{6,}', title)
         customer_id = match_id.group(0) if match_id else 'N/A'
-
-        # Ekstrak Customer Name (sebelum tanda hubung pertama)
         customer_name = title.split(' - ')[0].strip()
-
-        # Ekstrak Location ID (setelah tanda hubung terakhir)
         parts = title.split(' - ')
         location_code = parts[-1].strip() if len(parts) > 2 else 'N/A'
 
@@ -267,13 +294,12 @@ def panggil_api_dan_simpan(dates, app_instance):
         df_longlat = pd.DataFrame(update_longlat_data)
         df_longlat = df_longlat.sort_values(by='Customer ID', ascending=True)
     else:
-        # Jika tidak ada data, buat DataFrame 1 kolom dengan 1 row teks
         df_longlat = pd.DataFrame({"": ["Tidak Ada Update Longlat"]})
 
     # Mendapatkan nama lokasi dari mapping
     lokasi_name = next((name for name, code in location_id.items() if code == LOKASI_FILTER), LOKASI_FILTER)
     selected_date_for_filename = dates["dmy"].replace("-", ".")
-    base_name = f"Delivery Summary - {selected_date_for_filename} -{lokasi_name}"
+    base_name = f"Delivery Summary - {selected_date_for_filename} - {lokasi_name}"
 
     NAMA_FILE_OUTPUT = get_save_path(base_name)
 
@@ -284,14 +310,19 @@ def panggil_api_dan_simpan(dates, app_instance):
     try:
         with pd.ExcelWriter(NAMA_FILE_OUTPUT, engine='openpyxl') as writer:
             format_excel_sheet(writer, df_delivered, 'Total Delivered', centered_cols=['Total Visit', 'Total Delivered'])
+            
+            # Kolom untuk Hasil Pending SO harus mencakup 'Pending GR'
+            pending_centered_cols = ['Open Time', 'Close Time', 'ETA', 'ETD', 'Actual Arrival', 'Actual Departure', 'Visit Time', 'Actual Visit Time', 'Customer ID', 'ET Sequence', 'Real Sequence', 'Temperature']
             format_excel_sheet(writer, df_pending, 'Hasil Pending SO',
-                                 centered_cols=['Open Time', 'Close Time', 'ETA', 'ETD', 'Actual Arrival', 'Actual Departure', 'Visit Time', 'Actual Visit Time', 'Customer ID', 'ET Sequence', 'Real Sequence', 'Temperature'],
-                                 colored_cols={' ': "FFC0CB"})
+                                centered_cols=pending_centered_cols,
+                                colored_cols={' ': "FFC0CB"})
+                                
             format_excel_sheet(writer, df_ro_vs_real, 'Hasil RO vs Real',
-                                 centered_cols=['Status Delivery', 'Open Time', 'Close Time', 'Actual Arrival', 'Actual Departure', 'Visit Time', 'Actual Visit Time', 'ET Sequence', 'Real Sequence', 'Is Same Sequence'])
+                                centered_cols=['Status Delivery', 'Open Time', 'Close Time', 'Actual Arrival', 'Actual Departure', 'Visit Time', 'Actual Visit Time', 'ET Sequence', 'Real Sequence', 'Is Same Sequence'])
+            
             if "Customer ID" in df_longlat.columns:
                 format_excel_sheet(writer, df_longlat, 'Update Longlat',
-                                   centered_cols=['Customer ID', 'Location ID'])
+                                    centered_cols=['Customer ID', 'Location ID'])
             else:
                 df_longlat.to_excel(writer, index=False, sheet_name='Update Longlat')
 

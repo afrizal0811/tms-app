@@ -104,10 +104,7 @@ def process_total_delivered(df, master_driver_df):
         if 'label' in df_proc.columns:
             sukses_df = df_proc[df_proc['label'].str.upper() == 'SUKSES']
             delivered_counts = sukses_df['Driver'].value_counts(dropna=True).reset_index()
-            if not delivered_counts.empty:
-                delivered_counts.columns = ['Driver', 'Total Delivered']
-            else:
-                delivered_counts = pd.DataFrame(columns=['Driver', 'Total Delivered'])
+            delivered_counts.columns = ['Driver', 'Total Delivered']
         else:
             delivered_counts = pd.DataFrame(columns=['Driver', 'Total Delivered'])
 
@@ -144,7 +141,7 @@ def process_ro_vs_real(df, master_driver_df):
     cols = ['License Plat','Driver','Customer','Status Delivery','Open Time','Close Time','Actual Arrival','Actual Departure','Visit Time','Actual Visit Time','ET Sequence','Real Sequence','Is Same Sequence']
     df_final = df_proc[cols].sort_values(['Driver','Real Sequence'])
     parts = []
-    df_final['Driver'] = df_final['Driver'].astype(str).str.strip()  # normalisasi
+    df_final['Driver'] = df_final['Driver'].astype(str).str.strip()
 
     for _, g in df_final.dropna(subset=['Driver']).groupby('Driver'):
         parts.append(g)
@@ -156,7 +153,7 @@ def process_ro_vs_real(df, master_driver_df):
         else:
             # paksa pandas untuk mengenali ini sebagai typed row, bukan all-NA
             row_dummy = pd.DataFrame({col: [''] for col in df_final.columns}).astype(object)
-            row_dummy.iloc[0] = None  # kosongkan
+            row_dummy.iloc[0] = None
             parts.append(row_dummy)
 
     # Hapus baris kosong terakhir jika ada
@@ -177,26 +174,56 @@ def process_pending_so(df, master_driver_df):
     df_proc = df.copy()
     email_to_name = dict(zip(master_driver_df['Email'], master_driver_df['Driver']))
     df_proc['Driver'] = df_proc['assignee'].str.lower().map(email_to_name).fillna(df_proc['assignee'])
-    status_to_filter = ['BATAL','PENDING','TERIMA SEBAGIAN']
+    
+    # Filter untuk semua label yang relevan
+    status_to_filter = ['BATAL','PENDING','TERIMA SEBAGIAN', 'PENDING GR']
     df_filtered = df_proc[df_proc['label'].isin(status_to_filter)].copy()
+    
     if df_filtered.empty: return None
+    
     for col in ['Klik Jika Anda Sudah Sampai','doneTime','eta','etd']:
         if col in df_filtered.columns: convert_datetime_column(df_filtered,col)
+        
     df_filtered['Actual Visit Time'] = df_filtered.apply(lambda r: calculate_actual_visit(r.get('Klik Jika Anda Sudah Sampai',''), r.get('doneTime','')),axis=1)
     df_filtered['Customer ID'] = df_filtered['title'].apply(lambda t: t.split('-')[1].strip() if isinstance(t,str) and '-' in t else '')
     df_filtered['Temperature'] = df_filtered['Driver'].str.split(' ').str[0].str.replace("'","")
+    
     def reason(row):
-        return row.get('Alasan Batal','') if row['label'] in ['PENDING','BATAL'] else row.get('Alasan Tolakan','') if row['label']=='TERIMA SEBAGIAN' else ''
+        return row.get('Alasan','')
     df_filtered['Reason'] = df_filtered.apply(reason,axis=1)
+    
+    # --- KOREKSI Logika assign_faktur ---
     def assign_faktur(row):
-        return (row['title'],'','') if row['label']=='BATAL' else ('',row['title'],'') if row['label']=='TERIMA SEBAGIAN' else ('','','') if row['label']=='PENDING' else ('','','')
-    (df_filtered['Faktur Batal/ Tolakan SO'],df_filtered['Terkirim Sebagian'],df_filtered['Pending']) = zip(*df_filtered.apply(assign_faktur,axis=1))
-    cols = ['assignedVehicle','Driver','Faktur Batal/ Tolakan SO','Terkirim Sebagian','Pending','Reason','Open Time','Close Time','eta','etd','Klik Jika Anda Sudah Sampai','doneTime','Visit Time','Actual Visit Time','Customer ID','routePlannedOrder','Temperature']
+        label = row['label']
+        title = row['title']
+        
+        faktur_batal = title if label == 'BATAL' else ''
+        terkirim_sebagian = title if label == 'TERIMA SEBAGIAN' else ''
+        pending = title if label == 'PENDING' else ''  
+        pending_gr = title if label == 'PENDING GR' else ''
+        return faktur_batal, terkirim_sebagian, pending, pending_gr
+
+    (df_filtered['Faktur Batal/ Tolakan SO'],
+     df_filtered['Terkirim Sebagian'],
+     df_filtered['Pending'],
+     df_filtered['Pending GR']) = zip(*df_filtered.apply(assign_faktur,axis=1))
+    
+    # --- Daftar kolom keluaran ---
+    cols = [
+        'assignedVehicle','Driver',
+        'Faktur Batal/ Tolakan SO','Terkirim Sebagian','Pending','Pending GR',
+        'Reason','Open Time','Close Time','eta','etd','Klik Jika Anda Sudah Sampai','doneTime',
+        'Visit Time','Actual Visit Time','Customer ID','routePlannedOrder','Temperature'
+    ]
     df_final = df_filtered[cols].rename(columns={
         'assignedVehicle':'License Plat','eta':'ETA','etd':'ETD','Klik Jika Anda Sudah Sampai':'Actual Arrival','doneTime':'Actual Departure','routePlannedOrder':'ET Sequence'
     })
+    
     reason_loc = df_final.columns.get_loc('Reason')
-    df_final.insert(reason_loc+1,' ', '')
+    # Sesuaikan penempatan kolom pemisah ' '
+    if ' ' not in df_final.columns:
+        df_final.insert(reason_loc+1,' ', '')
+        
     return df_final.sort_values('Driver')
 
 def process_update_longlat(df):
