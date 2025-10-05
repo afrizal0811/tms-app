@@ -42,7 +42,7 @@ def create_date_picker_window(title, process_callback):
             main_frame = tk.Frame(self, bg='SystemButtonFace')
             main_frame.pack(expand=True, pady=20)
 
-            label = ttk.Label(main_frame, text="Pilih Tanggal")
+            label = ttk.Label(main_frame, text="Pilih Tanggal Pengiriman")
             label.pack(pady=(0, 10))
 
             # Widget DateEntry

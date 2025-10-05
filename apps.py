@@ -36,7 +36,8 @@ from modules.Start_Finish_Time.apps import main as start_finish_time_main
 from modules.Sync_Data.apps import main as sync_data_main
 from modules.Check_User.apps import main as check_user_main
 from modules.Auto_Routing_Summary.apps import main as auto_routing_summary_main
-from modules.Vehicles_Data.apps import main as vehicles_data_main # Impor modul baru
+from modules.Vehicles_Data.apps import main as vehicles_data_main
+from modules.Routing_Transaction.apps import main as routing_transaction_main
 
 ensure_config_exists()
 # ==============================================================================
@@ -98,6 +99,7 @@ def toggle_main_controls(is_enabled: bool):
     
     laporan_menu.entryconfig("Routing Summary", state=state)
     laporan_menu.entryconfig("Delivery Summary", state=state)
+    laporan_menu.entryconfig("Routing Transaction", state=state)
     laporan_menu.entryconfig("Data Kendaraan", state=state)
 
 def pilih_lokasi(parent_window, initial_setup=False):
@@ -369,6 +371,7 @@ laporan_menu = tk.Menu(menu_bar, tearoff=0)
 laporan_menu.add_command(label="Routing Summary", command=routing_summary_main)
 laporan_menu.add_command(label="Delivery Summary", command=delivery_summary_main)
 laporan_menu.add_separator()
+laporan_menu.add_command(label="Routing Transaction", command=routing_transaction_main) 
 laporan_menu.add_command(label="Data Kendaraan", command=vehicles_data_main)
 menu_bar.add_cascade(label="Laporan", menu=laporan_menu)
 
