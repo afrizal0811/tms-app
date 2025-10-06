@@ -38,6 +38,7 @@ from modules.Check_User.apps import main as check_user_main
 from modules.Auto_Routing_Summary.apps import main as auto_routing_summary_main
 from modules.Vehicles_Data.apps import main as vehicles_data_main
 from modules.Routing_Transaction.apps import main as routing_transaction_main
+from modules.Estimasi_Delivery import apps as estimasi_delivery_app 
 
 ensure_config_exists()
 # ==============================================================================
@@ -371,6 +372,7 @@ laporan_menu = tk.Menu(menu_bar, tearoff=0)
 laporan_menu.add_command(label="Routing Summary", command=routing_summary_main)
 laporan_menu.add_command(label="Delivery Summary", command=delivery_summary_main)
 laporan_menu.add_separator()
+laporan_menu.add_command(label="Estimasi Delivery", command=estimasi_delivery_app.main) 
 laporan_menu.add_command(label="Routing Transaction", command=routing_transaction_main) 
 laporan_menu.add_command(label="Data Kendaraan", command=vehicles_data_main)
 menu_bar.add_cascade(label="Laporan", menu=laporan_menu)
