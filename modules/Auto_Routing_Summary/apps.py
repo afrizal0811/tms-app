@@ -124,6 +124,7 @@ def process_routing_data(date_formats, gui_instance):
             response = requests.get(api_url, headers=headers, params=params, timeout=30)
             response.raise_for_status()
             data_check = response.json()
+            
 
             if 'data' in data_check and 'data' in data_check['data'] and data_check['data']['data']:
                 response_data = data_check
@@ -165,8 +166,20 @@ def process_routing_data(date_formats, gui_instance):
                             return default
     
                     if trips:
-                        total_weight = sum(safe_float(t.get("weight", 0)) for t in trips)
-                        total_volume = sum(safe_float(t.get("volume", 0)) for t in trips)
+                        def is_hub_true(val):
+                            if isinstance(val, bool):
+                                return val
+                            if isinstance(val, str):
+                                return val.strip().lower() in ('true', '1', 'yes')
+                            try:
+                                return int(val) == 1
+                            except Exception:
+                                return False
+
+                        non_hub_trips = [t for t in trips if not is_hub_true(t.get('isHub', False))]
+
+                        total_weight = sum(safe_float(t.get("weight", 0)) for t in non_hub_trips)
+                        total_volume = sum(safe_float(t.get("volume", 0)) for t in non_hub_trips)
                         total_distance = sum(safe_float(t.get("distance", 0)) for t in trips)
 
                         total_minutes = sum((t.get("travelTime", 0) + t.get("visitTime", 0) + t.get("waitingTime", 0)) for t in trips)
@@ -176,8 +189,8 @@ def process_routing_data(date_formats, gui_instance):
                         vehicle_max_weight = route.get("vehicleMaxWeight", 1) or 1
                         vehicle_max_volume = route.get("vehicleMaxVolume", 1) or 1
 
-                        weight_percentage = (total_weight / vehicle_max_weight) * 100
-                        volume_percentage = (total_volume / vehicle_max_volume) * 100
+                        weight_percentage = (total_weight / vehicle_max_weight) * 100 if vehicle_max_weight else None
+                        volume_percentage = (total_volume / vehicle_max_volume) * 100 if vehicle_max_volume else None
                     else:
                         total_distance = None
                         ship_duration = None
