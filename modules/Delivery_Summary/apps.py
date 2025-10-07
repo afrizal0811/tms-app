@@ -176,7 +176,7 @@ def process_pending_so(df, master_driver_df):
     df_proc['Driver'] = df_proc['assignee'].str.lower().map(email_to_name).fillna(df_proc['assignee'])
     
     # Filter untuk semua label yang relevan
-    status_to_filter = ['BATAL','PENDING','TERIMA SEBAGIAN', 'PENDING GR']
+    status_to_filter = ['BATAL','PENDING','TERIMA SEBAGIAN']
     df_filtered = df_proc[df_proc['label'].isin(status_to_filter)].copy()
     
     if df_filtered.empty: return None

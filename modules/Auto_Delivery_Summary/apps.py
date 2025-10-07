@@ -190,7 +190,7 @@ def panggil_api_dan_simpan(dates, app_instance):
     pending_so_data, ro_vs_real_data = [], []
     
     # Perbarui daftar label yang dianggap "undelivered"
-    undelivered_labels = ["PENDING", "PENDING GR", "BATAL", "TERIMA SEBAGIAN"]
+    undelivered_labels = ["PENDING", "BATAL", "TERIMA SEBAGIAN"]
 
     for task in tasks_data:
         processed = process_task_data(task, master_map, real_sequence_map)
