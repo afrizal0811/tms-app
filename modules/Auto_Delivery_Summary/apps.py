@@ -3,6 +3,7 @@ import pandas as pd
 import re
 import requests
 import traceback
+import math 
 from utils.function import (
     get_save_path,
     load_config,
@@ -15,6 +16,41 @@ from utils.gui import create_date_picker_window
 from utils.function import show_error_message, show_info_message
 from utils.messages import ERROR_MESSAGES, INFO_MESSAGES
 from utils.api_handler import handle_requests_error
+
+def haversine_distance(coord1_str, coord2_str):
+    """
+    Menghitung jarak Haversine antara dua koordinat (lat, long) dalam meter.
+    Koordinat harus dalam format string "lat,long".
+    Mengembalikan 0 jika salah satu koordinat tidak valid atau kosong.
+    """
+    if not coord1_str or not coord2_str:
+        return 0
+
+    try:
+        # Pisahkan string "lat,long" dan konversi ke float
+        lat1, lon1 = map(float, coord1_str.split(','))
+        lat2, lon2 = map(float, coord2_str.split(','))
+    except ValueError:
+        return 0
+
+    R = 6371000 # Radius bumi dalam meter
+    
+    # Konversi derajat ke radian
+    lat1_rad = math.radians(lat1)
+    lon1_rad = math.radians(lon1)
+    lat2_rad = math.radians(lat2)
+    lon2_rad = math.radians(lon2)
+
+    dlon = lon2_rad - lon1_rad
+    dlat = lat2_rad - lat1_rad
+
+    # Rumus Haversine
+    a = math.sin(dlat / 2)**2 + math.cos(lat1_rad) * math.cos(lat2_rad) * math.sin(dlon / 2)**2
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+    distance = R * c
+    return round(distance) # Kembalikan dalam meter, dibulatkan
+
 
 def process_task_data(task, master_map, real_sequence_map):
     """
@@ -249,8 +285,6 @@ def panggil_api_dan_simpan(dates, app_instance):
         
         # --- KOREKSI LOKASI KOLOM PEMISAH ' ' ---
         # Sisipkan kolom pemisah ' ' SETELAH kolom 'Reason'
-        # Urutan kolom sekarang: ..., Pending, Pending GR, Reason, Open Time, ...
-        # Kolom 'Reason' berada di index yang bisa didapatkan:
         reason_loc = df_pending.columns.get_loc('Reason')
         df_pending.insert(reason_loc + 1, ' ', '') # Sisipkan setelah 'Reason'
         # ------------------------------------------
@@ -272,9 +306,14 @@ def panggil_api_dan_simpan(dates, app_instance):
     # --- Generate Sheet "Update Longlat" ---
     update_longlat_data = []
     for task in tasks_data:
-        longlat = task.get('klikLokasiClient', '')
-        if not longlat: 
+        new_longlat = task.get('klikLokasiClient', '') # New Longlat (dari klik)
+        old_longlat = task.get('longlat', '') # Old Longlat (dari database/master)
+        
+        if not new_longlat: 
             continue
+
+        # Hitung Beda Jarak (m) menggunakan Old Longlat dan New Longlat
+        beda_jarak = haversine_distance(old_longlat, new_longlat)
 
         title = task.get('title', '')
         match_id = re.search(r'C0\d{6,}', title)
@@ -287,7 +326,8 @@ def panggil_api_dan_simpan(dates, app_instance):
             'Customer ID': customer_id,
             'Customer Name': customer_name,
             'Location ID': location_code,
-            'New Longlat': longlat
+            'New Longlat': new_longlat,
+            'Beda Jarak (m)': beda_jarak 
         })
 
     if update_longlat_data:
@@ -321,8 +361,10 @@ def panggil_api_dan_simpan(dates, app_instance):
                                 centered_cols=['Status Delivery', 'Open Time', 'Close Time', 'Actual Arrival', 'Actual Departure', 'Visit Time', 'Actual Visit Time', 'ET Sequence', 'Real Sequence', 'Is Same Sequence'])
             
             if "Customer ID" in df_longlat.columns:
+                # Kolom yang akan di-center: Customer ID, Location ID, New Longlat, Beda Jarak (m)
+                longlat_centered_cols = ['Customer ID', 'Location ID', 'New Longlat', 'Beda Jarak (m)']
                 format_excel_sheet(writer, df_longlat, 'Update Longlat',
-                                    centered_cols=['Customer ID', 'Location ID'])
+                                    centered_cols=longlat_centered_cols)
             else:
                 df_longlat.to_excel(writer, index=False, sheet_name='Update Longlat')
 
