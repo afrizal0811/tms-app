@@ -1,4 +1,4 @@
-# @GUI/apps.py (KODE YANG DIMODIFIKASI)
+# @GUI/apps.py (KODE LENGKAP DENGAN LOGIKA FILTER HUB_ID)
 
 from tkinter import ttk
 from version import CURRENT_VERSION, REMOTE_VERSION_URL, DOWNLOAD_LINK
@@ -16,6 +16,7 @@ from utils.function import (
     ensure_config_exists,
     load_config,
     load_constants,
+    load_master_data, # DITAMBAHKAN: Perlu load master data
     resource_path,
     save_json_data,
     show_error_message,
@@ -102,15 +103,81 @@ def toggle_main_controls(is_enabled: bool):
     laporan_menu.entryconfig("Delivery Summary", state=state)
     laporan_menu.entryconfig("Routing Transaction", state=state)
     laporan_menu.entryconfig("Data Kendaraan", state=state)
+    
+    # Menambahkan Estimasi Delivery ke kontrol
+    try:
+        laporan_menu.entryconfig("Estimasi Delivery", state=state)
+    except tk.TclError:
+        pass
+
+# ====================================================================================
+# FUNGSI PENTING: LOGIKA PENGAMBILAN LOKASI YANG TERSEDIA
+# ====================================================================================
+def get_available_locations(is_initial_setup: bool):
+    """
+    Menentukan daftar lokasi yang dapat dipilih berdasarkan mode (setup awal atau ganti).
+    
+    :param is_initial_setup: True jika ini adalah setup awal (semua lokasi).
+    :return: dictionary {display_name: kode_lokasi} untuk lokasi yang diizinkan.
+    """
+    constants = load_constants()
+    location_id = constants.get('location_id', {}) # {Display Name: kode_lokasi}
+    
+    if is_initial_setup:
+        # 1. Jika setup awal, tampilkan SEMUA lokasi dari constants
+        return location_id
+    else:
+        # 2. Jika ganti lokasi, batasi berdasarkan hub_id di config.json
+        config_data = load_config()
+        master_data = load_master_data()
+
+        # Fallback: Jika config hilang atau tidak ada data user/master, kembali ke mode awal
+        if not config_data or not config_data.get('user_checked') or not master_data:
+            return location_id 
+
+        # A. Ambil ID Mongo yang diizinkan dari config.json
+        user_hub_ids_mongo = config_data.get('user_checked', {}).get('hub_id', [])
+        hub_ids_map = master_data.get('hub_ids', {}) # {kode_lokasi: id_mongo}
+        
+        allowed_kode_lokasi = set()
+        
+        # B. Ubah ID Mongo menjadi Kode Lokasi (plck, pldm, dll.) menggunakan master.json
+        # Map: id_mongo -> kode_lokasi (dibalik dari hub_ids_map)
+        mongo_id_to_kode = {v: k for k, v in hub_ids_map.items()}
+        
+        for mongo_id in user_hub_ids_mongo:
+            if mongo_id in mongo_id_to_kode:
+                allowed_kode_lokasi.add(mongo_id_to_kode[mongo_id])
+        
+        allowed_locations = {}
+        
+        # C. Ubah Kode Lokasi menjadi Nama Tampilan (Cikarang, Daan Mogot) menggunakan constant.json
+        for display_name, kode_lokasi in location_id.items():
+            if kode_lokasi in allowed_kode_lokasi:
+                allowed_locations[display_name] = kode_lokasi
+            
+        # Fallback: Jika filter gagal (allowed_locations kosong), kembalikan semua lokasi
+        return allowed_locations if allowed_locations else location_id
+
 
 def pilih_lokasi(parent_window, initial_setup=False):
-    reverse_dict = {v: k for k, v in LOCATION_ID.items()}
-    selected_display_name = list(LOCATION_ID.keys())[0]
+    
+    # Tentukan lokasi yang akan ditampilkan berdasarkan mode
+    display_map = get_available_locations(initial_setup)
+    
+    if not display_map:
+        show_error_message("Error Lokasi", "Daftar lokasi yang tersedia kosong.")
+        return
+
+    selected_display_name = list(display_map.keys())[0] # Ambil lokasi pertama sebagai default
 
     config_data = load_config() or {}
     kode_lokasi = config_data.get("lokasi", "")
-    if kode_lokasi in reverse_dict:
-        selected_display_name = reverse_dict[kode_lokasi]
+    
+    # Cek apakah kode lokasi saat ini masih valid di daftar display_map yang baru
+    if kode_lokasi in display_map.values():
+        # Cari nama display dari kode yang tersimpan
+        selected_display_name = next((k for k, v in display_map.items() if v == kode_lokasi), selected_display_name)
 
     dialog = tk.Toplevel(parent_window)
     dialog.title("Pilih Lokasi Cabang")
@@ -121,7 +188,7 @@ def pilih_lokasi(parent_window, initial_setup=False):
 
     tk.Label(dialog, text="Pilih Lokasi Cabang:", font=("Arial", 14)).pack(pady=10)
     selected_var = tk.StringVar(value=selected_display_name)
-    combo = ttk.Combobox(dialog, values=list(LOCATION_ID.keys()), textvariable=selected_var, font=("Arial", 12), state="readonly")
+    combo = ttk.Combobox(dialog, values=list(display_map.keys()), textvariable=selected_var, font=("Arial", 12), state="readonly")
     combo.pack(pady=10)
     combo.set(selected_display_name)
     
@@ -129,8 +196,8 @@ def pilih_lokasi(parent_window, initial_setup=False):
 
     def on_select():
         selected = combo.get()
-        if selected in LOCATION_ID:
-            kode = LOCATION_ID[selected]
+        if selected in display_map:
+            kode = display_map[selected]
             config_data['lokasi'] = kode
             save_json_data(config_data, CONFIG_PATH)
             dialog.destroy()
@@ -264,7 +331,7 @@ def periksa_konfigurasi_awal(parent_window):
     config = load_config()
     if not config or not config.get("lokasi"):
         show_info_message("Setup Lokasi", INFO_MESSAGES["LOCATION_SETUP"])
-        pilih_lokasi(parent_window, initial_setup=True)
+        pilih_lokasi(parent_window, initial_setup=True) 
         update_title(parent_window)
         config = load_config()
 
@@ -346,7 +413,7 @@ def run_sync_in_background(root_window):
 
     def thread_target():
         try:
-            sync_data_main(reset_config_and_exit) # PERBAIKAN: Berikan argumen yang sesuai
+            sync_data_main(reset_config_and_exit) 
         finally:
             root_window.after(0, on_sync_complete)
             
@@ -362,7 +429,8 @@ root = tk.Tk()
 root.withdraw() 
 
 def ganti_lokasi():
-    pilih_lokasi(root, initial_setup=False)
+    # Panggil pilih_lokasi untuk ganti lokasi (initial_setup=False)
+    pilih_lokasi(root, initial_setup=False) 
     update_title(root)
 
 # --- Setup Menu Bar ---
@@ -372,8 +440,8 @@ laporan_menu = tk.Menu(menu_bar, tearoff=0)
 laporan_menu.add_command(label="Routing Summary", command=routing_summary_main)
 laporan_menu.add_command(label="Delivery Summary", command=delivery_summary_main)
 laporan_menu.add_separator()
-laporan_menu.add_command(label="Estimasi Delivery", command=estimasi_delivery_app.main) 
 laporan_menu.add_command(label="Routing Transaction", command=routing_transaction_main) 
+laporan_menu.add_command(label="Estimasi Delivery", command=estimasi_delivery_app.main)
 laporan_menu.add_command(label="Data Kendaraan", command=vehicles_data_main)
 menu_bar.add_cascade(label="Laporan", menu=laporan_menu)
 

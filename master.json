@@ -226,19 +226,19 @@
             "Email": "kendaraan.plck37@panganlestari.com",
             "Driver": "'DRY' SEWA 1",
             "Plat": "'DRY' SEWA 1",
-            "Type": "DRY-CDE-2000"
+            "Type": "DRY-CDD-5000"
         },
         {
             "Email": "kendaraan.plck38@panganlestari.com",
             "Driver": "'DRY' SEWA 2",
             "Plat": "'DRY' SEWA 2",
-            "Type": "DRY-CDE-LONG-2500"
+            "Type": "DRY-CDD-LONG-5000"
         },
         {
             "Email": "kendaraan.plck39@panganlestari.com",
             "Driver": "'DRY' SEWA 3",
             "Plat": "'DRY' SEWA 3",
-            "Type": "DRY-CDD-5000"
+            "Type": "DRY-FUSO-10000"
         },
         {
             "Email": "kendaraan.plck40@panganlestari.com",
@@ -309,13 +309,13 @@
         {
             "Email": "kendaraan.pldm05@panganlestari.com",
             "Driver": "'DRY' SAIMAN",
-            "Plat": "B 9569 FXU",
+            "Plat": "B 9574 FXU",
             "Type": "DRY-CDE-LONG-2500"
         },
         {
             "Email": "kendaraan.pldm06@panganlestari.com",
             "Driver": "'DRY' ROKHIM",
-            "Plat": "B 9574 FXU",
+            "Plat": "B 9569 FXU",
             "Type": "DRY-CDE-LONG-2500"
         },
         {

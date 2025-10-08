@@ -55,7 +55,8 @@ def main(parent_window):
 
         restricted_roles = [
             role_ids.get("planner"),
-            role_ids.get("checker")
+            role_ids.get("checker"),
+            role_ids.get("adminPlanner"),
         ]
         
         base_url = constants.get('base_url')

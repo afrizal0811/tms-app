@@ -23,6 +23,7 @@
         "driver": "6703410af6be892f3208ecde",
         "planner": "6703410af6be892f3208ecdd",
         "checker": "675a95be8fbcd91803047cc2",
-        "superadmin": "677c940ee491a8634b09defe"
+        "superadmin": "677c940ee491a8634b09defe",
+        "adminPlanner": "68dba1298b550457520dd5a2"
     }
 }
