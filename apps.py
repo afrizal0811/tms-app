@@ -346,17 +346,30 @@ def atur_visibilitas_menu(menu_bar):
     constants = load_constants()
     user_info = config.get("user_checked", {})
     user_role_id = user_info.get("role_id")
+    user_id = user_info.get("_id")
     role_ids = constants.get("role_ids", {})
+
     restricted_role_id_list = [
         role_ids.get("planner"),
         role_ids.get("checker")
     ]
 
+    # Daftar user ID yang dikecualikan dari pembatasan
+    EXEMPT_USER_IDS = {
+        "68bfbcfc3bede55edc0ca446",# User Syifa (Cikarang)
+        "68bfbcfc3bede55edc0ca444" # User Nia (Cikarang)
+    }
+
     try:
-        if user_role_id and user_role_id in restricted_role_id_list:
+        if (
+            user_role_id
+            and user_role_id in restricted_role_id_list
+            and user_id not in EXEMPT_USER_IDS
+        ):
             konfigurasi_menu.delete("Ganti Lokasi Cabang")
     except tk.TclError:
         pass
+
 
 def run_sync_in_background(root_window):
     """Menjalankan proses sinkronisasi hub dan driver di background thread."""
