@@ -301,15 +301,13 @@ def _handle_api_request_and_parse_data(app_instance, date_obj, hub_id):
     # LOGIKA PERUBAHAN TANGGAL (SAMA PERSIS DENGAN SEBELUMNYA)
     day_of_week = date_obj.weekday()
     
-    if day_of_week == 0: # Senin
-        target_date_obj = date_obj - timedelta(days=2) # ke Sabtu
+    if day_of_week == 0:  # Senin
+        target_date_obj = date_obj - timedelta(days=2)  # ke Sabtu
     else:
-        target_date_obj = date_obj - timedelta(days=1) # selain itu, mundur 1 hari
+        target_date_obj = date_obj - timedelta(days=1)  # selain itu, mundur 1 hari
 
     mileapp_date_format = target_date_obj.strftime('%Y-%m-%d')
     date_str = date_obj.strftime('%d-%m-%Y')
-    
-    app_instance.update_status(f"Mengambil data estimasi untuk tanggal {mileapp_date_format}")
     
     url = f"{base_url}/results"
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
@@ -332,8 +330,26 @@ def _handle_api_request_and_parse_data(app_instance, date_obj, hub_id):
         
     app_instance.update_status("Mengekstrak dan memformat data estimasi...")
     parsed_data = _parse_delivery_data(routing_results)
-    
+
+    # ============================================================
+    # 🔽 Tambahan baru: Urutkan kendaraan berdasarkan ETA terawal
+    # ============================================================
+    def get_first_eta(vehicle):
+        """Ambil waktu ETA pertama (terawal) dari setiap kendaraan."""
+        try:
+            # Ambil eta terawal dari daftar stopDetails kendaraan
+            eta_list = [datetime.strptime(stop['eta'], "%H:%M:%S") for stop in vehicle.get('stopDetails', []) if stop.get('eta')]
+            return min(eta_list) if eta_list else datetime.max
+        except Exception:
+            return datetime.max
+
+    # Urutkan berdasarkan ETA terawal, lalu nama kendaraan ascending
+    parsed_data.sort(key=lambda v: (get_first_eta(v), v.get('vehicleName', '')))
+
+    # ============================================================
+
     return parsed_data, date_str
+
 
 def process_data(date_input, app_instance):
     """Fungsi utama untuk memproses data Estimasi Delivery."""
@@ -354,7 +370,6 @@ def process_data(date_input, app_instance):
             app_instance.after(1000, app_instance.destroy) 
             return
 
-        app_instance.update_status("Mempersiapkan data konfigurasi...")
         hub_id = get_hub_id() 
 
         if not hub_id:
