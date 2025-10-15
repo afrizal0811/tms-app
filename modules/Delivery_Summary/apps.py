@@ -175,56 +175,81 @@ def process_pending_so(df, master_driver_df):
     email_to_name = dict(zip(master_driver_df['Email'], master_driver_df['Driver']))
     df_proc['Driver'] = df_proc['assignee'].str.lower().map(email_to_name).fillna(df_proc['assignee'])
     
-    # Filter untuk semua label yang relevan
-    status_to_filter = ['BATAL','PENDING','TERIMA SEBAGIAN']
-    df_filtered = df_proc[df_proc['label'].isin(status_to_filter)].copy()
-    
-    if df_filtered.empty: return None
-    
-    for col in ['Klik Jika Anda Sudah Sampai','doneTime','eta','etd']:
-        if col in df_filtered.columns: convert_datetime_column(df_filtered,col)
+    # Gabungkan dua kolom status bila ada
+    status_1 = df_proc.get('Status Delivery', df_proc.get('label', ''))
+    status_2 = df_proc.get('Status Delivery 2', '')
+    df_proc['status_delivery_list'] = (
+        status_1.fillna('').astype(str).str.upper().str.split(';') +
+        status_2.fillna('').astype(str).str.upper().str.split(';')
+    )
+    df_proc['status_delivery_list'] = df_proc['status_delivery_list'].apply(lambda x: list(dict.fromkeys([s.strip() for s in x if s.strip()])))
+
+    # Filter semua status relevan (termasuk dari status_delivery_list)
+    status_to_filter = ['BATAL', 'TERIMA SEBAGIAN', 'PENDING', 'PENDING GR']
+    df_filtered = df_proc[df_proc['status_delivery_list'].apply(lambda lst: any(s in status_to_filter for s in lst))].copy()
+    if df_filtered.empty:
+        return None
+
+    for col in ['Klik Jika Anda Sudah Sampai', 'doneTime', 'eta', 'etd']:
+        if col in df_filtered.columns:
+            convert_datetime_column(df_filtered, col)
         
-    df_filtered['Actual Visit Time'] = df_filtered.apply(lambda r: calculate_actual_visit(r.get('Klik Jika Anda Sudah Sampai',''), r.get('doneTime','')),axis=1)
-    df_filtered['Customer ID'] = df_filtered['title'].apply(lambda t: t.split('-')[1].strip() if isinstance(t,str) and '-' in t else '')
-    df_filtered['Temperature'] = df_filtered['Driver'].str.split(' ').str[0].str.replace("'","")
-    
-    def reason(row):
-        return row.get('Alasan','')
-    df_filtered['Reason'] = df_filtered.apply(reason,axis=1)
-    
-    # --- KOREKSI Logika assign_faktur ---
-    def assign_faktur(row):
-        label = row['label']
+    df_filtered['Actual Visit Time'] = df_filtered.apply(
+        lambda r: calculate_actual_visit(r.get('Klik Jika Anda Sudah Sampai',''), r.get('doneTime','')), axis=1
+    )
+
+    df_filtered['Customer ID'] = df_filtered['title'].apply(
+        lambda t: t.split('-')[1].strip() if isinstance(t, str) and '-' in t else ''
+    )
+    df_filtered['Temperature'] = df_filtered['Driver'].astype(str).str.split(' ').str[0].str.replace("'", "")
+
+    # Tentukan alasan (Reason)
+    def get_reason(row):
+        # Hanya ambil alasan jika ada status relevan
+        if any(s in ["BATAL", "TERIMA SEBAGIAN", "PENDING", "PENDING GR"] for s in row['status_delivery_list']):
+            return row.get('Alasan') or row.get('Alasan Tidak Bisa Dikunjungi') or row.get('Alasan Batal') or ''
+        return ''
+    df_filtered['Reason'] = df_filtered.apply(get_reason, axis=1)
+
+    # --- Pemrosesan kolom Faktur/Pending/Terima Sebagian ---
+    def assign_status_columns(row):
+        statuses = row['status_delivery_list']
         title = row['title']
-        
-        faktur_batal = title if label == 'BATAL' else ''
-        terkirim_sebagian = title if label == 'TERIMA SEBAGIAN' else ''
-        pending = title if label == 'PENDING' else ''  
-        pending_gr = title if label == 'PENDING GR' else ''
+
+        faktur_batal = title if "BATAL" in statuses else ''
+        terkirim_sebagian = title if "TERIMA SEBAGIAN" in statuses else ''
+        pending = title if "PENDING" in statuses and "PENDING GR" not in statuses else ''
+        pending_gr = title if "PENDING GR" in statuses else ''
+
         return faktur_batal, terkirim_sebagian, pending, pending_gr
 
     (df_filtered['Faktur Batal/ Tolakan SO'],
      df_filtered['Terkirim Sebagian'],
      df_filtered['Pending'],
-     df_filtered['Pending GR']) = zip(*df_filtered.apply(assign_faktur,axis=1))
-    
+     df_filtered['Pending GR']) = zip(*df_filtered.apply(assign_status_columns, axis=1))
+
     # --- Daftar kolom keluaran ---
     cols = [
-        'assignedVehicle','Driver',
-        'Faktur Batal/ Tolakan SO','Terkirim Sebagian','Pending','Pending GR',
-        'Reason','Open Time','Close Time','eta','etd','Klik Jika Anda Sudah Sampai','doneTime',
-        'Visit Time','Actual Visit Time','Customer ID','routePlannedOrder','Temperature'
+        'assignedVehicle', 'Driver',
+        'Faktur Batal/ Tolakan SO', 'Terkirim Sebagian', 'Pending', 'Pending GR',
+        'Reason', 'Open Time', 'Close Time', 'eta', 'etd',
+        'Klik Jika Anda Sudah Sampai', 'doneTime', 'Visit Time', 'Actual Visit Time',
+        'Customer ID', 'routePlannedOrder', 'Temperature'
     ]
     df_final = df_filtered[cols].rename(columns={
-        'assignedVehicle':'License Plat','eta':'ETA','etd':'ETD','Klik Jika Anda Sudah Sampai':'Actual Arrival','doneTime':'Actual Departure','routePlannedOrder':'ET Sequence'
+        'assignedVehicle': 'License Plat',
+        'eta': 'ETA', 'etd': 'ETD',
+        'Klik Jika Anda Sudah Sampai': 'Actual Arrival',
+        'doneTime': 'Actual Departure',
+        'routePlannedOrder': 'ET Sequence'
     })
     
     reason_loc = df_final.columns.get_loc('Reason')
-    # Sesuaikan penempatan kolom pemisah ' '
     if ' ' not in df_final.columns:
-        df_final.insert(reason_loc+1,' ', '')
+        df_final.insert(reason_loc + 1, ' ', '')
         
     return df_final.sort_values('Driver')
+
 
 def process_update_longlat(df):
     if 'title' not in df.columns or 'Klik Lokasi Client' not in df.columns:

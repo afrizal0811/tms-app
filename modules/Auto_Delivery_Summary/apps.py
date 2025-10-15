@@ -81,13 +81,21 @@ def process_task_data(task, master_map, real_sequence_map):
     et_sequence = task.get('routePlannedOrder', 0)
     real_sequence = real_sequence_map.get(task['_id'], 0)
 
+    # Ambil kedua status delivery
+    status_delivery_1 = task.get('statusDelivery', [])
+    status_delivery_2 = task.get('statusDelivery-1', [])
+    
+    # Gabungkan keduanya (hilangkan duplikat)
+    combined_status_delivery = list(dict.fromkeys(status_delivery_1 + status_delivery_2))
+
     return {
         'task_id': task['_id'],
         'license_plat': (task.get('assignedVehicle') or {}).get('name', 'N/A'),
         'driver_name': driver_name,
         'assignee_email': vehicle_assignee_email,
         'customer_name': customer_name,
-        'status_delivery': ', '.join(task.get('statusDelivery', [])),
+        'status_delivery': ', '.join(combined_status_delivery),
+        'status_delivery_list': combined_status_delivery,
         'open_time': task.get('openTime', ''),
         'close_time': task.get('closeTime', ''),
         'eta': (task.get('eta') or '')[:5],
@@ -226,7 +234,7 @@ def panggil_api_dan_simpan(dates, app_instance):
     pending_so_data, ro_vs_real_data = [], []
     
     # Perbarui daftar label yang dianggap "undelivered"
-    undelivered_labels = ["PENDING", "BATAL", "TERIMA SEBAGIAN"]
+    undelivered_labels = ["PENDING", "BATAL", "TERIMA SEBAGIAN", "PENDING GR"]
 
     for task in tasks_data:
         processed = process_task_data(task, master_map, real_sequence_map)
@@ -241,29 +249,59 @@ def panggil_api_dan_simpan(dates, app_instance):
             if not any(label in undelivered_labels for label in processed['labels']):
                 summary_data[processed['assignee_email']]['Total Delivered'] += 1
 
-        if any(label in undelivered_labels for label in processed['labels']):
+        if (
+            any(label in undelivered_labels for label in processed['labels'])
+            or any(status in undelivered_labels for status in processed.get('status_delivery_list', []))
+        ):
             match = re.search(r'(C0[0-9]+)', processed['customer_name'])
             reason = ''
             
-            # Alasan hanya diisi jika ada di label yang relevan (misalnya BATAL, TERIMA SEBAGIAN, PENDING, PENDING GR)
-            if any(label in ["BATAL", "TERIMA SEBAGIAN", "PENDING", "PENDING GR"] for label in processed['labels']): 
+            if any(
+                label in ["BATAL", "TERIMA SEBAGIAN", "PENDING", "PENDING GR"]
+                for label in processed['labels'] + processed.get('status_delivery_list', [])
+            ):
                 reason = processed['alasan']
 
             pending_so_data.append({
-                'License Plat': processed['license_plat'], 'Driver': processed['driver_name'],
-                'Faktur Batal/ Tolakan SO': processed['customer_name'] if "BATAL" in processed['labels'] else '',
-                'Terkirim Sebagian': processed['customer_name'] if "TERIMA SEBAGIAN" in processed['labels'] else '',
-                # Pastikan PENDING hanya masuk ke kolom 'Pending'
-                'Pending': processed['customer_name'] if "PENDING" in processed['labels'] and "PENDING GR" not in processed['labels'] else '',
-                'Pending GR': processed['customer_name'] if "PENDING GR" in processed['labels'] else '',
+                'License Plat': processed['license_plat'],
+                'Driver': processed['driver_name'],
+                'Faktur Batal/ Tolakan SO': processed['customer_name'] if (
+                    "BATAL" in processed['labels'] or "BATAL" in processed.get('status_delivery_list', [])
+                ) else '',
+
+                'Terkirim Sebagian': processed['customer_name'] if (
+                    "TERIMA SEBAGIAN" in processed['labels'] or "TERIMA SEBAGIAN" in processed.get('status_delivery_list', [])
+                ) else '',
+
+                'Pending': processed['customer_name'] if (
+                    ("PENDING" in processed['labels'] or "PENDING" in processed.get('status_delivery_list', []))
+                    and "PENDING GR" not in processed['labels']
+                    and "PENDING GR" not in processed.get('status_delivery_list', [])
+                ) else '',
+
+                'Pending GR': processed['customer_name'] if (
+                    "PENDING GR" in processed['labels'] or "PENDING GR" in processed.get('status_delivery_list', [])
+                ) else '',
+
                 'Reason': reason,
-                'Open Time': processed['open_time'], 'Close Time': processed['close_time'], 'ETA': processed['eta'], 'ETD': processed['etd'],
-                'Actual Arrival': processed['actual_arrival'], 'Actual Departure': processed['actual_departure'],
-                'Visit Time': processed['visit_time'], 'Actual Visit Time': processed['actual_visit_time'],
-                'Customer ID': match.group(1) if match else 'N/A', 'ET Sequence': processed['et_sequence'],
+                'Open Time': processed['open_time'],
+                'Close Time': processed['close_time'],
+                'ETA': processed['eta'],
+                'ETD': processed['etd'],
+                'Actual Arrival': processed['actual_arrival'],
+                'Actual Departure': processed['actual_departure'],
+                'Visit Time': processed['visit_time'],
+                'Actual Visit Time': processed['actual_visit_time'],
+                'Customer ID': match.group(1) if match else 'N/A',
+                'ET Sequence': processed['et_sequence'],
                 'Real Sequence': processed['real_sequence'], 
-                'Temperature': 'DRY' if processed['driver_name'].startswith("'DRY'") else ('FRZ' if processed['driver_name'].startswith("'FRZ'") else 'N/A')
+                'Temperature': (
+                    'DRY' if processed['driver_name'].startswith("'DRY'")
+                    else 'FRZ' if processed['driver_name'].startswith("'FRZ'")
+                    else 'N/A'
+                )
             })
+
 
         ro_vs_real_data.append({
             'License Plat': processed['license_plat'], 'Driver': processed['driver_name'], 'Customer': processed['customer_name'],
