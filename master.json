@@ -225,19 +225,19 @@
         {
             "Email": "kendaraan.plck37@panganlestari.com",
             "Driver": "'DRY' SEWA 1",
-            "Plat": "'DRY' SEWA 1",
+            "Plat": "'DRY' SEWA 1 CDD 5000",
             "Type": "DRY-CDD-5000"
         },
         {
             "Email": "kendaraan.plck38@panganlestari.com",
             "Driver": "'DRY' SEWA 2",
-            "Plat": "'DRY' SEWA 2",
+            "Plat": "'DRY' SEWA 2 CDD LONG",
             "Type": "DRY-CDD-LONG-5000"
         },
         {
             "Email": "kendaraan.plck39@panganlestari.com",
             "Driver": "'DRY' SEWA 3",
-            "Plat": "'DRY' SEWA 3",
+            "Plat": "'DRY' SEWA 3 FUSO",
             "Type": "DRY-FUSO-10000"
         },
         {

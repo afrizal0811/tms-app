@@ -99,7 +99,7 @@ def process_task_data(task, master_map, real_sequence_map):
         'et_sequence': et_sequence,
         'real_sequence': real_sequence,
         'is_same_sequence': "SAMA" if et_sequence == real_sequence else "TIDAK SAMA",
-        'labels': task.get('label', []),
+        'labels': task.get('label') or [],
         'alasan': task.get('alasan', '')
     }
 
