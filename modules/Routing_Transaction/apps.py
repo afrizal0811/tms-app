@@ -421,7 +421,7 @@ def display_result_gui(parent_instance, parsed_data, date_str):
 
 def process_data(date_input, app_instance):
     """Fungsi utama untuk memproses data Routing Transaction dari API.
-    Urutkan kendaraan berdasarkan ETA dari visit pertama (berdasarkan 'order')."""
+    Urutkan kendaraan berdasarkan ETD dari HUB pertama (berdasarkan 'order')."""
     date_str = date_input.get('dmy') if isinstance(date_input, dict) else (date_input if isinstance(date_input, str) else None)
 
     if not date_str:
@@ -446,22 +446,19 @@ def process_data(date_input, app_instance):
             app_instance.after(1000, app_instance.destroy)
             return
 
-        # Tentukan tanggal target (MileApp pakai hari sebelumnya)
         date_obj = datetime.strptime(date_str, '%d-%m-%Y')
         day_of_week = date_obj.weekday()
 
-        if day_of_week == 6:  # Minggu
+        if day_of_week == 6:
             app_instance.display_error("Data Tidak Ditemukan", ERROR_MESSAGES["DATA_NOT_FOUND"])
             app_instance.after(1000, app_instance.destroy)
             return
-        elif day_of_week == 0:  # Senin
+        elif day_of_week == 0:
             target_date_obj = date_obj - timedelta(days=2)
         else:
             target_date_obj = date_obj - timedelta(days=1)
 
         mileapp_date_format = target_date_obj.strftime('%Y-%m-%d')
-
-        # Panggil API
         url = f"{base_url}/results"
         headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
         params = {"dateFrom": mileapp_date_format, "dateTo": mileapp_date_format, "limit": 100, "hubId": hub_id}
@@ -470,7 +467,6 @@ def process_data(date_input, app_instance):
         response.raise_for_status()
         data = response.json()
 
-        # Filter dispatchStatus = done
         app_instance.update_status("Memfilter data...")
         routing_results = [
             item for item in data.get('data', {}).get('data', [])
@@ -482,39 +478,40 @@ def process_data(date_input, app_instance):
             app_instance.after(1000, app_instance.destroy)
             return
 
-        # Ekstraksi & Format
         app_instance.update_status("Mengekstrak dan memformat data trips dan stops...")
-
         parsed_data = []
 
         for route_item in routing_results:
             routing_list = route_item.get('result', {}).get('routing', [])
-
             for route in routing_list:
                 vehicle_name = route.get('vehicleName', 'N/A')
                 trips = route.get('trips', []) or []
-                # Pastikan trips diurutkan berdasarkan order jika tersedia
                 trips_sorted = sorted(trips, key=lambda t: t.get('order', 9999))
+                
+                # ============================================================
+                # ▼▼▼ LOGIKA BARU UNTUK MENCARI ETD HUB PERTAMA ▼▼▼
+                # ============================================================
+                hub_etd = datetime.max # Nilai default jika ETD HUB tidak ditemukan
+                
+                first_hub_trip = next((trip for trip in trips_sorted if trip.get('isHub')), None)
+                
+                if first_hub_trip:
+                    etd_raw = first_hub_trip.get('etd')
+                    if etd_raw:
+                        try:
+                            if re.fullmatch(r"\d{2}:\d{2}(:\d{2})?", etd_raw):
+                                hub_etd = datetime.combine(datetime.today().date(), datetime.strptime(etd_raw, "%H:%M:%S").time())
+                            else:
+                                hub_etd = datetime.fromisoformat(etd_raw.replace('Z', '+00:00'))
+                        except Exception:
+                            pass # Biarkan hub_etd tetap datetime.max jika format salah
+                # ============================================================
+
                 non_hub_trips = [trip for trip in trips_sorted if not trip.get('isHub')]
                 num_trips = len(non_hub_trips)
                 details_per_stop = []
-                all_etas = []
 
-                # Kumpulkan semua ETA (untuk fallback) dan siapkan details
                 for trip in non_hub_trips:
-                    # Ambil ETA dari beberapa kemungkinan field
-                    eta_raw = trip.get('eta')
-                    if eta_raw:
-                        try:
-                            # Jika hanya berisi waktu (HH:MM:SS)
-                            if re.fullmatch(r"\d{2}:\d{2}(:\d{2})?", eta_raw):
-                                eta_obj = datetime.combine(datetime.today().date(), datetime.strptime(eta_raw, "%H:%M:%S").time())
-                            else:
-                                eta_obj = datetime.fromisoformat(eta_raw.replace('Z', '+00:00'))
-                            all_etas.append(eta_obj)
-                        except Exception:
-                            pass
-
                     visit_name = trip.get('visitName')
                     if visit_name:
                         cust_code, loc_code = extract_customer_and_location(visit_name)
@@ -532,36 +529,17 @@ def process_data(date_input, app_instance):
                                     "soNumbers": so_numbers
                                 })
 
-                # Ambil ETA dari visit pertama (berdasarkan order) jika ada
-                first_eta = None
-
-                if non_hub_trips:
-                    first_trip = non_hub_trips[0]
-                    eta_raw = first_trip.get("eta")
-
-                    if eta_raw:
-                        try:
-                            if re.fullmatch(r"\d{2}:\d{2}(:\d{2})?", eta_raw):
-                                first_eta = datetime.combine(datetime.today().date(), datetime.strptime(eta_raw, "%H:%M:%S").time())
-                            else:
-                                first_eta = datetime.fromisoformat(eta_raw.replace("Z", "+00:00"))
-                        except Exception:
-                            first_eta = None
-
-                # fallback: jika first_eta tidak ditemukan, pakai min(all_etas)
-                eta = first_eta if first_eta is not None else (min(all_etas) if all_etas else datetime.max)
                 if details_per_stop:
                     parsed_data.append({
                         "vehicleName": vehicle_name,
                         "numTrips": num_trips,
                         "detailsPerStop": details_per_stop,
-                        "eta": eta
+                        "hub_etd": hub_etd  # Tambahkan ETD HUB ke data
                     })
 
-        # Urutkan berdasarkan ETA (visit pertama) terlebih dahulu, lalu nama kendaraan sebagai tiebreaker
-        parsed_data.sort(key=lambda x: (x.get('eta', datetime.max), x.get('vehicleName', '')))
+        # Urutkan berdasarkan ETD HUB, lalu nama kendaraan
+        parsed_data.sort(key=lambda x: (x.get('hub_etd', datetime.max), x.get('vehicleName', '')))
 
-        # Tampilkan hasil
         if parsed_data:
             app_instance.after(0, lambda: display_result_gui(app_instance, parsed_data, date_str))
         else:
