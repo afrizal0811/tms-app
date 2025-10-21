@@ -24,6 +24,7 @@ def export_to_excel(all_vehicle_data, date_str, lokasi_cabang):
         return
 
     folder_path = filedialog.askdirectory(title="Pilih Folder untuk Menyimpan Laporan")
+    
     if not folder_path:
         return
 
@@ -41,8 +42,7 @@ def export_to_excel(all_vehicle_data, date_str, lokasi_cabang):
             red_font = Font(color="FF0000")
             black_fill = PatternFill(start_color="000000", end_color="000000", fill_type="solid")
             
-            # Perubahan No. 2: Ganti nama kolom target
-            fill_target_columns = ['Jam Buka', 'Jam Tutup', 'Estimasi Sampai', 'Estimasi Berangkat']
+            fill_target_columns = ['SO', 'Jam Buka', 'Jam Tutup', 'Estimasi Sampai', 'Estimasi Berangkat']
 
             for vehicle_data in all_vehicle_data:
                 stop_details = vehicle_data.get('stopDetails', [])
@@ -60,6 +60,7 @@ def export_to_excel(all_vehicle_data, date_str, lokasi_cabang):
                     jam_tutup = stop.get('endTime', 'N/A')
                     eta_val = stop.get('eta', 'N/A')
                     etd_val = stop.get('etd', 'N/A')
+                    so_numbers = stop.get('soNumbers', '')
 
                     if visit_name == 'HUB':
                         jam_buka = ""
@@ -68,10 +69,10 @@ def export_to_excel(all_vehicle_data, date_str, lokasi_cabang):
                         if current_order == min_order: eta_val = ""
                         elif current_order == max_order: etd_val = ""
                     
-                    # Perubahan No. 2: Ganti nama kolom di data ekspor
                     export_rows.append({
-                        'Urutan': stop.get('order'),
+                        'No.': stop.get('order'),
                         'Outlet': visit_name,
+                        'SO': so_numbers,
                         'Jam Buka': jam_buka,
                         'Jam Tutup': jam_tutup,
                         'Estimasi Sampai': f"{eta_val.split(':')[0]}:{eta_val.split(':')[1]}" if ':' in str(eta_val) else eta_val,
@@ -86,14 +87,16 @@ def export_to_excel(all_vehicle_data, date_str, lokasi_cabang):
                     worksheet = writer.sheets[safe_sheet_name]
                     for col in worksheet.columns:
                         max_length = 0
-                        column = col[0].column_letter
+                        column_letter = col[0].column_letter
+                        header_length = len(str(worksheet[f"{column_letter}1"].value))
+                        max_length = header_length
                         for cell in col:
                             try:
                                 if len(str(cell.value)) > max_length:
-                                    max_length = len(cell.value)
+                                    max_length = len(str(cell.value))
                             except: pass
                         adjusted_width = (max_length + 2)
-                        worksheet.column_dimensions[column].width = adjusted_width
+                        worksheet.column_dimensions[column_letter].width = adjusted_width
 
                     for row_idx, row_data in enumerate(df.itertuples(index=False), 2):
                         if row_data.Outlet == 'HUB':
@@ -103,14 +106,14 @@ def export_to_excel(all_vehicle_data, date_str, lokasi_cabang):
                                 header_name = df.columns[col_idx-1]
                                 if header_name in fill_target_columns and not cell.value:
                                     cell.fill = black_fill
-
+        
         os.startfile(file_path)
 
     except Exception as e:
         messagebox.showerror("Error Ekspor", f"Terjadi kesalahan saat mengekspor data:\n{e}")
 
 # =============================================================================
-# FUNGSI UTILITY DATA & REGEX (Tidak ada perubahan)
+# FUNGSI UTILITY DATA & REGEX
 # =============================================================================
 def extract_outlet_name(visit_name):
     if not visit_name: return "N/A"
@@ -144,34 +147,43 @@ def extract_customer_and_location(visit_name):
 # =============================================================================
 def create_vehicle_tab(notebook, vehicle_data):
     vehicle_name = vehicle_data['vehicleName']
-    stop_details = vehicle_data['stopDetails']
-    num_trips = vehicle_data['numTrips']
-    tab_frame = ttk.Frame(notebook, padding="10")
-    notebook.add(tab_frame, text=vehicle_name)
-    summary_frame = tk.Frame(tab_frame, padx=10, pady=5, relief="raised", bd=1)
+    stop_details = vehicle_data['stopDetails'] 
+    num_trips = vehicle_data['numTrips'] 
+    
+    tab_frame_container = ttk.Frame(notebook, padding="10")
+    notebook.add(tab_frame_container, text=vehicle_name)
+    
+    summary_frame = tk.Frame(tab_frame_container, padx=10, pady=5, relief="raised", bd=1)
     summary_frame.pack(fill='x', pady=(0, 10))
-    ttk.Label(summary_frame, text=f"Total Stop Pelanggan:", font=("Arial", 10)).pack(side=tk.LEFT, padx=10)
+    ttk.Label(summary_frame, text=f"Total Stop Pelanggan (Asli):", font=("Arial", 10)).pack(side=tk.LEFT, padx=10)
     ttk.Label(summary_frame, text=f"{num_trips}", font=("Arial", 10, "bold")).pack(side=tk.LEFT)
     
-    # Perubahan No. 2: Ganti nama kolom
-    columns = ("Urutan", "Outlet", "Jam Buka", "Jam Tutup", "Estimasi Sampai", "Estimasi Berangkat")
-    tree = ttk.Treeview(tab_frame, columns=columns, show='headings')
+    columns = ("No.", "Outlet", "SO", "Jam Buka", "Jam Tutup", "Estimasi Sampai", "Estimasi Berangkat")
+    tree = ttk.Treeview(tab_frame_container, columns=columns, show='headings')
+    
+    vsb = ttk.Scrollbar(tab_frame_container, orient="vertical", command=tree.yview)
+    hsb = ttk.Scrollbar(tab_frame_container, orient="horizontal", command=tree.xview)
+    tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
+    
+    vsb.pack(side='right', fill='y')
+    hsb.pack(side='bottom', fill='x')
     tree.pack(expand=True, fill='both')
+    
     tree.tag_configure('hub_style', foreground='red')
     
-    tree.column("Urutan", width=60, anchor='center')
-    tree.column("Outlet", width=250, anchor='w')
-    tree.column("Jam Buka", width=100, anchor='center')
-    tree.column("Jam Tutup", width=100, anchor='center')
-    # Perubahan No. 2: Ganti nama kolom
-    tree.column("Estimasi Sampai", width=120, anchor='center')
-    tree.column("Estimasi Berangkat", width=120, anchor='center')
+    tree.column("No.", width=40, anchor='center', stretch=False)
+    tree.column("Outlet", width=250)
+    tree.column("SO", width=200)
+    tree.column("Jam Buka", width=100, anchor='center', stretch=False)
+    tree.column("Jam Tutup", width=100, anchor='center', stretch=False)
+    tree.column("Estimasi Sampai", width=120, anchor='center', stretch=False)
+    tree.column("Estimasi Berangkat", width=120, anchor='center', stretch=False)
     
-    tree.heading("Urutan", text="Urutan")
+    tree.heading("No.", text="No.")
     tree.heading("Outlet", text="Outlet")
+    tree.heading("SO", text="SO")
     tree.heading("Jam Buka", text="Jam Buka")
     tree.heading("Jam Tutup", text="Jam Tutup")
-    # Perubahan No. 2: Ganti nama heading
     tree.heading("Estimasi Sampai", text="Estimasi Sampai")
     tree.heading("Estimasi Berangkat", text="Estimasi Berangkat")
 
@@ -180,12 +192,14 @@ def create_vehicle_tab(notebook, vehicle_data):
         orders = [s['order'] for s in stop_details]
         min_order = min(orders)
         max_order = max(orders)
+
     for stop in sorted(stop_details, key=lambda x: x['order']):
         visit_name = stop.get('visitName', 'N/A')
         jam_buka = stop.get('startTime', 'N/A')
         jam_tutup = stop.get('endTime', 'N/A')
         eta_val = stop.get('eta', 'N/A')
         etd_val = stop.get('etd', 'N/A')
+        so_numbers = stop.get('soNumbers', '')
         tags_to_apply = ()
         is_hub = (visit_name == 'HUB')
         if is_hub:
@@ -193,52 +207,31 @@ def create_vehicle_tab(notebook, vehicle_data):
             jam_buka = ""
             jam_tutup = ""
             current_order = stop.get('order')
-            if current_order == min_order:
-                eta_val = ""
-            elif current_order == max_order:
-                etd_val = ""
+            if current_order == min_order: eta_val = ""
+            elif current_order == max_order: etd_val = ""
+            
         eta_short = f"{eta_val.split(':')[0]}:{eta_val.split(':')[1]}" if ':' in str(eta_val) else eta_val
         etd_short = f"{etd_val.split(':')[0]}:{etd_val.split(':')[1]}" if ':' in str(etd_val) else etd_val
+        
         tree.insert('', 'end', values=(
             stop.get('order', 999), 
             visit_name, 
+            so_numbers,
             jam_buka, 
             jam_tutup, 
             eta_short,
             etd_short
         ), tags=tags_to_apply)
-    scrollbar = ttk.Scrollbar(tree, orient="vertical", command=tree.yview)
-    tree.configure(yscrollcommand=scrollbar.set)
-    scrollbar.pack(side='right', fill='y')
 
-def create_summary_tab(notebook, parsed_data):
-    num_vehicles = len(parsed_data)
-    summary_frame = ttk.Frame(notebook, padding="20 20 20 20")
-    notebook.add(summary_frame, text="Rangkuman", sticky="nsew") 
+def create_summary_tab(notebook, vehicle_data):
+    num_vehicles = len(vehicle_data)
+    summary_frame = ttk.Frame(notebook, padding="20")
+    notebook.add(summary_frame, text="Rangkuman") 
     center_frame = tk.Frame(summary_frame)
     center_frame.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
     tk.Label(center_frame, text="REKAPITULASI ESTIMASI DELIVERY", font=("Arial", 16, "bold"), pady=15).pack()
-    tk.Label(center_frame, text=f"Total {num_vehicles} Kendaraan Aktif", font=("Arial", 14, "bold"), fg="blue").pack(pady=5)
-    tk.Label(center_frame, text="Lihat detail estimasi waktu di setiap tab kendaraan.", font=("Arial", 10), fg="gray").pack(pady=5)
-
-def update_vehicle_tabs(notebook, vehicle_data_list, current_page, pagination_control_frame):
-    for tab_id in notebook.tabs()[1:]: notebook.forget(tab_id)
-    start_index = current_page * VEHICLES_PER_PAGE
-    end_index = start_index + VEHICLES_PER_PAGE
-    vehicles_to_display = vehicle_data_list[start_index:end_index]
-    for vehicle_data in vehicles_to_display: create_vehicle_tab(notebook, vehicle_data)
-    total_pages = (len(vehicle_data_list) + VEHICLES_PER_PAGE - 1) // VEHICLES_PER_PAGE
-    for widget in pagination_control_frame.winfo_children(): widget.destroy()
-    result_window = pagination_control_frame.winfo_toplevel()
-    move_page = result_window.move_page
-    left_button = ttk.Button(pagination_control_frame, text="<", command=lambda: move_page(-1))
-    left_button.pack(side=tk.LEFT, padx=(0, 5))
-    if current_page == 0: left_button.config(state=tk.DISABLED)
-    ttk.Label(pagination_control_frame, text=f"Halaman {current_page + 1}/{total_pages}", font=("Arial", 10)).pack(side=tk.LEFT, padx=5)
-    right_button = ttk.Button(pagination_control_frame, text=">", command=lambda: move_page(1))
-    right_button.pack(side=tk.LEFT, padx=(5, 0))
-    if current_page == total_pages - 1: right_button.config(state=tk.DISABLED)
-    notebook.select(1 if notebook.index("end") > 0 else 0)
+    tk.Label(center_frame, text=f"Total {num_vehicles} Kendaraan Ditemukan", font=("Arial", 14, "bold"), fg="blue").pack(pady=5)
+    tk.Label(center_frame, text="Gunakan pencarian global di atas untuk memfilter kendaraan.", font=("Arial", 10), fg="gray").pack(pady=5)
 
 def display_result_gui(parent_instance, parsed_data, date_str, lokasi_cabang):
     if not parent_instance.winfo_exists(): return
@@ -251,39 +244,115 @@ def display_result_gui(parent_instance, parsed_data, date_str, lokasi_cabang):
     center_y = int(screen_height/2 - window_height / 2)
     result_window.geometry(f'{window_width}x{window_height}+{center_x}+{center_y}')
     main_container = tk.Frame(result_window); main_container.pack(expand=True, fill='both', padx=10, pady=10)
+    
     top_control_frame = tk.Frame(main_container, pady=5); top_control_frame.pack(fill='x', anchor='n') 
-    pagination_control_frame = tk.Frame(top_control_frame); pagination_control_frame.pack(pady=(0, 5)) 
+    search_frame = ttk.Frame(top_control_frame)
+    search_frame.pack(pady=(0, 5))
+    ttk.Label(search_frame, text="Cari SO:", font=("Arial", 9, "bold")).pack(side=tk.LEFT, padx=(0, 5))
+    search_entry = ttk.Entry(search_frame, width=40)
+    search_entry.pack(side=tk.LEFT, fill='x', expand=True)
+    
+    pagination_control_frame = tk.Frame(top_control_frame); pagination_control_frame.pack(pady=(5, 5)) 
+    
     notebook = ttk.Notebook(main_container); notebook.pack(expand=True, fill='both')
+    
     bottom_control_frame = tk.Frame(main_container, pady=10)
     bottom_control_frame.pack(fill='x', anchor='s')
     download_button = ttk.Button(
         bottom_control_frame, 
-        text="Download", 
-        command=lambda: export_to_excel(parsed_data, date_str, lokasi_cabang)
+        text="📥 Download Excel", 
+        command=lambda: export_to_excel(result_window.vehicle_data_list, date_str, lokasi_cabang)
     )
     download_button.pack()
-    if parsed_data:
-        create_summary_tab(notebook, parsed_data)
-    else:
-        error_tab = ttk.Frame(notebook, padding="10"); notebook.add(error_tab, text="Kosong")
-        tk.Label(error_tab, text="Tidak ada data estimasi yang ditemukan.", font=("Arial", 14)).pack(pady=20)
-        return
+    
+    result_window.master_vehicle_list = parsed_data[:]
+    result_window.vehicle_data_list = parsed_data[:]
     result_window.current_page = 0
-    result_window.vehicle_data_list = parsed_data
-    result_window.notebook = notebook
-    result_window.pagination_control_frame = pagination_control_frame 
+    
+    # --- FUNGSI UTAMA UNTUK MERENDER ULANG TAMPILAN ---
+    def refresh_display(page_to_show=0):
+        # 1. Hapus semua tab yang ada
+        for tab in notebook.tabs():
+            notebook.forget(tab)
+
+        # 2. Putuskan apakah tab rangkuman perlu ditampilkan
+        is_searching = bool(search_entry.get().strip())
+        if not is_searching:
+            create_summary_tab(notebook, result_window.vehicle_data_list)
+        
+        # 3. Buat tab kendaraan untuk halaman yang diminta
+        start_index = page_to_show * VEHICLES_PER_PAGE
+        end_index = start_index + VEHICLES_PER_PAGE
+        vehicles_to_display = result_window.vehicle_data_list[start_index:end_index]
+        for v_data in vehicles_to_display:
+            create_vehicle_tab(notebook, v_data)
+        
+        # 4. Update kontrol pagination
+        for widget in pagination_control_frame.winfo_children():
+            widget.destroy()
+            
+        total_pages = (len(result_window.vehicle_data_list) + VEHICLES_PER_PAGE - 1) // VEHICLES_PER_PAGE
+        if total_pages > 1:
+            left_button = ttk.Button(pagination_control_frame, text="<", command=lambda: move_page(-1))
+            left_button.pack(side=tk.LEFT, padx=(0, 5))
+            if page_to_show == 0: left_button.config(state=tk.DISABLED)
+            
+            ttk.Label(pagination_control_frame, text=f"Halaman {page_to_show + 1}/{total_pages}", font=("Arial", 10)).pack(side=tk.LEFT, padx=5)
+            
+            right_button = ttk.Button(pagination_control_frame, text=">", command=lambda: move_page(1))
+            right_button.pack(side=tk.LEFT, padx=(5, 0))
+            if page_to_show == total_pages - 1: right_button.config(state=tk.DISABLED)
+
+        # 5. Pilih tab yang aktif
+        if not is_searching:
+            notebook.select(0)
+        elif notebook.tabs():
+            notebook.select(0)
+
+    # --- Fungsi yang dipanggil oleh UI ---
+    def perform_global_search(event=None):
+        search_term = search_entry.get().strip().lower()
+        
+        if not search_term:
+            result_window.vehicle_data_list = result_window.master_vehicle_list[:]
+        else:
+            filtered_list = []
+            for vehicle in result_window.master_vehicle_list:
+                matching_stops = [
+                    stop for stop in vehicle.get('stopDetails', [])
+                    if search_term in stop.get('soNumbers', '').lower()
+                ]
+                if matching_stops:
+                    filtered_vehicle_data = vehicle.copy()
+                    filtered_vehicle_data['stopDetails'] = matching_stops
+                    filtered_list.append(filtered_vehicle_data)
+            result_window.vehicle_data_list = filtered_list
+            
+        result_window.current_page = 0
+        refresh_display(page_to_show=0)
+
+    def reset_global_search():
+        search_entry.delete(0, tk.END)
+        perform_global_search()
+
     def move_page(delta):
         new_page = result_window.current_page + delta
-        total_pages = (len(result_window.vehicle_data_list) + VEHICLES_PER_PAGE - 1) // VEHICLES_PER_PAGE
-        if 0 <= new_page < total_pages:
-            result_window.current_page = new_page
-            update_vehicle_tabs(notebook, parsed_data, result_window.current_page, pagination_control_frame) 
-    result_window.move_page = move_page
-    update_vehicle_tabs(notebook, parsed_data, result_window.current_page, pagination_control_frame)
-    notebook.select(0)
+        result_window.current_page = new_page
+        refresh_display(page_to_show=new_page)
 
-# =============================================================================
-# LOGIKA INTI DATA PROCESSING
+    search_button = ttk.Button(search_frame, text="Cari", command=perform_global_search)
+    search_button.pack(side=tk.LEFT, padx=(5, 0))
+    reset_button = ttk.Button(search_frame, text="Reset", command=reset_global_search)
+    reset_button.pack(side=tk.LEFT, padx=(5, 0))
+    search_entry.bind("<Return>", perform_global_search)
+    
+    # Simpan fungsi move_page agar bisa diakses
+    result_window.move_page = move_page
+    
+    # Tampilan Awal
+    refresh_display()
+
+# (Sisa kode di bawah ini tidak ada perubahan)
 # =============================================================================
 def _parse_delivery_data(routing_results):
     parsed_data = []
@@ -297,18 +366,30 @@ def _parse_delivery_data(routing_results):
             for trip in trips:
                 time_window = trip.get('timeWindow', {})
                 outlet_name = ""
+                so_numbers = ""
+                visit_name_raw = trip.get('visitName', '')
+                
                 is_hub_trip = trip.get('isHub', False)
                 if is_hub_trip:
                     outlet_name = "HUB"
                     if not trip.get('eta') and not trip.get('etd'):
                         continue
                 else:
-                    if not trip.get('visitName') or not time_window.get('startTime') or not trip.get('eta'):
+                    if not visit_name_raw or not time_window.get('startTime') or not trip.get('eta'):
                         continue
-                    outlet_name = extract_outlet_name(trip.get('visitName'))
+                    outlet_name = extract_outlet_name(visit_name_raw)
+                    
+                    match = re.search(r'S[SO]\d', visit_name_raw)
+                    if match:
+                        so_start_index = match.start()
+                        so_substring = visit_name_raw[so_start_index:]
+                        so_list = [so.strip() for so in so_substring.split(',')]
+                        so_numbers = ', '.join(so_list)
+
                 stop_details.append({
                     "order": trip.get('order', 999),
                     "visitName": outlet_name,
+                    "soNumbers": so_numbers, 
                     "startTime": time_window.get('startTime', 'N/A'),
                     "endTime": time_window.get('endTime', 'N/A'),
                     "eta": trip.get('eta', 'N/A'),
@@ -379,15 +460,12 @@ def process_data(date_input, app_instance):
             app_instance.after(1000, app_instance.destroy) 
             return
             
-        # Perubahan No. 1: Logika untuk mendapatkan nama lokasi lengkap
         config = load_config()
         constants = load_constants()
         lokasi_code = config.get('lokasi', 'Unknown')
         
         location_id_map = constants.get('location_id', {})
-        # Buat peta terbalik: { "plck": "Cikarang" }
         reversed_location_map = {v: k for k, v in location_id_map.items()}
-        # Cari nama lengkap, jika tidak ada, gunakan kode aslinya
         lokasi_cabang = reversed_location_map.get(lokasi_code, lokasi_code)
         
         hub_id = get_hub_id() 

@@ -4,6 +4,7 @@ from openpyxl.styles import Alignment
 from openpyxl.utils import get_column_letter
 import os
 import pandas as pd
+import numpy as np
 import requests
 import traceback
 import sys
@@ -62,13 +63,23 @@ def process_routing_data(date_formats, gui_instance):
         constants = load_constants()
         secrets = load_secret()
         lokasi_code = config.get('lokasi')
-        master_data = load_master_data(lokasi_cabang=lokasi_code)
-        if master_data is None:
-            return
+        
+        # =======================================================
+        # ▼▼▼ LOGIKA BARU UNTUK MENGGABUNGKAN PLCK + PLDM ▼▼▼
+        # =======================================================
+        codes_to_process = ['plck', 'pldm'] if lokasi_code == 'plck' else [lokasi_code]
+        
+        # Muat data master berdasarkan kode yang diproses
+        # Asumsi: load_master_data() tanpa argumen akan memuat semua data
+        full_master_data = load_master_data()
+        if full_master_data is None: return
 
-        master_data_df = master_data["df"]
-        hub_ids = master_data["hub_ids"]
-
+        # Filter master data sesuai dengan kode lokasi yang dibutuhkan
+        master_data_df = full_master_data["df"]
+        master_data_df = master_data_df[master_data_df['Email'].str.contains('|'.join(codes_to_process), na=False)]
+        hub_ids = full_master_data["hub_ids"]
+        # =======================================================
+        
         if not config:
             show_error_message("Gagal", ERROR_MESSAGES["CONFIG_FILE_ERROR"])
             return
@@ -78,77 +89,82 @@ def process_routing_data(date_formats, gui_instance):
         if not secrets:
             show_error_message("Gagal", ERROR_MESSAGES["SECRET_FILE_ERROR"])
             return
-        if master_data_df is None or master_data_df.empty:
+        if master_data_df.empty:
             show_error_message("Gagal", ERROR_MESSAGES["MASTER_DATA_MISSING"])
             return
 
         master_data_map = dict(zip(master_data_df['Email'], master_data_df['Driver']))
-        hub_id = hub_ids.get(lokasi_code)
         api_token = secrets.get('token')
         location_id = constants.get('location_id', {})
-        lokasi_name = next((name for name, code in location_id.items() if code == lokasi_code), lokasi_code)
+        
+        # Tentukan nama lokasi untuk nama file (jika plck, tambahkan pldm)
+        if lokasi_code == 'plck':
+            lokasi_name = "PLCK & PLDM"
+        else:
+            lokasi_name = next((name for name, code in location_id.items() if code == lokasi_code), lokasi_code)
 
         if not api_token:
             show_error_message("Error Token API", ERROR_MESSAGES["API_TOKEN_MISSING"])
-            return
-        if not hub_id:
-            show_error_message("Konfigurasi Salah", ERROR_MESSAGES["HUB_ID_MISSING"])
             return
 
         base_url = constants.get('base_url')
         api_url = f"{base_url}/results"
         headers = {'Authorization': f'Bearer {api_token}'}
 
-        # kalau user pilih hari Minggu, langsung dipakai
-        if date_obj.weekday() == 6:  # 6 = Minggu
+        if date_obj.weekday() == 6:
             adjusted_date = date_obj
         else:
-            # default kurangi 1 hari
             adjusted_date = date_obj - timedelta(days=1)
-            # kalau hasilnya jatuh Minggu, mundur lagi jadi -2
             if adjusted_date.weekday() == 6:
                 adjusted_date = date_obj - timedelta(days=2)
 
         date_str = adjusted_date.strftime('%Y-%m-%d')
+        
+        # =======================================================
+        # ▼▼▼ LOGIKA PANGGILAN API BERULANG UNTUK SETIAP HUB ▼▼▼
+        # =======================================================
+        all_response_data = []
+        hub_ids_to_fetch = [hub_ids.get(code) for code in codes_to_process if hub_ids.get(code)]
 
-        params = {
-            'dateFrom': date_str,
-            'dateTo': date_str,
-            'limit': 100,
-            'hubId': hub_id
-        }
-
-        response_data = None
-
-        try:
-            response = requests.get(api_url, headers=headers, params=params, timeout=30)
-            response.raise_for_status()
-            data_check = response.json()
-            
-
-            if 'data' in data_check and 'data' in data_check['data'] and data_check['data']['data']:
-                response_data = data_check
-            else:
-                show_error_message("Data Tidak Ditemukan", ERROR_MESSAGES["DATA_NOT_FOUND"])
-                return
-        except requests.exceptions.RequestException as e:
-            handle_requests_error(e)
+        if not hub_ids_to_fetch:
+            show_error_message("Konfigurasi Salah", ERROR_MESSAGES["HUB_ID_MISSING"])
             return
+            
+        for hub_id in hub_ids_to_fetch:
+            params = {
+                'dateFrom': date_str, 'dateTo': date_str,
+                'limit': 100, 'hubId': hub_id
+            }
+            try:
+                response = requests.get(api_url, headers=headers, params=params, timeout=30)
+                response.raise_for_status()
+                data_check = response.json()
+                if 'data' in data_check and 'data' in data_check['data'] and data_check['data']['data']:
+                    all_response_data.extend(data_check['data']['data'])
+            except requests.exceptions.RequestException as e:
+                handle_requests_error(e)
+                return
+        
+        if not all_response_data:
+            show_error_message("Data Tidak Ditemukan", ERROR_MESSAGES["DATA_NOT_FOUND"])
+            return
+        # =======================================================
 
-        # === Proses routing data ===
         processed_data = []
         first_tags_list = []
         processed_assignees_for_usage = set()
 
         routing_results = [
-            item for item in response_data['data']['data']
+            item for item in all_response_data
             if item.get("dispatchStatus") == "done"
         ]
+        
         for item in routing_results:
             if 'result' in item and 'routing' in item['result']:
                 for route in item['result']['routing']:
                     assignee_email = route.get('assignee')
-                    if not assignee_email or lokasi_code not in assignee_email:
+                    # Filter email tidak lagi diperlukan karena sudah difilter via hub_id dan master data
+                    if not assignee_email:
                         continue
 
                     if assignee_email not in processed_assignees_for_usage:
@@ -167,35 +183,24 @@ def process_routing_data(date_formats, gui_instance):
     
                     if trips:
                         def is_hub_true(val):
-                            if isinstance(val, bool):
-                                return val
-                            if isinstance(val, str):
-                                return val.strip().lower() in ('true', '1', 'yes')
-                            try:
-                                return int(val) == 1
-                            except Exception:
-                                return False
+                            if isinstance(val, bool): return val
+                            if isinstance(val, str): return val.strip().lower() in ('true', '1', 'yes')
+                            try: return int(val) == 1
+                            except Exception: return False
 
                         non_hub_trips = [t for t in trips if not is_hub_true(t.get('isHub', False))]
-
                         total_weight = sum(safe_float(t.get("weight", 0)) for t in non_hub_trips)
                         total_volume = sum(safe_float(t.get("volume", 0)) for t in non_hub_trips)
                         total_distance = sum(safe_float(t.get("distance", 0)) for t in trips)
-
                         total_minutes = sum((t.get("travelTime", 0) + t.get("visitTime", 0) + t.get("waitingTime", 0)) for t in trips)
                         hours, minutes = divmod(total_minutes, 60)
                         ship_duration = f"'{hours}:{minutes:02d}"
-
                         vehicle_max_weight = route.get("vehicleMaxWeight", 1) or 1
                         vehicle_max_volume = route.get("vehicleMaxVolume", 1) or 1
-
                         weight_percentage = (total_weight / vehicle_max_weight) * 100 if vehicle_max_weight else None
                         volume_percentage = (total_volume / vehicle_max_volume) * 100 if vehicle_max_volume else None
                     else:
-                        total_distance = None
-                        ship_duration = None
-                        weight_percentage = None
-                        volume_percentage = None
+                        total_distance, ship_duration, weight_percentage, volume_percentage = None, None, None, None
 
                     processed_data.append({
                         'Assignee': driver_name,
@@ -209,7 +214,7 @@ def process_routing_data(date_formats, gui_instance):
                     })
 
         if not processed_data:
-            show_error_message("Data Tidak Ditemukan", ERROR_MESSAGES["DATA_NOT_FOUND"])
+            show_error_message("Data Tidak Ditemukan", "Tidak ada data 'done' yang ditemukan untuk diproses.")
             return
 
         df_api = pd.DataFrame(processed_data)
@@ -238,7 +243,26 @@ def process_routing_data(date_formats, gui_instance):
         drivers_in_api = set(df_api_grouped['Assignee']) if not df_api_grouped.empty else set()
         missing_drivers = all_master_drivers - drivers_in_api
         df_missing = pd.DataFrame([{'Assignee': driver} for driver in missing_drivers])
-        df_final = pd.concat([df_api_grouped, df_missing], ignore_index=True).sort_values(by='Assignee', ascending=True).reset_index(drop=True)
+        
+        df_final = pd.concat([df_api_grouped, df_missing], ignore_index=True)
+
+        # Blok pengurutan SEWA (tidak berubah)
+        df_final['is_sewa'] = (
+            df_final['Vehicle Name'].str.contains('SEWA', case=False, na=False) |
+            df_final['Assignee'].str.contains('SEWA', case=False, na=False)
+        ).astype(int)
+        conditions = [
+            df_final['Assignee'].str.contains('DRY', case=False, na=False),
+            df_final['Assignee'].str.contains('FRZ', case=False, na=False)
+        ]
+        choices = [1, 2]
+        df_final['sewa_category'] = np.select(conditions, choices, default=3)
+        df_final = df_final.sort_values(
+            by=['is_sewa', 'sewa_category', 'Assignee'],
+            ascending=[True, True, True]
+        ).reset_index(drop=True)
+        df_final = df_final.drop(columns=['is_sewa', 'sewa_category'])
+
         column_order = ['Vehicle Name', 'Assignee', 'Weight Percentage', 'Volume Percentage', 'Total Distance (m)', 'Total Visits', 'Total Delivered', 'Ship Duration']
         df_final = df_final.reindex(columns=column_order)
 

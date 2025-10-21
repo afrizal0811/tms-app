@@ -1,5 +1,6 @@
 from openpyxl.styles import Alignment, PatternFill
 import pandas as pd
+import numpy as np  # Import library numpy
 import re
 import requests
 import traceback
@@ -65,7 +66,7 @@ def process_task_data(task, master_map, real_sequence_map):
     customer_name = task.get('customerName', '')
 
     # Time processing
-    t_arrival_utc = pd.to_datetime(task.get('klikJikaAndaSudahSampai'), errors='coerce')
+    t_arrival_utc = pd.to_datetime(task.get('klikJikaSudahSampai'), errors='coerce')
     t_departure_utc = pd.to_datetime(task.get('doneTime'), errors='coerce')
 
     t_arrival_local = t_arrival_utc.tz_convert('Asia/Jakarta') if pd.notna(t_arrival_utc) else pd.NaT
@@ -311,7 +312,36 @@ def panggil_api_dan_simpan(dates, app_instance):
             'ET Sequence': processed['et_sequence'], 'Real Sequence': processed['real_sequence'], 'Is Same Sequence': processed['is_same_sequence']
         })
 
-    df_delivered = pd.DataFrame(list(summary_data.values())).sort_values(by='Driver', ascending=True)
+    df_delivered = pd.DataFrame(list(summary_data.values()))
+    
+    # =======================================================
+    # ▼▼▼ BLOK LOGIKA PENGURUTAN BARU UNTUK 'Total Delivered' ▼▼▼
+    # =======================================================
+    if not df_delivered.empty:
+        # 1. Buat kolom kunci untuk menandai baris 'SEWA' (nilai 1) vs 'Non-SEWA' (nilai 0)
+        df_delivered['is_sewa'] = (
+            df_delivered['License Plat'].str.contains('SEWA', case=False, na=False) |
+            df_delivered['Driver'].str.contains('SEWA', case=False, na=False)
+        ).astype(int)
+
+        # 2. Buat kolom kunci sekunder untuk grup SEWA (DRY=1, FRZ=2, Lainnya=3)
+        conditions = [
+            df_delivered['Driver'].str.contains('DRY', case=False, na=False),
+            df_delivered['Driver'].str.contains('FRZ', case=False, na=False)
+        ]
+        choices = [1, 2]
+        df_delivered['sewa_category'] = np.select(conditions, choices, default=3)
+
+        # 3. Lakukan pengurutan multi-level
+        df_delivered = df_delivered.sort_values(
+            by=['is_sewa', 'sewa_category', 'Driver'],
+            ascending=[True, True, True]
+        ).reset_index(drop=True)
+
+        # 4. Hapus kolom kunci sementara
+        df_delivered = df_delivered.drop(columns=['is_sewa', 'sewa_category'])
+    # =======================================================
+
     df_pending = pd.DataFrame(pending_so_data)
     
     if not df_pending.empty:

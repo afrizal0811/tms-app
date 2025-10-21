@@ -123,15 +123,15 @@ def process_ro_vs_real(df, master_driver_df):
     df_proc['assignedVehicle'] = df_proc.apply(
         lambda r: email_to_plat.get(r['assignee_email'], r['assignedVehicle']) if not r['assignedVehicle'] else r['assignedVehicle'], axis=1
     )
-    for col in ['Klik Jika Anda Sudah Sampai','doneTime']:
+    for col in ['Klik Jika Sudah Sampai','doneTime']:
         if col in df_proc.columns: convert_datetime_column(df_proc,col)
-    df_proc['Actual Visit Time'] = df_proc.apply(lambda r: calculate_actual_visit(r.get('Klik Jika Anda Sudah Sampai',''), r.get('doneTime','')),axis=1)
+    df_proc['Actual Visit Time'] = df_proc.apply(lambda r: calculate_actual_visit(r.get('Klik Jika Sudah Sampai',''), r.get('doneTime','')),axis=1)
     df_proc['doneTime_parsed'] = pd.to_datetime(df_proc['doneTime'], format='%H:%M', errors='coerce')
     df_proc['Real Seq'] = df_proc.groupby('assignee')['doneTime_parsed'].rank(method='dense').astype('Int64')
 
     df_proc.rename(columns={
         'assignedVehicle':'License Plat','assignee':'Driver','title':'Customer','label':'Status Delivery',
-        'Klik Jika Anda Sudah Sampai':'Actual Arrival','doneTime':'Actual Departure',
+        'Klik Jika Sudah Sampai':'Actual Arrival','doneTime':'Actual Departure',
         'routePlannedOrder':'ET Sequence','Real Seq':'Real Sequence'
     }, inplace=True)
     if df_proc.columns.duplicated().any():
@@ -190,12 +190,12 @@ def process_pending_so(df, master_driver_df):
     if df_filtered.empty:
         return None
 
-    for col in ['Klik Jika Anda Sudah Sampai', 'doneTime', 'eta', 'etd']:
+    for col in ['Klik Jika Sudah Sampai', 'doneTime', 'eta', 'etd']:
         if col in df_filtered.columns:
             convert_datetime_column(df_filtered, col)
         
     df_filtered['Actual Visit Time'] = df_filtered.apply(
-        lambda r: calculate_actual_visit(r.get('Klik Jika Anda Sudah Sampai',''), r.get('doneTime','')), axis=1
+        lambda r: calculate_actual_visit(r.get('Klik Jika Sudah Sampai',''), r.get('doneTime','')), axis=1
     )
 
     df_filtered['Customer ID'] = df_filtered['title'].apply(
@@ -233,13 +233,13 @@ def process_pending_so(df, master_driver_df):
         'assignedVehicle', 'Driver',
         'Faktur Batal/ Tolakan SO', 'Terkirim Sebagian', 'Pending', 'Pending GR',
         'Reason', 'Open Time', 'Close Time', 'eta', 'etd',
-        'Klik Jika Anda Sudah Sampai', 'doneTime', 'Visit Time', 'Actual Visit Time',
+        'Klik Jika Sudah Sampai', 'doneTime', 'Visit Time', 'Actual Visit Time',
         'Customer ID', 'routePlannedOrder', 'Temperature'
     ]
     df_final = df_filtered[cols].rename(columns={
         'assignedVehicle': 'License Plat',
         'eta': 'ETA', 'etd': 'ETD',
-        'Klik Jika Anda Sudah Sampai': 'Actual Arrival',
+        'Klik Jika Sudah Sampai': 'Actual Arrival',
         'doneTime': 'Actual Departure',
         'routePlannedOrder': 'ET Sequence'
     })
@@ -310,7 +310,7 @@ def main():
     if not input_file:
         show_info_message("Dibatalkan", INFO_MESSAGES["CANCELED_BY_USER"]); return
     df_original = pd.read_excel(input_file)
-    required_columns = ['assignedVehicle','assignee','Alasan Tidak Bisa Dikunjungi','Alasan Batal','Open Time','Close Time','eta','etd','Klik Jika Anda Sudah Sampai','doneTime','Visit Time','routePlannedOrder']
+    required_columns = ['assignedVehicle','assignee','Alasan Tidak Bisa Dikunjungi','Alasan Batal','Open Time','Close Time','eta','etd','Klik Jika Sudah Sampai','doneTime','Visit Time','routePlannedOrder']
     if any(col not in df_original.columns for col in required_columns):
         show_error_message("Proses Gagal", ERROR_MESSAGES["INVALID_FILE"].format(details="Upload file Export Task dengan benar!")); return
     email_prefixes = df_original["assignee"].dropna().astype(str).str.extract(r'kendaraan\.([^.@]+)',expand=False).dropna().str.lower().unique()

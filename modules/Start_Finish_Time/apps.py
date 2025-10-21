@@ -3,6 +3,7 @@ from openpyxl.styles import PatternFill, Alignment
 from openpyxl.utils import get_column_letter
 import openpyxl
 import pandas as pd
+import numpy as np  # Import library numpy
 import requests
 import traceback
 # Impor fungsi bantuan dari shared_utils dan gui_utils
@@ -92,10 +93,12 @@ def simpan_file_excel(dataframe, lokasi_name, tanggal_str):
         show_info_message("Dibatalkan", INFO_MESSAGES["CANCELED_BY_USER"])
         return
 
-    dataframe.to_excel(filename, index=False)
+    # Perubahan: Ubah nama sheet menjadi 'Data'
+    dataframe.to_excel(filename, index=False, sheet_name='Data')
 
     wb = openpyxl.load_workbook(filename)
-    ws = wb.active
+    ws = wb.active # Akan otomatis mengambil sheet 'Data'
+    
     kolom_rata_tengah = ['Plat', 'Start Date', 'Start Time', 'Finish Date', 'Finish Time', 'Tracked Time', 'Total Duration', 'Total Distance']
     col_idx_map = {col_name: idx + 1 for idx, col_name in enumerate(dataframe.columns)}
     center_alignment = Alignment(horizontal='center', vertical='center')
@@ -221,7 +224,6 @@ def ambil_data(dates, app_instance=None):
                     item_copy["finish"]["totalDuration"] = convert_to_jam(item_copy["finish"]["totalDuration"])
             
             if "trackedTime" in item_copy:
-                # Pastikan trackedTime selalu positif sebelum diubah ke jam:menit
                 item_copy["trackedTime"] = abs(item_copy["trackedTime"])
                 item_copy["trackedTime"] = convert_to_jam(item_copy["trackedTime"])
             
@@ -250,7 +252,6 @@ def ambil_data(dates, app_instance=None):
         df_merged['Driver'] = df_merged['Driver'].fillna(df_merged['Email'])
         df_merged['Plat'] = df_merged['Plat'].fillna('')
         df_merged.drop(columns=['Email'], inplace=True)
-        df_merged = df_merged.sort_values(by='Driver', ascending=True)
 
     except Exception as e:
         show_error_message("Error", ERROR_MESSAGES["UNKNOWN_ERROR"].format(error_detail=e))
@@ -279,8 +280,7 @@ def ambil_data(dates, app_instance=None):
 
     final_df['finish.totalDuration_menit'] = final_df['finish.totalDuration'].apply(durasi_ke_menit)
     final_df['finish.totalDistance'] = pd.to_numeric(final_df['finish.totalDistance'], errors='coerce').fillna(0)
-    final_df = final_df.sort_values(by='Driver')
-
+    
     def filter_duplikat(grup):
         idx_to_drop = set()
         for i in range(len(grup)):
@@ -300,7 +300,34 @@ def ambil_data(dates, app_instance=None):
     kosong_df = final_df[final_df['finish.totalDuration_menit'] == 0]
     final_df = pd.concat([filtered_df_final, kosong_df], ignore_index=True)
     final_df.drop(columns=['finish.totalDuration_menit'], inplace=True)
-    final_df = final_df.sort_values(by='Driver', ascending=True)
+
+    # =======================================================
+    # ▼▼▼ BLOK LOGIKA PENGURUTAN BARU ▼▼▼
+    # =======================================================
+    if not final_df.empty:
+        # 1. Buat kolom kunci untuk menandai baris 'SEWA' (nilai 1) vs 'Non-SEWA' (nilai 0)
+        final_df['is_sewa'] = (
+            final_df['Plat'].str.contains('SEWA', case=False, na=False) |
+            final_df['Driver'].str.contains('SEWA', case=False, na=False)
+        ).astype(int)
+
+        # 2. Buat kolom kunci sekunder untuk grup SEWA (DRY=1, FRZ=2, Lainnya=3)
+        conditions = [
+            final_df['Driver'].str.contains('DRY', case=False, na=False),
+            final_df['Driver'].str.contains('FRZ', case=False, na=False)
+        ]
+        choices = [1, 2]
+        final_df['sewa_category'] = np.select(conditions, choices, default=3)
+
+        # 3. Lakukan pengurutan multi-level
+        final_df = final_df.sort_values(
+            by=['is_sewa', 'sewa_category', 'Driver'],
+            ascending=[True, True, True]
+        ).reset_index(drop=True)
+
+        # 4. Hapus kolom kunci sementara
+        final_df = final_df.drop(columns=['is_sewa', 'sewa_category'])
+    # =======================================================
 
     tanggal_format_titik = tanggal_str.replace('-', '.')
     return simpan_file_excel(final_df, lokasi_name, tanggal_format_titik)
@@ -319,7 +346,7 @@ def main():
         success = ambil_data(dates, app_instance)
         if success and app_instance is not None:
             try:
-                app_instance.destroy()   # tutup window setelah selesai
+                app_instance.destroy()
             except Exception:
                 pass
 
