@@ -3,7 +3,7 @@ from openpyxl.styles import PatternFill, Alignment
 from openpyxl.utils import get_column_letter
 import openpyxl
 import pandas as pd
-import numpy as np  # Import library numpy
+import numpy as np
 import requests
 import traceback
 # Impor fungsi bantuan dari shared_utils dan gui_utils
@@ -20,13 +20,12 @@ from utils.function import (
 from utils.gui import create_date_picker_window
 from utils.messages import ERROR_MESSAGES, INFO_MESSAGES
 from utils.api_handler import handle_requests_error
+
 # =============================================================================
 # BAGIAN 1: FUNGSI-FUNGSI BANTU (HELPER FUNCTIONS)
 # =============================================================================
 
-def extract_email_from_id(_id):
-    parts = _id.split('_')
-    return parts[1] if len(parts) > 1 else _id
+# Fungsi extract_email_from_id dihapus karena tidak lagi digunakan
 
 def convert_to_jam(menit):
     menit = int(round(menit)) 
@@ -37,11 +36,12 @@ def convert_to_jam(menit):
 
 def tambah_7_jam(waktu_str):
     try:
-        # parse langsung ISO8601 (dengan timezone offset)
         waktu = datetime.fromisoformat(waktu_str)
-    except ValueError:
-        # fallback kalau formatnya tanpa offset
-        waktu = datetime.strptime(waktu_str, "%Y-%m-%d %H:%M:%S")
+    except (ValueError, TypeError):
+        if isinstance(waktu_str, str):
+             waktu = datetime.strptime(waktu_str, "%Y-%m-%d %H:%M:%S")
+        else:
+            return '' # Kembalikan string kosong jika input tidak valid
     return (waktu + timedelta(hours=7)).strftime("%Y-%m-%d %H:%M:%S")
 
 def simpan_file_excel(dataframe, lokasi_name, tanggal_str):
@@ -50,8 +50,7 @@ def simpan_file_excel(dataframe, lokasi_name, tanggal_str):
 
     kolom_baru = {
         'Driver': 'Driver', 'startTime': 'Start Trip', 'finish.finishTime': 'Finish Trip',
-        'trackedTime': 'Tracked Time', 'finish.totalDuration': 'Total Duration',
-        'finish.totalDistance': 'Total Distance',
+        'trackedTime': 'Duration', 
     }
     dataframe = dataframe.rename(columns=kolom_baru)
 
@@ -69,20 +68,12 @@ def simpan_file_excel(dataframe, lokasi_name, tanggal_str):
 
     dataframe = dataframe.rename(columns={'Start Trip': 'Start Time', 'Finish Trip': 'Finish Time'})
 
-    if 'Tracked Time' in dataframe.columns:
-        dataframe['Tracked Time'] = dataframe['Tracked Time'].astype(str).apply(lambda x: f"'{x}" if pd.notna(x) and x != 'None' and x != '' else x)
-    if 'Total Duration' in dataframe.columns:
-        dataframe['Total Duration'] = dataframe['Total Duration'].astype(str).apply(lambda x: f"'{x}" if pd.notna(x) and x != 'None' and x != '' else x)
-
-    if 'Total Distance' in dataframe.columns:
-        dataframe['Total Distance'] = pd.to_numeric(dataframe['Total Distance'], errors='coerce')
-        dataframe['Total Distance'] = dataframe['Total Distance'].round(2)
-        dataframe['Total Distance'] = dataframe['Total Distance'].astype(object)
-        dataframe.loc[dataframe['Total Distance'] == 0, 'Total Distance'] = ''
-
+    if 'Duration' in dataframe.columns:
+        dataframe['Duration'] = dataframe['Duration'].astype(str).apply(lambda x: f"'{x}" if pd.notna(x) and x != 'None' and x != '' else x)
+    
     urutan_kolom = [
         'Plat', 'Driver', 'Start Date', 'Start Time', 'Finish Date',
-        'Finish Time', 'Tracked Time', 'Total Duration', 'Total Distance',
+        'Finish Time', 'Duration',
     ]
     urutan_kolom_final = [col for col in urutan_kolom if col in dataframe.columns]
     dataframe = dataframe[urutan_kolom_final]
@@ -93,13 +84,12 @@ def simpan_file_excel(dataframe, lokasi_name, tanggal_str):
         show_info_message("Dibatalkan", INFO_MESSAGES["CANCELED_BY_USER"])
         return
 
-    # Perubahan: Ubah nama sheet menjadi 'Data'
     dataframe.to_excel(filename, index=False, sheet_name='Data')
 
     wb = openpyxl.load_workbook(filename)
-    ws = wb.active # Akan otomatis mengambil sheet 'Data'
+    ws = wb.active
     
-    kolom_rata_tengah = ['Plat', 'Start Date', 'Start Time', 'Finish Date', 'Finish Time', 'Tracked Time', 'Total Duration', 'Total Distance']
+    kolom_rata_tengah = ['Plat', 'Start Date', 'Start Time', 'Finish Date', 'Finish Time', 'Duration']
     col_idx_map = {col_name: idx + 1 for idx, col_name in enumerate(dataframe.columns)}
     center_alignment = Alignment(horizontal='center', vertical='center')
 
@@ -119,6 +109,22 @@ def simpan_file_excel(dataframe, lokasi_name, tanggal_str):
         except ValueError:
             pass
             
+    # --- BLOK BARU UNTUK WARNA FILL ---
+    # Hex RRGGBB (tanpa #)
+    fill_color = PatternFill(start_color="f6edc3",
+                             end_color="f6edc3",
+                             fill_type="solid")
+    
+    kolom_warna = ['Start Time', 'Finish Time', 'Duration']
+
+    for col_name in kolom_warna:
+        if col_name in col_idx_map:
+            col_number = col_idx_map[col_name]
+            # Mulai dari baris 1 (header) sampai baris terakhir
+            for row_idx in range(1, ws.max_row + 1):
+                ws.cell(row=row_idx, column=col_number).fill = fill_color
+    # --- AKHIR BLOK BARU ---
+
     merah_fill = PatternFill(start_color="FF0000", end_color="FF0000", fill_type="solid")
     start_date_col_idx = col_idx_map.get('Start Date')
     finish_date_col_idx = col_idx_map.get('Finish Date')
@@ -132,7 +138,7 @@ def simpan_file_excel(dataframe, lokasi_name, tanggal_str):
 
     wb.save(filename)
     open_file_externally(filename)
-    return True 
+    return True
 
 # =============================================================================
 # BAGIAN 2: FUNGSI PEMROSESAN UTAMA
@@ -183,7 +189,7 @@ def ambil_data(dates, app_instance=None):
     base_url = constants.get('base_url')
     url = f"{base_url}/location-histories"
     params = {
-        "limit": 500, "startFinish": "true", "fields": "finish,startTime",
+        "limit": 1000, "startFinish": "true", "fields": "finish,startTime,email",
         "timeTo": f"{tanggal_input} 23:59:59", "timeFrom": f"{tanggal_from} 00:00:00",
         "timeBy": "createdTime"
     }
@@ -202,24 +208,23 @@ def ambil_data(dates, app_instance=None):
         ))
         return False
 
-    items = response.json().get("tasks", {}).get("data", [])
     if not items:
         show_error_message("Error", ERROR_MESSAGES["DATA_NOT_FOUND"])
         return
 
     filtered_items = []
     for item in items:
+        email = item.get("email")
+        if not email or lokasi_code not in email:
+            continue
         tracked_time = item.get("trackedTime", 0)
         if tracked_time not in [None, 0] \
         and abs(tracked_time) >= 10 \
         and item.get("finish", {}).get("totalDistance", float('inf')) > 5:
-            
-            item_copy = item.copy()
-            item_copy["_id"] = extract_email_from_id(item_copy["_id"])
-            item_copy["startTime"] = tambah_7_jam(item_copy["startTime"])
-            
+            item_copy = item.copy()            
+            item_copy["startTime"] = tambah_7_jam(item_copy.get("startTime"))
             if item_copy.get("finish"):
-                item_copy["finish"]["finishTime"] = tambah_7_jam(item_copy["finish"]["finishTime"])
+                item_copy["finish"]["finishTime"] = tambah_7_jam(item_copy["finish"].get("finishTime"))
                 if "totalDuration" in item_copy["finish"]:
                     item_copy["finish"]["totalDuration"] = convert_to_jam(item_copy["finish"]["totalDuration"])
             
@@ -229,24 +234,30 @@ def ambil_data(dates, app_instance=None):
             
             filtered_items.append(item_copy)
 
-    df_api_data = pd.json_normalize(filtered_items)
-    if df_api_data.empty:
-        show_error_message("Error", ERROR_MESSAGES["DATA_NOT_FOUND"])
+    if not filtered_items:
+        show_error_message("Error", "Tidak ada data yang lolos filter untuk lokasi yang dipilih.")
         return
 
-    df_api_data.rename(columns={"_id": "Email"}, inplace=True)
+    df_api_data = pd.json_normalize(filtered_items)
+    
+    # Ganti nama kolom 'email' menjadi 'Email' agar sesuai dengan master data
+    df_api_data.rename(columns={"email": "Email"}, inplace=True)
+
+    # Pastikan kolom 'startTime' ada sebelum difilter
     if 'startTime' in df_api_data.columns:
         df_api_data['startTime'] = pd.to_datetime(df_api_data['startTime'])
         df_api_data = df_api_data[df_api_data['startTime'].dt.strftime("%Y-%m-%d") == tanggal_input]
 
-    try:
-        df_api_data = df_api_data[df_api_data['Email'].str.contains(lokasi_code, na=False, case=False)]
-        if df_api_data.empty:
-            show_error_message("Error", ERROR_MESSAGES["DATA_NOT_FOUND"])
-            return
+    if df_api_data.empty:
+        show_error_message("Error", "Tidak ada data yang cocok dengan tanggal yang dipilih setelah filter.")
+        return
 
+    try:
         mapping_df = master_data["df"]
+        # Filter master data sesuai lokasi
         mapping_df_filtered = mapping_df[mapping_df['Email'].str.contains(lokasi_code, na=False, case=False)]
+        
+        # Gabungkan data API yang sudah difilter dengan master data yang sudah difilter
         df_merged = df_api_data.merge(mapping_df_filtered[['Email', 'Driver', 'Plat']], on='Email', how='left')
 
         df_merged['Driver'] = df_merged['Driver'].fillna(df_merged['Email'])
@@ -301,33 +312,23 @@ def ambil_data(dates, app_instance=None):
     final_df = pd.concat([filtered_df_final, kosong_df], ignore_index=True)
     final_df.drop(columns=['finish.totalDuration_menit'], inplace=True)
 
-    # =======================================================
-    # ▼▼▼ BLOK LOGIKA PENGURUTAN BARU ▼▼▼
-    # =======================================================
+    # Blok pengurutan SEWA
     if not final_df.empty:
-        # 1. Buat kolom kunci untuk menandai baris 'SEWA' (nilai 1) vs 'Non-SEWA' (nilai 0)
         final_df['is_sewa'] = (
             final_df['Plat'].str.contains('SEWA', case=False, na=False) |
             final_df['Driver'].str.contains('SEWA', case=False, na=False)
         ).astype(int)
-
-        # 2. Buat kolom kunci sekunder untuk grup SEWA (DRY=1, FRZ=2, Lainnya=3)
         conditions = [
             final_df['Driver'].str.contains('DRY', case=False, na=False),
             final_df['Driver'].str.contains('FRZ', case=False, na=False)
         ]
         choices = [1, 2]
         final_df['sewa_category'] = np.select(conditions, choices, default=3)
-
-        # 3. Lakukan pengurutan multi-level
         final_df = final_df.sort_values(
             by=['is_sewa', 'sewa_category', 'Driver'],
             ascending=[True, True, True]
         ).reset_index(drop=True)
-
-        # 4. Hapus kolom kunci sementara
         final_df = final_df.drop(columns=['is_sewa', 'sewa_category'])
-    # =======================================================
 
     tanggal_format_titik = tanggal_str.replace('-', '.')
     return simpan_file_excel(final_df, lokasi_name, tanggal_format_titik)
@@ -344,7 +345,8 @@ def main():
 
     def process_wrapper(dates, app_instance):
         success = ambil_data(dates, app_instance)
-        if success and app_instance is not None:
+        # Hancurkan jendela GUI setelah proses selesai, baik berhasil maupun gagal
+        if app_instance is not None:
             try:
                 app_instance.destroy()
             except Exception:
