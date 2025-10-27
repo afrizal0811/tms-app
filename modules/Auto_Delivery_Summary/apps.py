@@ -1,12 +1,11 @@
-from openpyxl.styles import Alignment, PatternFill
+from openpyxl.styles import Alignment, PatternFill, Font
 import pandas as pd
 import numpy as np # Import numpy for sorting
 import re
 import requests
 import traceback
 import math
-import json # Keep import for potential error handling
-from datetime import datetime, timedelta # Add timedelta
+from openpyxl.comments import Comment
 from utils.function import (
     get_save_path,
     load_config,
@@ -126,6 +125,7 @@ def process_task_data_code1(task, master_map, real_sequence_map):
 
     return {
         'task_id': task['_id'],
+        'flow': task.get('flow', ''),
         'license_plat': license_plat, # Variabel baru
         'driver_name': driver_name, # Variabel baru
         'assignee_email': final_assignee_email, # Variabel baru
@@ -214,6 +214,7 @@ def panggil_api_dan_simpan(dates, app_instance):
     LOKASI_FILTER = config.get('lokasi') # Digunakan untuk filter master & real sequence
     HUB_ID = hub_ids.get(LOKASI_FILTER)
     location_id = constants.get('location_id', {})
+    show_pending_gr = LOKASI_FILTER in ["plck", "pldm"]
 
     if not API_TOKEN: show_error_message("Error Token API", ERROR_MESSAGES["API_TOKEN_MISSING"]); return False
     if not LOKASI_FILTER or not HUB_ID: show_error_message("Konfigurasi Salah", ERROR_MESSAGES["HUB_ID_MISSING"]); return False
@@ -263,8 +264,12 @@ def panggil_api_dan_simpan(dates, app_instance):
     # Inisialisasi list untuk data mentah 'Hasil RO vs Real' (berdasarkan assignedTo.name - Logic Code 2)
     ro_vs_real_raw_data = {} # Pakai dict untuk grouping by assignedTo.name
 
-    processed_tasks_list_pending = [] # List terpisah HANYA untuk sheet pending (Logic Code 1)
+    processed_tasks_list_pending = [] 
+    
     pending_undelivered_labels = ["PENDING", "BATAL", "TERIMA SEBAGIAN", "PENDING GR"]
+    
+    if show_pending_gr:
+        pending_undelivered_labels.append("PENDING GR")
 
     # Iterasi utama: Proses data untuk semua sheet
     for task in tasks_data:
@@ -291,12 +296,12 @@ def panggil_api_dan_simpan(dates, app_instance):
                 summary_data_total_delivered_new[driver_name_from_assigned_to] = {
                     'License Plat': plat_td,
                     'Driver': driver_name_from_assigned_to,
-                    'Total Visit': 0,
+                    'Total Outlet': 0,
                     'Total Delivered': 0
                 }
 
-            # Hitung Total Visit
-            summary_data_total_delivered_new[driver_name_from_assigned_to]['Total Visit'] += 1
+            # Hitung Total Outlet
+            summary_data_total_delivered_new[driver_name_from_assigned_to]['Total Outlet'] += 1
 
             # Hitung Total Delivered
             # --- PERBAIKAN: Tangani 'label' string atau list ---
@@ -308,8 +313,12 @@ def panggil_api_dan_simpan(dates, app_instance):
                 labels_td_list = raw_labels_td
             # --- AKHIR PERBAIKAN ---
             
-            # Gunakan list yang sudah bersih
-            is_pending_or_batal_td = any(label in ["PENDING", "BATAL", "TERIMA SEBAGIAN"] for label in labels_td_list)
+            failure_labels_td = ["PENDING", "BATAL", "TERIMA SEBAGIAN"]
+            if not show_pending_gr: # Jika BUKAN plck/pldm
+                failure_labels_td.append("PENDING GR") # Anggap PENDING GR sebagai gagal
+                
+                # Gunakan list yang sudah bersih
+            is_pending_or_batal_td = any(label in failure_labels_td for label in labels_td_list)
             if not is_pending_or_batal_td:
                 summary_data_total_delivered_new[driver_name_from_assigned_to]['Total Delivered'] += 1
 
@@ -352,6 +361,7 @@ def panggil_api_dan_simpan(dates, app_instance):
             ro_sequence_ro = task.get('routePlannedOrder') # Bisa None
 
             task_details_for_ro = {
+                '_task_id': task['_id'],
                 'Flow': flow_ro, # Tambahkan kolom Flow
                 'Plat': plat_ro,
                 'Driver': driver_name_from_assigned_to,
@@ -394,8 +404,9 @@ def panggil_api_dan_simpan(dates, app_instance):
         df_delivered = df_delivered.sort_values(by=['is_sewa', 'sewa_category', 'Driver'], ascending=[True, True, True]).reset_index(drop=True)
         df_delivered = df_delivered.drop(columns=['is_sewa', 'sewa_category'])
 
-    # --- Finalisasi Sheet 'Hasil RO vs Real' (Logic Code 2) ---
     ro_vs_real_final_list = []
+    correct_sequence_map = {}
+
     for driver_name, tasks_list in ro_vs_real_raw_data.items():
         # Sortir task per driver berdasarkan waktu arrival UTC
         sorted_tasks = sorted(tasks_list, key=lambda x: x['_arrival_utc'] if pd.notna(x['_arrival_utc']) else pd.Timestamp.max.tz_localize('UTC'))
@@ -413,6 +424,12 @@ def panggil_api_dan_simpan(dates, app_instance):
             ro_sequence_val = task_detail['RO Sequence']
             is_same = "SAMA" if ro_sequence_val != '-' and pd.to_numeric(ro_sequence_val, errors='coerce') == real_sequence else "TIDAK SAMA"
 
+            task_id = task_detail.get('_task_id')
+            if task_id:
+                correct_sequence_map[task_id] = {
+                    'ro': ro_sequence_val,
+                    'real': real_sequence
+                }
 
             ro_vs_real_final_list.append({
                 'Flow': task_detail['Flow'], # Tambahkan Flow
@@ -450,48 +467,99 @@ def panggil_api_dan_simpan(dates, app_instance):
         df_ro_vs_real = pd.DataFrame(final_ro_rows_formatted) # Buat ulang DataFrame
 
 
-    # --- Finalisasi Sheet 'Hasil Pending SO' (dari processed_tasks_list_pending - Logic Code 1) ---
+# --- Finalisasi Sheet 'Hasil Pending SO' (dari processed_tasks_list_pending - Logic Code 1) ---
+    
+    # --- ▼▼▼ PERBAIKAN UNTUK UnboundLocalError ▼▼▼ ---
     pending_so_data = [] # Re-inisialisasi
-    for processed in processed_tasks_list_pending: # Gunakan list ini
-        # Filter Pending/Batal/Sebagian/Pending GR
-        if (
-            any(label in pending_undelivered_labels for label in processed['labels'])
-            or any(status in pending_undelivered_labels for status in processed.get('status_delivery_list', []))
-        ):
-            match = re.search(r'(C0[0-9]+)', processed['customer_name'])
-            reason = ''
-            if any(label in ["BATAL", "TERIMA SEBAGIAN", "PENDING", "PENDING GR"] for label in processed['labels'] + processed.get('status_delivery_list', [])):
-                reason = processed['alasan']
-            pending_so_data.append({
-                'License Plat': processed['license_plat'], 'Driver': processed['driver_name'],
-                'Faktur Batal/ Tolakan SO': processed['customer_name'] if ("BATAL" in processed['labels'] or "BATAL" in processed.get('status_delivery_list', [])) else '',
-                'Terkirim Sebagian': processed['customer_name'] if ("TERIMA SEBAGIAN" in processed['labels'] or "TERIMA SEBAGIAN" in processed.get('status_delivery_list', [])) else '',
-                'Pending': processed['customer_name'] if (("PENDING" in processed['labels'] or "PENDING" in processed.get('status_delivery_list', [])) and "PENDING GR" not in processed['labels'] and "PENDING GR" not in processed.get('status_delivery_list', [])) else '',
-                'Pending GR': processed['customer_name'] if ("PENDING GR" in processed['labels'] or "PENDING GR" in processed.get('status_delivery_list', [])) else '',
-                'Reason': reason, 'Open Time': processed['open_time'], 'Close Time': processed['close_time'],
-                'ETA': processed['eta'], 'ETD': processed['etd'], 'Actual Arrival': processed['actual_arrival'],
-                'Actual Departure': processed['actual_departure'], 'Visit Time': processed['visit_time'],
-                'Actual Visit Time': processed['actual_visit_time'], 'Customer ID': match.group(1) if match else 'N/A',
-                'ET Sequence': processed['et_sequence'], 'Real Sequence': processed['real_sequence'],
-                'Temperature': ('DRY' if processed['driver_name'].startswith("'DRY'") else 'FRZ' if processed['driver_name'].startswith("'FRZ'") else 'N/A')
-            })
+    fill_values = None   # Inisialisasi fill_values di sini
+    df_pending = pd.DataFrame() # Inisialisasi df_pending di sini
+    # --- ▲▲▲ AKHIR PERBAIKAN ▲▲▲ ---
 
-    df_pending = pd.DataFrame(pending_so_data)
+    for processed in processed_tasks_list_pending: # Gunakan list ini
+        # (Filter tidak perlu diubah)
+        labels_list = processed.get('labels', []) + processed.get('status_delivery_list', [])
+        if not any(label in pending_undelivered_labels for label in labels_list):
+            continue
+
+        # (Logika sequence tidak perlu diubah)
+        task_id = processed['task_id']
+        correct_seqs = correct_sequence_map.get(task_id, {})
+        ro_sequence = correct_seqs.get('ro', processed['et_sequence'])
+        real_sequence = correct_seqs.get('real', processed['real_sequence'])
+        
+        match = re.search(r'(C0[0-9]+)', processed['customer_name'])
+        
+        # (Logika Reason tidak perlu diubah)
+        reason = '' 
+        if any(label in pending_undelivered_labels for label in labels_list):
+            reason = processed['alasan']
+
+        # (Logika pewarnaan tidak perlu diubah)
+        is_pending_gr = "PENDING GR" in labels_list
+        is_pending = "PENDING" in labels_list
+        is_batal = "BATAL" in labels_list
+        is_sebagian = "TERIMA SEBAGIAN" in labels_list
+        fill_color = None
+        is_redirected_gr = (is_pending_gr and not show_pending_gr)
+        if is_redirected_gr:
+            fill_color = "FF0000" 
+        should_be_in_pending_col = (is_pending and not is_pending_gr) or is_redirected_gr
+        
+        # (Logika pending_row tidak perlu diubah)
+        pending_row = {
+            'Flow': processed['flow'],
+            'License Plat': processed['license_plat'], 'Driver': processed['driver_name'],
+            'Faktur Batal/ Tolakan SO': processed['customer_name'] if is_batal else '',
+            'Terkirim Sebagian': processed['customer_name'] if is_sebagian else '',
+            'Pending': processed['customer_name'] if should_be_in_pending_col else '',
+            'Reason': reason,
+            'Open Time': processed['open_time'], 'Close Time': processed['close_time'],
+            'ETA': processed['eta'], 'ETD': processed['etd'], 'Actual Arrival': processed['actual_arrival'],
+            'Actual Departure': processed['actual_departure'], 'Visit Time': processed['visit_time'],
+            'Actual Visit Time': processed['actual_visit_time'], 'Customer ID': match.group(1) if match else 'N/A',
+            'RO Sequence': ro_sequence,
+            'Real Sequence': real_sequence,
+            'Temperature': ('DRY' if processed['driver_name'].startswith("'DRY'") else 'FRZ' if processed['driver_name'].startswith("'FRZ'") else 'N/A'),
+            '_fill': fill_color 
+        }
+
+        if show_pending_gr:
+            pending_row['Pending GR'] = processed['customer_name'] if is_pending_gr else ''
+
+        pending_so_data.append(pending_row)
+
+    # --- ▼▼▼ PERBAIKAN LOGIKA SETELAH LOOP ▼▼▼ ---
+    
+    # 1. Buat DataFrame dari data (jika ada)
+    if pending_so_data:
+        df_pending = pd.DataFrame(pending_so_data)
+
+    # 2. Lakukan sorting, HANYA jika DataFrame tidak kosong
     if not df_pending.empty:
-        cols = list(df_pending.columns)
-        if 'Pending GR' in cols and 'Pending' in cols:
-            pending_gr_idx = cols.index('Pending GR')
-            cols.insert(cols.index('Pending') + 1, cols.pop(pending_gr_idx))
-        if 'Reason' in cols:
-             reason_loc = df_pending.columns.get_loc('Reason')
-             # Gunakan df.insert() untuk DataFrame
-             df_pending.insert(loc=reason_loc + 1, column=' ', value='')
-        # Pastikan kolom diurutkan ulang jika kolom ' ' ditambahkan
-        current_cols = list(df_pending.columns)
-        df_pending = df_pending[current_cols]
+        # Lakukan sorting DULU
         df_pending = df_pending.sort_values(by='Driver', ascending=True)
 
-    # --- Finalisasi Sheet Update Longlat (Logic Code 1) ---
+        # Ekstrak data warna (fill_values) SETELAH di-sort
+        if '_fill' in df_pending.columns:
+            fill_values = df_pending['_fill']
+
+        # Siapkan daftar kolom untuk Excel (tanpa _fill)
+        cols = list(df_pending.columns)
+        if '_fill' in cols:
+            cols.remove('_fill')
+        
+        # Atur ulang 'Pending GR' (jika ada)
+        if 'Pending GR' in cols and 'Pending' in cols:
+            cols.insert(cols.index('Pending') + 1, cols.pop(cols.index('Pending GR')))
+            
+        # Sisipkan kolom kosong ' ' (jika 'Reason' ada)
+        if 'Reason' in cols:
+            df_pending[' '] = '' # Tambahkan kolom ke DataFrame
+            cols.insert(cols.index('Reason') + 1, ' ') # Atur posisinya di daftar
+            
+        # Terapkan urutan kolom ('cols') yang sudah benar
+        df_pending = df_pending[cols] 
+    
     update_longlat_data = []
     for task in tasks_data: # Iterasi tasks_data asli
         new_longlat = task.get('klikLokasiClient', '')
@@ -528,15 +596,52 @@ def panggil_api_dan_simpan(dates, app_instance):
         with pd.ExcelWriter(NAMA_FILE_OUTPUT, engine='openpyxl') as writer:
             # Sheet Total Delivered (Logika agregasi baru - Code 2)
             if not df_delivered.empty:
-                 format_excel_sheet(writer, df_delivered, 'Total Delivered', centered_cols=['Total Visit', 'Total Delivered'])
+                 format_excel_sheet(writer, df_delivered, 'Total Delivered', centered_cols=['Total Outlet', 'Total Delivered'])
             else:
                  pd.DataFrame([{" ": "Tidak ada data kunjungan valid (filter Code 2)"}]) \
                    .to_excel(writer, sheet_name='Total Delivered', index=False)
 
             # Sheet Hasil Pending SO (Logika Code 1)
-            pending_centered_cols = ['Open Time', 'Close Time', 'ETA', 'ETD', 'Actual Arrival', 'Actual Departure', 'Visit Time', 'Actual Visit Time', 'Customer ID', 'ET Sequence', 'Real Sequence', 'Temperature']
-            format_excel_sheet(writer, df_pending, 'Hasil Pending SO', centered_cols=pending_centered_cols, colored_cols={' ': "FFC0CB"})
+            if not df_pending.empty:
+                # --- KASUS JIKA ADA DATA PENDING ---
+                pending_centered_cols = ['Flow', 'Open Time', 'Close Time', 'ETA', 'ETD', 'Actual Arrival', 'Actual Departure', 'Visit Time', 'Actual Visit Time', 'Customer ID', 'RO Sequence', 'Real Sequence', 'Temperature']
+                format_excel_sheet(writer, df_pending, 'Hasil Pending SO', centered_cols=pending_centered_cols, colored_cols={' ': "FFC0CB"})
 
+                # --- ▼▼▼ KODE UNTUK WARNA SEL (REQ 1) ▼▼▼ ---
+                if fill_values is not None:
+                    ws_pending = writer.sheets["Hasil Pending SO"]
+                    bright_red_fill = PatternFill(start_color="FF0000", end_color="FF0000", fill_type="solid")
+                    
+                    # Cari kolom "Pending"
+                    pending_col_idx = None
+                    for cell in ws_pending[1]: # Loop header (baris 1)
+                        if cell.value == "Pending":
+                            pending_col_idx = cell.column # Ambil nomor kolom (mis: 5)
+                            break
+                    
+                    if pending_col_idx is not None:
+                        # Iterate data fill_values (yang sudah di-sort)
+                        for i, fill_val in enumerate(fill_values.values, start=2):
+                            if pd.notna(fill_val): # Jika nilainya bukan None (ada warna)
+                                ws_pending.cell(row=i, column=pending_col_idx).fill = bright_red_fill
+                # --- ▲▲▲ AKHIR KODE WARNA ▲▲▲ ---
+            
+            else:
+                # --- KASUS JIKA TIDAK ADA DATA PENDING ---
+                df_placeholder = pd.DataFrame({"Semua Pengiriman Sukses": []}) # Buat df dgn header saja
+                df_placeholder.to_excel(writer, index=False, sheet_name='Hasil Pending SO')
+                
+                # Ambil worksheet-nya
+                ws_pending = writer.sheets['Hasil Pending SO']
+                
+                # Terapkan bold ke A1
+                ws_pending['A1'].font = Font(bold=True)
+                
+                # Sesuaikan lebar kolom A
+                ws_pending.column_dimensions['A'].width = len("Semua Pengiriman Sukses") + 5
+
+            # <-- KODE YANG HILANG DITAMBAHKAN DI SINI (Sheet 3 & 4)
+            
             # Sheet Hasil RO vs Real (Logika baru - Code 2, dengan kolom Flow & Status Delivery dari Label)
             ro_centered_cols = ['Flow', 'Status Delivery', 'Open Time', 'Close Time', 'Actual Arrival', 'Actual Departure', 'Visit Time', 'Actual Visit Time', 'RO Sequence', 'Real Sequence', 'Is Same Sequence'] # Tambahkan 'Flow'
             format_excel_sheet(writer, df_ro_vs_real, 'Hasil RO vs Real', centered_cols=ro_centered_cols)
@@ -547,6 +652,65 @@ def panggil_api_dan_simpan(dates, app_instance):
                 format_excel_sheet(writer, df_longlat, 'Update Longlat', centered_cols=longlat_centered_cols)
             else:
                 df_longlat.to_excel(writer, index=False, sheet_name='Update Longlat')
+
+            comment_author = "System" # Definisikan author satu kali
+
+            if "Total Delivered" in writer.sheets:
+                ws_ro = writer.sheets["Total Delivered"]
+                
+                # Buat kamus (dictionary) untuk semua komentar di sheet ini
+                comments_ro = {
+                    "Total Delivered": "Total Outlet - (Pending + Batal + Terima Sebagian)",
+                }
+                
+                # Loop baris header satu kali saja
+                for cell in ws_ro[1]: 
+                    if cell.value in comments_ro:
+                        comment_text = comments_ro[cell.value]
+                        cell.comment = Comment(comment_text, comment_author)
+            # --- Komentar untuk sheet 'Hasil RO vs Real' ---
+            if "Hasil RO vs Real" in writer.sheets:
+                ws_ro = writer.sheets["Hasil RO vs Real"]
+                
+                # Buat kamus (dictionary) untuk semua komentar di sheet ini
+                comments_ro = {
+                    "RO Sequence": "Urutan berdasarkan hasil routing",
+                    "Real Sequence": "Urutan kunjungan aktual di lapangan.",
+                }
+                
+                # Loop baris header satu kali saja
+                for cell in ws_ro[1]: 
+                    if cell.value in comments_ro:
+                        comment_text = comments_ro[cell.value]
+                        cell.comment = Comment(comment_text, comment_author)
+
+            # --- Komentar untuk sheet 'Update Longlat' ---
+            if "Update Longlat" in writer.sheets:
+                ws_longlat = writer.sheets["Update Longlat"]
+                
+                # Kamus untuk komentar di sheet Longlat
+                comments_longlat = {
+                    "Beda Jarak (m)": "Perhitungan jarak secara garis lurus antara koordinat lama dan baru."
+                }
+                
+                # Loop baris header satu kali saja
+                for cell in ws_longlat[1]: 
+                    if cell.value in comments_longlat:
+                        comment_text = comments_longlat[cell.value]
+                        cell.comment = Comment(comment_text, comment_author)
+            
+            # --- ▼▼▼ KODE BARU UNTUK KOMENTAR KONDISIONAL (REQ 2) ▼▼▼ ---
+            # Cek apakah ada baris yang dialihkan (fill_values punya data)
+            if fill_values is not None and fill_values.notna().any():
+                if "Hasil Pending SO" in writer.sheets:
+                    ws_pending_comment = writer.sheets["Hasil Pending SO"]
+                    target_header = "Pending"
+                    comment_text = 'Warna merah menandakan harusnya pilih "Pending" bukan "Pending GR"'
+                    
+                    for cell in ws_pending_comment[1]: # Loop header
+                        if cell.value == target_header:
+                            cell.comment = Comment(comment_text, comment_author)
+                            break # Hentikan pencarian
 
         open_file_externally(NAMA_FILE_OUTPUT)
         return True

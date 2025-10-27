@@ -65,9 +65,10 @@ def process_routing_data(date_formats, gui_instance):
         lokasi_code = config.get('lokasi')
         
         # =======================================================
-        # ▼▼▼ LOGIKA BARU UNTUK MENGGABUNGKAN PLCK + PLDM ▼▼▼
+        # ▼▼▼ LOGIKA LOKASI PROSES ▼▼▼
         # =======================================================
-        codes_to_process = ['plck', 'pldm'] if lokasi_code == 'plck' else [lokasi_code]
+        # Hanya proses lokasi yang dipilih
+        codes_to_process = [lokasi_code]
         
         # Muat data master berdasarkan kode yang diproses
         # Asumsi: load_master_data() tanpa argumen akan memuat semua data
@@ -97,11 +98,8 @@ def process_routing_data(date_formats, gui_instance):
         api_token = secrets.get('token')
         location_id = constants.get('location_id', {})
         
-        # Tentukan nama lokasi untuk nama file (jika plck, tambahkan pldm)
-        if lokasi_code == 'plck':
-            lokasi_name = "PLCK & PLDM"
-        else:
-            lokasi_name = next((name for name, code in location_id.items() if code == lokasi_code), lokasi_code)
+        # Tentukan nama lokasi untuk nama file
+        lokasi_name = next((name for name, code in location_id.items() if code == lokasi_code), lokasi_code)
 
         if not api_token:
             show_error_message("Error Token API", ERROR_MESSAGES["API_TOKEN_MISSING"])
