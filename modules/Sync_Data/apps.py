@@ -215,10 +215,13 @@ def fetch_and_process_vehicle_data(api_token, hub_id, constants, type_map, drive
 # =============================================================================
 # FETCH USERS
 # =============================================================================
-def fetch_driver_users(api_token, hub_id, constants):
+def fetch_driver_users(api_token, hub_id, constants, lokasi_kode):
     base_url = constants.get("base_url")
     role_ids = constants.get("role_ids", {})
-    driver_id = role_ids.get("driver")
+    if lokasi_kode in ("plck", "pldm"):
+        driver_id = role_ids.get("driverJkt")
+    else:
+        driver_id = role_ids.get("driver")
     api_url = f"{base_url}/users"
     headers = {"Authorization": f"Bearer {api_token}"}
     params = {
@@ -336,7 +339,7 @@ def main(rest_config):
             return
 
         # Ambil users & vehicles (boleh saja master_df None — fungsi aman terhadap itu)
-        users = fetch_driver_users(api_token, hub_id, constants)
+        users = fetch_driver_users(api_token, hub_id, constants, lokasi_kode)
         vehicles = fetch_and_process_vehicle_data(api_token, hub_id, constants, type_map, users, rest_config)
 
         # Siapkan master records aman untuk update_driver_master

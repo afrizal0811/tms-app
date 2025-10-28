@@ -77,8 +77,9 @@ def process_routing_data(date_formats, gui_instance):
 
         # Filter master data sesuai dengan kode lokasi yang dibutuhkan
         master_data_df = full_master_data["df"]
-        master_data_df = master_data_df[master_data_df['Email'].str.contains('|'.join(codes_to_process), na=False)]
         hub_ids = full_master_data["hub_ids"]
+        if not master_data_df.empty:
+            master_data_df = master_data_df[master_data_df['Email'].str.contains('|'.join(codes_to_process), na=False)]
         # =======================================================
         
         if not config:
