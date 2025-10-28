@@ -248,7 +248,7 @@ def display_result_gui(parent_instance, parsed_data, date_str, lokasi_cabang):
     top_control_frame = tk.Frame(main_container, pady=5); top_control_frame.pack(fill='x', anchor='n') 
     search_frame = ttk.Frame(top_control_frame)
     search_frame.pack(pady=(0, 5))
-    ttk.Label(search_frame, text="Cari SO:", font=("Arial", 9, "bold")).pack(side=tk.LEFT, padx=(0, 5))
+    ttk.Label(search_frame, text="Cari (Kendaraan / SO / Outlet):", font=("Arial", 9, "bold")).pack(side=tk.LEFT, padx=(0, 5))
     search_entry = ttk.Entry(search_frame, width=40)
     search_entry.pack(side=tk.LEFT, fill='x', expand=True)
     
@@ -310,22 +310,40 @@ def display_result_gui(parent_instance, parsed_data, date_str, lokasi_cabang):
             notebook.select(0)
 
     # --- Fungsi yang dipanggil oleh UI ---
+    # --- Fungsi yang dipanggil oleh UI ---
     def perform_global_search(event=None):
         search_term = search_entry.get().strip().lower()
         
         if not search_term:
+            # Jika tidak ada kata kunci, tampilkan semua data master
             result_window.vehicle_data_list = result_window.master_vehicle_list[:]
         else:
             filtered_list = []
             for vehicle in result_window.master_vehicle_list:
-                matching_stops = [
-                    stop for stop in vehicle.get('stopDetails', [])
-                    if search_term in stop.get('soNumbers', '').lower()
-                ]
-                if matching_stops:
-                    filtered_vehicle_data = vehicle.copy()
-                    filtered_vehicle_data['stopDetails'] = matching_stops
-                    filtered_list.append(filtered_vehicle_data)
+                vehicle_name = vehicle.get('vehicleName', '').lower()
+                
+                # 1. Cek apakah nama kendaraan cocok
+                if search_term in vehicle_name:
+                    # Jika cocok, tambahkan seluruh data kendaraan (termasuk semua stop)
+                    filtered_list.append(vehicle)
+                else:
+                    # 2. Jika nama kendaraan tidak cocok, cek setiap stop
+                    matching_stops = []
+                    for stop in vehicle.get('stopDetails', []):
+                        so_numbers = stop.get('soNumbers', '').lower()
+                        customer_name = stop.get('visitName', '').lower() # Ini adalah 'Outlet'
+                        
+                        # Cek apakah SO atau Nama Outlet (Customer) cocok
+                        if search_term in so_numbers or search_term in customer_name:
+                            matching_stops.append(stop)
+                    
+                    # Jika ada stop yang cocok, buat data kendaraan baru
+                    # hanya dengan stop yang cocok tersebut
+                    if matching_stops:
+                        filtered_vehicle_data = vehicle.copy()
+                        filtered_vehicle_data['stopDetails'] = matching_stops
+                        filtered_list.append(filtered_vehicle_data)
+                        
             result_window.vehicle_data_list = filtered_list
             
         result_window.current_page = 0
