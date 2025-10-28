@@ -6,6 +6,8 @@
         "SAT-TEGAL": "DRY-CDD",
         "MENGINAP1": "DRY-CDD",
         "MENGINAP2": "DRY-CDD",
-        "FROZEN-SOUR SALLY": "FROZEN-CDE-LONG"
+        "FROZEN-SOUR SALLY": "FROZEN-CDE-LONG",
+        "FROZEN-SOUR-SALLY": "FROZEN-CDE",
+        "FROZEN-SEWA": "FROZEN-CDE"
     }
 }

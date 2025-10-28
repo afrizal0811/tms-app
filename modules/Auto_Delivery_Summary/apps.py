@@ -5,6 +5,8 @@ import re
 import requests
 import traceback
 import math
+import datetime
+from datetime import timedelta
 from openpyxl.comments import Comment
 from utils.function import (
     get_save_path,
@@ -18,7 +20,7 @@ from utils.gui import create_date_picker_window
 from utils.function import show_error_message, show_info_message
 from utils.messages import ERROR_MESSAGES, INFO_MESSAGES
 from utils.api_handler import handle_requests_error
-
+import json
 def haversine_distance(coord1_str, coord2_str):
     """
     Menghitung jarak Haversine antara dua koordinat (lat, long) dalam meter.
@@ -43,12 +45,6 @@ def haversine_distance(coord1_str, coord2_str):
     distance = R * c
     return round(distance)
 
-# =============================================================================
-# ▼▼▼ process_task_data DARI KODE 1 (UNTUK Total Delivered, Pending SO) ▼▼▼
-# =============================================================================
-# =============================================================================
-# ▼▼▼ process_task_data DARI KODE 1 (UNTUK Total Delivered, Pending SO) ▼▼▼
-# =============================================================================
 def process_task_data_code1(task, master_map, real_sequence_map):
     """
     Memproses satu data 'task' (Logic from Code 1).
@@ -77,7 +73,6 @@ def process_task_data_code1(task, master_map, real_sequence_map):
     license_plat = (task.get('assignedVehicle') or {}).get('name')
     if not license_plat or license_plat == 'N/A':
         license_plat = master_record.get('Plat', 'N/A')
-    # --- AKHIR PERBAIKAN ---
 
     customer_name = task.get('customerName', '')
 
@@ -121,8 +116,6 @@ def process_task_data_code1(task, master_map, real_sequence_map):
     # Tetapkan hasil ke *kedua* variabel untuk konsistensi
     labels_list = final_status_list
     combined_status_delivery = final_status_list
-    # --- AKHIR PERBAIKAN ---
-
     return {
         'task_id': task['_id'],
         'flow': task.get('flow', ''),
@@ -183,17 +176,115 @@ def format_excel_sheet(writer, df, sheet_name, centered_cols, colored_cols=None)
             for cell in worksheet[col_letter]:
                  # Kondisi 'if cell.value' dihapus agar seluruh kolom diwarnai
                  cell.fill = fill
-        # --- AKHIR PERBAIKAN ---
 
     header_align = Alignment(horizontal='center', vertical='center')
     for cell in worksheet[1]: # Hanya header
         cell.alignment = header_align
+
+def fetch_results_data(base_url, headers, date_str, hub_id):
+    """
+    Mengambil data dari endpoint /results untuk mendapatkan ETA/ETD hub.
+    """
+    results_url = f"{base_url}/results"
+    params = {
+        'dateFrom': date_str,
+        'dateTo': date_str,
+        'hubId': hub_id,
+        'limit': 500  # Asumsi 500 data cukup untuk 1 hari
+    }
+
+    try:
+        response = requests.get(results_url, headers=headers, params=params, timeout=60)
+        response.raise_for_status()  # Cek error HTTP
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        show_error_message("Gagal API /results", f"Gagal mengambil data dari {results_url}: {e}\n\n{traceback.format_exc()}")
+        return None
+
+# GANTI FUNGSI LAMA DENGAN FUNGSI BARU INI
+def parse_hub_times(results_data, master_map):
+    """
+    (Versi Bersih - v7)
+    Mem-parsing JSON dari /results untuk membuat map:
+    { "DriverName": {"first_etd": "HH:MM", "last_eta": "HH:MM"} }
+    """
+    hub_times_map = {}
+    
+    if not results_data or 'data' not in results_data or 'data' not in results_data['data']:
+        return hub_times_map
+
+    dispatch_list = results_data['data']['data']
+    if not dispatch_list:
+         return hub_times_map
+
+    # Iterasi utama (per dispatch)
+    for i, dispatch in enumerate(dispatch_list):
+        
+        if dispatch.get('dispatchStatus') != 'done':
+            continue
+        
+        if 'result' not in dispatch or 'routing' not in dispatch['result']:
+            continue
+        
+        # Iterasi vehicle ('routing')
+        for j, vehicle in enumerate(dispatch['result']['routing']):
+            
+            # Filter 4: Cek 'assignee' (email)
+            assignee_email = vehicle.get('assignee')
+            if not assignee_email:
+                continue
+
+            # Mapping email ke Nama Driver
+            master_record = master_map.get(assignee_email)
+            driver_name = None
+            
+            if master_record is not None:
+                driver_name = master_record.get('Driver') 
+            
+            if not driver_name:
+                continue
+            
+            if driver_name in hub_times_map:
+                continue
+            
+            trips = vehicle.get('trips', [])
+            if not trips:
+                continue
+
+            first_hub_etd = None
+            last_hub_eta = None
+
+            # 1. Cari ETD dari Hub Pertama (Loop dari Awal)
+            for visit in trips:
+                if visit.get('isHub') is True:
+                    etd = visit.get('etd')
+                    if etd:
+                        first_hub_etd = etd[:5] # Ambil HH:mm
+                        break # Stop setelah menemukan yg pertama
+
+            # 2. Cari ETA dari Hub Terakhir (Loop dari Akhir)
+            for visit in reversed(trips):
+                if visit.get('isHub') is True:
+                    eta = visit.get('eta')
+                    if eta:
+                        last_hub_eta = eta[:5] # Ambil HH:mm
+                        break # Stop setelah menemukan yg terakhir
+            
+            # 3. Simpan jika salah satu atau keduanya ditemukan
+            if first_hub_etd or last_hub_eta:
+                hub_times_map[driver_name] = {
+                    'first_etd': first_hub_etd or '',
+                    'last_eta': last_hub_eta or ''
+                }
+
+    return hub_times_map
 
 def panggil_api_dan_simpan(dates, app_instance):
     """
     Fungsi utama untuk memanggil API, memproses data, dan menyimpan ke Excel.
     """
     selected_date = dates["ymd"]
+    
     # --- PENGATURAN MENGGUNAKAN SHARED UTILS ---
     constants = load_constants()
     config = load_config()
@@ -211,7 +302,7 @@ def panggil_api_dan_simpan(dates, app_instance):
     master_map = {row['Email']: row for _, row in master_df.iterrows()}
 
     API_TOKEN = secrets.get('token')
-    LOKASI_FILTER = config.get('lokasi') # Digunakan untuk filter master & real sequence
+    LOKASI_FILTER = config.get('lokasi')
     HUB_ID = hub_ids.get(LOKASI_FILTER)
     location_id = constants.get('location_id', {})
     show_pending_gr = LOKASI_FILTER in ["plck", "pldm"]
@@ -220,13 +311,34 @@ def panggil_api_dan_simpan(dates, app_instance):
     if not LOKASI_FILTER or not HUB_ID: show_error_message("Konfigurasi Salah", ERROR_MESSAGES["HUB_ID_MISSING"]); return False
 
     base_url = constants.get('base_url')
+    headers = {"Authorization": f"Bearer {API_TOKEN}", "Content-Type": "application/json"}
+    
+    # --- LOGIKA PANGGIL API /RESULTS (H-1 / H-2) ---
+    try:
+        date_obj = datetime.datetime.strptime(selected_date, '%Y-%m-%d').date()
+    except ValueError:
+        show_error_message("Format Tanggal Salah", f"Format tanggal {selected_date} tidak valid.")
+        return False
+    
+    day_of_week = date_obj.weekday()
+    if day_of_week == 0: # 0 adalah Senin
+        target_date_obj = date_obj - timedelta(days=2) # Mundur 2 hari (ke Sabtu)
+    else:
+        target_date_obj = date_obj - timedelta(days=1) # Mundur 1 hari
+    
+    results_date_str = target_date_obj.strftime('%Y-%m-%d')
+    
+    results_data = fetch_results_data(base_url, headers, results_date_str, HUB_ID)
+    
+    hub_times_map = parse_hub_times(results_data, master_map)
+
+    # --- Panggilan API /tasks (Existing) ---
     api_url = f"{base_url}/tasks"
     params = {
         "status": "DONE", "hubId": HUB_ID,
         "timeFrom": f"{selected_date} 00:00:00", "timeTo": f"{selected_date} 23:59:59",
         "timeBy": "doneTime", "limit": 1000
     }
-    headers = {"Authorization": f"Bearer {API_TOKEN}", "Content-Type": "application/json"}
 
     try:
         response = requests.get(api_url, headers=headers, params=params, timeout=60)
@@ -240,8 +352,7 @@ def panggil_api_dan_simpan(dates, app_instance):
     except requests.exceptions.RequestException as e: handle_requests_error(e); return False
     except Exception as e: show_error_message("Error API", ERROR_MESSAGES["UNKNOWN_ERROR"].format(error_detail=f"{e}\n\n{traceback.format_exc()}")); return False
 
-    # --- Data Processing ---
-    # real_sequence map tetap perlu filter lokasi email dari assignedVehicle
+    # --- Data Processing (Tidak diubah) ---
     tasks_by_assignee_for_seq = {}
     for task in tasks_data:
         assignee_email_vehicle = (task.get('assignedVehicle') or {}).get('assignee')
@@ -250,152 +361,82 @@ def panggil_api_dan_simpan(dates, app_instance):
 
     real_sequence_map = {}
     for assignee, tasks in tasks_by_assignee_for_seq.items():
-        # Urutkan berdasarkan doneTime untuk real sequence (sesuai kode asli)
         sorted_tasks = sorted(tasks, key=lambda x: x.get('doneTime') or '9999-12-31T23:59:59Z')
         for i, task in enumerate(sorted_tasks):
             real_sequence_map[task['_id']] = i + 1
 
-    # =====================================================================
-    # ▼▼▼ LOGIKA PENGOLAHAN DATA UNTUK SEMUA SHEET ▼▼▼
-    # =====================================================================
-    # Inisialisasi dictionary untuk agregasi 'Total Delivered' (pakai assignedTo.name - Logic Code 2)
     summary_data_total_delivered_new = {}
-
-    # Inisialisasi list untuk data mentah 'Hasil RO vs Real' (berdasarkan assignedTo.name - Logic Code 2)
-    ro_vs_real_raw_data = {} # Pakai dict untuk grouping by assignedTo.name
-
+    ro_vs_real_raw_data = {} 
     processed_tasks_list_pending = [] 
-    
     pending_undelivered_labels = ["PENDING", "BATAL", "TERIMA SEBAGIAN", "PENDING GR"]
-    
-    if show_pending_gr:
-        pending_undelivered_labels.append("PENDING GR")
-
-    # Iterasi utama: Proses data untuk semua sheet
+    if show_pending_gr: pending_undelivered_labels.append("PENDING GR")
     for task in tasks_data:
-
-        # --- Proses untuk 'Total Delivered' (Filter Baru by assignedTo.name - Logic Code 2) ---
         assigned_to_data = task.get('assignedTo')
         driver_name_from_assigned_to = None
         driver_email_from_assigned_to = None
-
         if isinstance(assigned_to_data, dict):
             driver_name_from_assigned_to = assigned_to_data.get('name')
             driver_email_from_assigned_to = assigned_to_data.get('email')
-
-        # Hanya proses jika 'assignedTo.name' ada
         if driver_name_from_assigned_to:
             if driver_name_from_assigned_to not in summary_data_total_delivered_new:
-                # Cari plat berdasarkan email jika ada, jika tidak, coba cari dari assignedVehicle
                 plat_td = "N/A_Plat"
                 if driver_email_from_assigned_to and driver_email_from_assigned_to in master_map:
                     plat_td = master_map[driver_email_from_assigned_to].get('Plat', 'N/A_Plat')
                 elif task.get('assignedVehicle') and isinstance(task['assignedVehicle'], dict):
                      plat_td = task['assignedVehicle'].get('name', 'N/A_Plat')
-
                 summary_data_total_delivered_new[driver_name_from_assigned_to] = {
-                    'License Plat': plat_td,
-                    'Driver': driver_name_from_assigned_to,
-                    'Total Outlet': 0,
-                    'Total Delivered': 0
+                    'License Plat': plat_td, 'Driver': driver_name_from_assigned_to,
+                    'Total Outlet': 0, 'Total Delivered': 0
                 }
-
-            # Hitung Total Outlet
             summary_data_total_delivered_new[driver_name_from_assigned_to]['Total Outlet'] += 1
-
-            # Hitung Total Delivered
-            # --- PERBAIKAN: Tangani 'label' string atau list ---
             raw_labels_td = task.get('label')
             labels_td_list = []
-            if isinstance(raw_labels_td, str):
-                labels_td_list = [raw_labels_td]
-            elif isinstance(raw_labels_td, list):
-                labels_td_list = raw_labels_td
-            # --- AKHIR PERBAIKAN ---
-            
+            if isinstance(raw_labels_td, str): labels_td_list = [raw_labels_td]
+            elif isinstance(raw_labels_td, list): labels_td_list = raw_labels_td
             failure_labels_td = ["PENDING", "BATAL", "TERIMA SEBAGIAN"]
-            if not show_pending_gr: # Jika BUKAN plck/pldm
-                failure_labels_td.append("PENDING GR") # Anggap PENDING GR sebagai gagal
-                
-                # Gunakan list yang sudah bersih
+            if not show_pending_gr: failure_labels_td.append("PENDING GR")
             is_pending_or_batal_td = any(label in failure_labels_td for label in labels_td_list)
             if not is_pending_or_batal_td:
                 summary_data_total_delivered_new[driver_name_from_assigned_to]['Total Delivered'] += 1
-
-
-            # --- Proses untuk 'Hasil RO vs Real' (Filter Baru by assignedTo.name - Logic Code 2) ---
             plat_ro = "N/A_Plat"
-            # Prioritaskan lookup plat dari master berdasarkan email assignedTo
             if driver_email_from_assigned_to and driver_email_from_assigned_to in master_map:
                 plat_ro = master_map[driver_email_from_assigned_to].get('Plat', 'N/A_Plat')
-            # Jika tidak ada di master, coba ambil dari assignedVehicle
             elif task.get('assignedVehicle') and isinstance(task['assignedVehicle'], dict):
                  plat_ro = task['assignedVehicle'].get('name', 'N/A_Plat')
-
-            # Ekstrak data yang dibutuhkan untuk RO vs Real
             customer_name_ro = task.get('customerName', '')
-            # --- PERBAIKAN: Tangani 'label' string atau list ---
-            raw_labels_ro = task.get('label') # Ambil dari key 'label'
-            if isinstance(raw_labels_ro, str):
-                status_delivery_ro = raw_labels_ro # Jika string, gunakan langsung
-            elif isinstance(raw_labels_ro, list):
-                status_delivery_ro = ', '.join(raw_labels_ro) # Jika list, gabungkan
-            else:
-                status_delivery_ro = '' # Jika None atau tipe lain
-            # --- AKHIR PERBAIKAN ---
-            
+            raw_labels_ro = task.get('label') 
+            if isinstance(raw_labels_ro, str): status_delivery_ro = raw_labels_ro
+            elif isinstance(raw_labels_ro, list): status_delivery_ro = ', '.join(raw_labels_ro)
+            else: status_delivery_ro = ''
             open_time_ro = task.get('openTime', '')
             close_time_ro = task.get('closeTime', '')
-
-            # --- PERUBAHAN ---
-            # Ambil 'flow' terlebih dahulu untuk menentukan 'Actual Arrival'
-            flow_ro = task.get('flow', '') # Ambil nilai 'flow'
-            
-            # Tentukan key untuk 'Actual Arrival' berdasarkan 'flow'
+            flow_ro = task.get('flow', '') 
             arrival_key = 'page1DoneTime' if 'Pending GR' in flow_ro else 'klikJikaSudahSampai'
             arrival_utc_ro = pd.to_datetime(task.get(arrival_key), errors='coerce')
-            # --- AKHIR PERUBAHAN ---
-
             departure_utc_ro = pd.to_datetime(task.get('doneTime'), errors='coerce')
             visit_time_api_ro = task.get('visitTime', '')
-            ro_sequence_ro = task.get('routePlannedOrder') # Bisa None
-
+            ro_sequence_ro = task.get('routePlannedOrder') 
+            eta_ro = (task.get('eta') or '')[:5]
+            etd_ro = (task.get('etd') or '')[:5]
             task_details_for_ro = {
-                '_task_id': task['_id'],
-                'Flow': flow_ro, # Tambahkan kolom Flow
-                'Plat': plat_ro,
-                'Driver': driver_name_from_assigned_to,
-                'Customer': customer_name_ro,
-                'Status Delivery': status_delivery_ro, # Gunakan data label
-                'Open Time': open_time_ro,
-                'Close Time': close_time_ro,
+                '_task_id': task['_id'], 'Flow': flow_ro, 'Plat': plat_ro,
+                'Driver': driver_name_from_assigned_to, 'Customer': customer_name_ro,
+                'Status Delivery': status_delivery_ro, 'Open Time': open_time_ro,
+                'Close Time': close_time_ro, 'ETA': eta_ro, 'ETD': etd_ro,
                 'Visit Time': visit_time_api_ro,
                 'RO Sequence': ro_sequence_ro if ro_sequence_ro is not None else '-',
-                '_arrival_utc': arrival_utc_ro,
-                '_departure_utc': departure_utc_ro
+                '_arrival_utc': arrival_utc_ro, '_departure_utc': departure_utc_ro
             }
-
-            # Kelompokkan berdasarkan driver name (dari assignedTo.name)
             if driver_name_from_assigned_to not in ro_vs_real_raw_data:
                 ro_vs_real_raw_data[driver_name_from_assigned_to] = []
             ro_vs_real_raw_data[driver_name_from_assigned_to].append(task_details_for_ro)
-
-
-        # --- Proses untuk 'Pending SO' (Filter Lama by assignedVehicle.assignee - Logic Code 1) ---
-        processed_code1 = process_task_data_code1(task, master_map, real_sequence_map) # Panggil fungsi asli (Code 1)
-        # Hanya proses lebih lanjut jika processed_code1 valid dan email cocok lokasi
+        processed_code1 = process_task_data_code1(task, master_map, real_sequence_map) 
         if processed_code1 and LOKASI_FILTER in processed_code1['assignee_email']:
-            # Simpan hasil proses ini HANYA untuk sheet Pending
-            if (
-                any(label in pending_undelivered_labels for label in processed_code1['labels'])
-                or any(status in pending_undelivered_labels for status in processed_code1.get('status_delivery_list', []))
-            ):
+            if ( any(label in pending_undelivered_labels for label in processed_code1['labels'])
+                or any(status in pending_undelivered_labels for status in processed_code1.get('status_delivery_list', [])) ):
                  processed_tasks_list_pending.append(processed_code1)
 
-
-    # --- Finalisasi Sheet 'Total Delivered' (Logic Code 2) ---
     df_delivered = pd.DataFrame(list(summary_data_total_delivered_new.values()))
-    # Pengurutan SEWA untuk 'Total Delivered'
     if not df_delivered.empty:
         df_delivered['is_sewa'] = (df_delivered['License Plat'].astype(str).str.contains('SEWA', case=False, na=False) | df_delivered['Driver'].astype(str).str.contains('SEWA', case=False, na=False)).astype(int)
         conditions = [df_delivered['Driver'].astype(str).str.contains('DRY', case=False, na=False), df_delivered['Driver'].astype(str).str.contains('FRZ', case=False, na=False)]
@@ -406,162 +447,148 @@ def panggil_api_dan_simpan(dates, app_instance):
 
     ro_vs_real_final_list = []
     correct_sequence_map = {}
-
     for driver_name, tasks_list in ro_vs_real_raw_data.items():
-        # Sortir task per driver berdasarkan waktu arrival UTC
-        sorted_tasks = sorted(tasks_list, key=lambda x: x['_arrival_utc'] if pd.notna(x['_arrival_utc']) else pd.Timestamp.max.tz_localize('UTC'))
-
-        for i, task_detail in enumerate(sorted_tasks):
-            real_sequence = i + 1
+        tasks_sorted_by_arrival = sorted(tasks_list, key=lambda x: x['_arrival_utc'] if pd.notna(x['_arrival_utc']) else pd.Timestamp.max.tz_localize('UTC'))
+        arrival_rank_map = {}
+        for i, task in enumerate(tasks_sorted_by_arrival):
+            arrival_rank_map[task['_task_id']] = i + 1
+        for task_detail in tasks_list:
+            task_detail['_real_sequence_rank'] = arrival_rank_map.get(task_detail['_task_id'], 999) 
+        sorted_tasks_for_display = sorted(tasks_list, key=lambda x: x['ETA'] if x['ETA'] else '99:99')
+        for i, task_detail in enumerate(sorted_tasks_for_display):
+            real_sequence = task_detail['_real_sequence_rank'] 
             arrival_local = task_detail['_arrival_utc'].tz_convert('Asia/Jakarta') if pd.notna(task_detail['_arrival_utc']) else pd.NaT
             departure_local = task_detail['_departure_utc'].tz_convert('Asia/Jakarta') if pd.notna(task_detail['_departure_utc']) else pd.NaT
-
             actual_visit_time_ro = pd.NA
             if pd.notna(arrival_local) and pd.notna(departure_local):
                  delta_minutes = (departure_local - arrival_local).total_seconds() / 60
                  actual_visit_time_ro = int(round(delta_minutes))
-
             ro_sequence_val = task_detail['RO Sequence']
             is_same = "SAMA" if ro_sequence_val != '-' and pd.to_numeric(ro_sequence_val, errors='coerce') == real_sequence else "TIDAK SAMA"
-
             task_id = task_detail.get('_task_id')
             if task_id:
-                correct_sequence_map[task_id] = {
-                    'ro': ro_sequence_val,
-                    'real': real_sequence
-                }
-
+                correct_sequence_map[task_id] = { 'ro': ro_sequence_val, 'real': real_sequence }
             ro_vs_real_final_list.append({
-                'Flow': task_detail['Flow'], # Tambahkan Flow
-                'Plat': task_detail['Plat'],
-                'Driver': task_detail['Driver'],
-                'Customer': task_detail['Customer'],
-                'Status Delivery': task_detail['Status Delivery'], # Sudah dari label
-                'Open Time': task_detail['Open Time'],
-                'Close Time': task_detail['Close Time'],
+                'Flow': task_detail['Flow'], 'Plat': task_detail['Plat'],
+                'Driver': task_detail['Driver'], 'Customer': task_detail['Customer'],
+                'Status Delivery': task_detail['Status Delivery'], 'Open Time': task_detail['Open Time'],
+                'Close Time': task_detail['Close Time'], 'ETA': task_detail['ETA'], 
                 'Actual Arrival': arrival_local.strftime('%H:%M') if pd.notna(arrival_local) else '',
+                'ETD': task_detail['ETD'], 
                 'Actual Departure': departure_local.strftime('%H:%M') if pd.notna(departure_local) else '',
-                'Visit Time': task_detail['Visit Time'],
-                'Actual Visit Time': actual_visit_time_ro,
-                'RO Sequence': ro_sequence_val,
-                'Real Sequence': real_sequence,
+                'Visit Time': task_detail['Visit Time'], 'Actual Visit Time': actual_visit_time_ro,
+                'RO Sequence': ro_sequence_val, 'Real Sequence': real_sequence, 
                 'Is Same Sequence': is_same
             })
 
     df_ro_vs_real = pd.DataFrame(ro_vs_real_final_list)
+
     if not df_ro_vs_real.empty:
-        # Sortir keseluruhan berdasarkan Driver, lalu Real Sequence
-        df_ro_vs_real = df_ro_vs_real.sort_values(by=['Driver', 'Real Sequence'], ascending=[True, True])
-        final_ro_rows_formatted = []
-        last_driver = None
-        # Definisikan urutan kolom yang benar di sini
-        ro_cols_order = ['Flow', 'Plat', 'Driver', 'Customer', 'Status Delivery', 'Open Time', 'Close Time', 'Actual Arrival', 'Actual Departure', 'Visit Time', 'Actual Visit Time', 'RO Sequence', 'Real Sequence', 'Is Same Sequence']
-        df_ro_vs_real = df_ro_vs_real[ro_cols_order] # Susun ulang kolom DataFrame
+        df_ro_vs_real['ETA_Sort'] = df_ro_vs_real['ETA'].replace('', '99:99')
+        df_ro_vs_real = df_ro_vs_real.sort_values(by=['Driver', 'ETA_Sort'], ascending=[True, True])
+        df_ro_vs_real = df_ro_vs_real.drop(columns=['ETA_Sort'])
+        
+        final_ro_dfs = [] 
+        ro_cols_order = ['Flow', 'Plat', 'Driver', 'Customer', 'Status Delivery', 'Open Time', 'Close Time', 'ETA', 'Actual Arrival', 'ETD', 'Actual Departure', 'Visit Time', 'Actual Visit Time', 'RO Sequence', 'Real Sequence', 'Is Same Sequence']
+        
+        df_ro_vs_real = df_ro_vs_real.reindex(columns=ro_cols_order)
 
-        for _, row in df_ro_vs_real.iterrows():
-            if last_driver is not None and row['Driver'] != last_driver:
-                # Sisipkan baris kosong
-                final_ro_rows_formatted.append({col: '' for col in ro_cols_order}) # Gunakan urutan kolom
-            final_ro_rows_formatted.append(row.to_dict())
-            last_driver = row['Driver']
-        df_ro_vs_real = pd.DataFrame(final_ro_rows_formatted) # Buat ulang DataFrame
+        for driver_name, driver_group_df in df_ro_vs_real.groupby('Driver', sort=False):
+            if not driver_name: 
+                continue
+            
+            hub_data = hub_times_map.get(driver_name, {})
+            hub_etd = hub_data.get('first_etd', '') 
+            hub_eta = hub_data.get('last_eta', '')
+            
+            # 2. Buat baris HUB pertama (Hapus prefix "HUB:")
+            hub_row_start = {col: '' for col in ro_cols_order}
+            hub_row_start['Customer'] = 'HUB'
+            # --- MODIFIKASI: Hapus prefix "HUB:" ---
+            hub_row_start['ETD'] = hub_etd if hub_etd else '-' 
+            
+            # 3. Buat baris HUB terakhir (Hapus prefix "HUB:")
+            hub_row_end = {col: '' for col in ro_cols_order}
+            hub_row_end['Customer'] = 'HUB'
+            # --- MODIFIKASI: Hapus prefix "HUB:" ---
+            hub_row_end['ETA'] = hub_eta if hub_eta else '-'
+            
+            # 4. Buat DataFrame dari baris
+            df_hub_start = pd.DataFrame([hub_row_start], columns=ro_cols_order)
+            df_hub_end = pd.DataFrame([hub_row_end], columns=ro_cols_order)
+            
+            # 5. Buat baris Spacer
+            spacer_row = pd.DataFrame([{col: '' for col in ro_cols_order}], columns=ro_cols_order)
+            
+            if final_ro_dfs:
+                final_ro_dfs.append(spacer_row)
+                
+            final_ro_dfs.append(df_hub_start)
+            final_ro_dfs.append(driver_group_df[ro_cols_order])
+            final_ro_dfs.append(df_hub_end)
 
+        if final_ro_dfs:
+            df_ro_vs_real = pd.concat(final_ro_dfs, ignore_index=True)
+        else:
+            df_ro_vs_real = pd.DataFrame(columns=ro_cols_order)
 
-# --- Finalisasi Sheet 'Hasil Pending SO' (dari processed_tasks_list_pending - Logic Code 1) ---
-    
-    # --- ▼▼▼ PERBAIKAN UNTUK UnboundLocalError ▼▼▼ ---
-    pending_so_data = [] # Re-inisialisasi
-    fill_values = None   # Inisialisasi fill_values di sini
-    df_pending = pd.DataFrame() # Inisialisasi df_pending di sini
-    # --- ▲▲▲ AKHIR PERBAIKAN ▲▲▲ ---
-
-    for processed in processed_tasks_list_pending: # Gunakan list ini
-        # (Filter tidak perlu diubah)
+    # --- Finalisasi Sheet 'Hasil Pending SO' (Tidak diubah) ---
+    pending_so_data = [] 
+    fill_values = None   
+    df_pending = pd.DataFrame() 
+    for processed in processed_tasks_list_pending: 
         labels_list = processed.get('labels', []) + processed.get('status_delivery_list', [])
-        if not any(label in pending_undelivered_labels for label in labels_list):
-            continue
-
-        # (Logika sequence tidak perlu diubah)
+        if not any(label in pending_undelivered_labels for label in labels_list): continue
         task_id = processed['task_id']
         correct_seqs = correct_sequence_map.get(task_id, {})
         ro_sequence = correct_seqs.get('ro', processed['et_sequence'])
         real_sequence = correct_seqs.get('real', processed['real_sequence'])
-        
         match = re.search(r'(C0[0-9]+)', processed['customer_name'])
-        
-        # (Logika Reason tidak perlu diubah)
         reason = '' 
         if any(label in pending_undelivered_labels for label in labels_list):
             reason = processed['alasan']
-
-        # (Logika pewarnaan tidak perlu diubah)
         is_pending_gr = "PENDING GR" in labels_list
         is_pending = "PENDING" in labels_list
         is_batal = "BATAL" in labels_list
         is_sebagian = "TERIMA SEBAGIAN" in labels_list
         fill_color = None
         is_redirected_gr = (is_pending_gr and not show_pending_gr)
-        if is_redirected_gr:
-            fill_color = "FF0000" 
+        if is_redirected_gr: fill_color = "FF0000" 
         should_be_in_pending_col = (is_pending and not is_pending_gr) or is_redirected_gr
-        
-        # (Logika pending_row tidak perlu diubah)
         pending_row = {
-            'Flow': processed['flow'],
-            'License Plat': processed['license_plat'], 'Driver': processed['driver_name'],
+            'Flow': processed['flow'], 'License Plat': processed['license_plat'], 'Driver': processed['driver_name'],
             'Faktur Batal/ Tolakan SO': processed['customer_name'] if is_batal else '',
             'Terkirim Sebagian': processed['customer_name'] if is_sebagian else '',
             'Pending': processed['customer_name'] if should_be_in_pending_col else '',
-            'Reason': reason,
-            'Open Time': processed['open_time'], 'Close Time': processed['close_time'],
+            'Reason': reason, 'Open Time': processed['open_time'], 'Close Time': processed['close_time'],
             'ETA': processed['eta'], 'ETD': processed['etd'], 'Actual Arrival': processed['actual_arrival'],
             'Actual Departure': processed['actual_departure'], 'Visit Time': processed['visit_time'],
             'Actual Visit Time': processed['actual_visit_time'], 'Customer ID': match.group(1) if match else 'N/A',
-            'RO Sequence': ro_sequence,
-            'Real Sequence': real_sequence,
+            'RO Sequence': ro_sequence, 'Real Sequence': real_sequence,
             'Temperature': ('DRY' if processed['driver_name'].startswith("'DRY'") else 'FRZ' if processed['driver_name'].startswith("'FRZ'") else 'N/A'),
             '_fill': fill_color 
         }
-
         if show_pending_gr:
             pending_row['Pending GR'] = processed['customer_name'] if is_pending_gr else ''
-
         pending_so_data.append(pending_row)
-
-    # --- ▼▼▼ PERBAIKAN LOGIKA SETELAH LOOP ▼▼▼ ---
-    
-    # 1. Buat DataFrame dari data (jika ada)
     if pending_so_data:
         df_pending = pd.DataFrame(pending_so_data)
-
-    # 2. Lakukan sorting, HANYA jika DataFrame tidak kosong
     if not df_pending.empty:
-        # Lakukan sorting DULU
         df_pending = df_pending.sort_values(by='Driver', ascending=True)
-
-        # Ekstrak data warna (fill_values) SETELAH di-sort
         if '_fill' in df_pending.columns:
             fill_values = df_pending['_fill']
-
-        # Siapkan daftar kolom untuk Excel (tanpa _fill)
         cols = list(df_pending.columns)
-        if '_fill' in cols:
-            cols.remove('_fill')
-        
-        # Atur ulang 'Pending GR' (jika ada)
+        if '_fill' in cols: cols.remove('_fill')
         if 'Pending GR' in cols and 'Pending' in cols:
             cols.insert(cols.index('Pending') + 1, cols.pop(cols.index('Pending GR')))
-            
-        # Sisipkan kolom kosong ' ' (jika 'Reason' ada)
         if 'Reason' in cols:
-            df_pending[' '] = '' # Tambahkan kolom ke DataFrame
-            cols.insert(cols.index('Reason') + 1, ' ') # Atur posisinya di daftar
-            
-        # Terapkan urutan kolom ('cols') yang sudah benar
+            df_pending[' '] = '' 
+            cols.insert(cols.index('Reason') + 1, ' ')
         df_pending = df_pending[cols] 
     
+    # --- Logika 'Update Longlat' (Tidak diubah) ---
     update_longlat_data = []
-    for task in tasks_data: # Iterasi tasks_data asli
+    for task in tasks_data: 
         new_longlat = task.get('klikLokasiClient', '')
         old_longlat = task.get('longlat', '')
         if not new_longlat: continue
@@ -577,7 +604,6 @@ def panggil_api_dan_simpan(dates, app_instance):
             'Location ID': location_code_longlat, 'New Longlat': new_longlat,
             'Beda Jarak (m)': beda_jarak
         })
-
     if update_longlat_data:
         df_longlat = pd.DataFrame(update_longlat_data)
         df_longlat = df_longlat.sort_values(by='Beda Jarak (m)', ascending=True)
@@ -593,58 +619,101 @@ def panggil_api_dan_simpan(dates, app_instance):
     if not NAMA_FILE_OUTPUT: show_info_message("Dibatalkan", INFO_MESSAGES["CANCELED_BY_USER"]); return False
 
     try:
+        simpan_excel(NAMA_FILE_OUTPUT, df_delivered, df_pending, df_ro_vs_real, df_longlat, fill_values, show_pending_gr)
+        
+        open_file_externally(NAMA_FILE_OUTPUT)
+        return True
+    except Exception as e: show_error_message("Gagal Menyimpan", ERROR_MESSAGES["UNKNOWN_ERROR"].format(error_detail=f"GAGAL MENYIMPAN FILE EXCEL: {e}\n\n{traceback.format_exc()}")); return False
+
+# (Fungsi 'main' dan 'process_wrapper' tidak perlu diubah)
+
+# (Fungsi panggil_api_dan_simpan sekarang memanggil ini)
+def simpan_excel(NAMA_FILE_OUTPUT, df_delivered, df_pending, df_ro_vs_real, df_longlat, fill_values, show_pending_gr):
+    """
+    Menyimpan semua DataFrame ke dalam satu file Excel dengan beberapa sheet.
+    (Versi Modifikasi: Mewarnai ETA/ETD jika Customer == 'HUB')
+    """
+    
+    try:
         with pd.ExcelWriter(NAMA_FILE_OUTPUT, engine='openpyxl') as writer:
-            # Sheet Total Delivered (Logika agregasi baru - Code 2)
+            
+            # Sheet Total Delivered
             if not df_delivered.empty:
                  format_excel_sheet(writer, df_delivered, 'Total Delivered', centered_cols=['Total Outlet', 'Total Delivered'])
             else:
                  pd.DataFrame([{" ": "Tidak ada data kunjungan valid (filter Code 2)"}]) \
                    .to_excel(writer, sheet_name='Total Delivered', index=False)
 
-            # Sheet Hasil Pending SO (Logika Code 1)
+            # Sheet Hasil Pending SO
             if not df_pending.empty:
-                # --- KASUS JIKA ADA DATA PENDING ---
                 pending_centered_cols = ['Flow', 'Open Time', 'Close Time', 'ETA', 'ETD', 'Actual Arrival', 'Actual Departure', 'Visit Time', 'Actual Visit Time', 'Customer ID', 'RO Sequence', 'Real Sequence', 'Temperature']
                 format_excel_sheet(writer, df_pending, 'Hasil Pending SO', centered_cols=pending_centered_cols, colored_cols={' ': "FFC0CB"})
 
-                # --- ▼▼▼ KODE UNTUK WARNA SEL (REQ 1) ▼▼▼ ---
                 if fill_values is not None:
                     ws_pending = writer.sheets["Hasil Pending SO"]
                     bright_red_fill = PatternFill(start_color="FF0000", end_color="FF0000", fill_type="solid")
                     
-                    # Cari kolom "Pending"
                     pending_col_idx = None
                     for cell in ws_pending[1]: # Loop header (baris 1)
                         if cell.value == "Pending":
-                            pending_col_idx = cell.column # Ambil nomor kolom (mis: 5)
+                            pending_col_idx = cell.column
                             break
                     
                     if pending_col_idx is not None:
-                        # Iterate data fill_values (yang sudah di-sort)
                         for i, fill_val in enumerate(fill_values.values, start=2):
-                            if pd.notna(fill_val): # Jika nilainya bukan None (ada warna)
+                            if pd.notna(fill_val):
                                 ws_pending.cell(row=i, column=pending_col_idx).fill = bright_red_fill
-                # --- ▲▲▲ AKHIR KODE WARNA ▲▲▲ ---
-            
             else:
-                # --- KASUS JIKA TIDAK ADA DATA PENDING ---
-                df_placeholder = pd.DataFrame({"Semua Pengiriman Sukses": []}) # Buat df dgn header saja
+                df_placeholder = pd.DataFrame({"Semua Pengiriman Sukses": []})
                 df_placeholder.to_excel(writer, index=False, sheet_name='Hasil Pending SO')
-                
-                # Ambil worksheet-nya
                 ws_pending = writer.sheets['Hasil Pending SO']
-                
-                # Terapkan bold ke A1
                 ws_pending['A1'].font = Font(bold=True)
-                
-                # Sesuaikan lebar kolom A
                 ws_pending.column_dimensions['A'].width = len("Semua Pengiriman Sukses") + 5
 
-            # <-- KODE YANG HILANG DITAMBAHKAN DI SINI (Sheet 3 & 4)
-            
-            # Sheet Hasil RO vs Real (Logika baru - Code 2, dengan kolom Flow & Status Delivery dari Label)
-            ro_centered_cols = ['Flow', 'Status Delivery', 'Open Time', 'Close Time', 'Actual Arrival', 'Actual Departure', 'Visit Time', 'Actual Visit Time', 'RO Sequence', 'Real Sequence', 'Is Same Sequence'] # Tambahkan 'Flow'
+            # Sheet Hasil RO vs Real
+            ro_centered_cols = ['Flow', 'Status Delivery', 'Open Time', 'Close Time', 'ETA', 'Actual Arrival', 'ETD', 'Actual Departure', 'Visit Time', 'Actual Visit Time', 'RO Sequence', 'Real Sequence', 'Is Same Sequence']
             format_excel_sheet(writer, df_ro_vs_real, 'Hasil RO vs Real', centered_cols=ro_centered_cols)
+
+            if "Hasil RO vs Real" in writer.sheets:
+                ws_ro_vs_real = writer.sheets["Hasil RO vs Real"]
+                RED_FONT = Font(color="FF0000")
+                
+                # Cari indeks kolom ETA, ETD, dan Customer (berbasis 1)
+                col_idx = {}
+                for cell in ws_ro_vs_real[1]: # Iterasi header
+                    if cell.value in ["ETA", "ETD", "Customer"]:
+                        col_idx[cell.value] = cell.column # Simpan nomor kolom
+                
+                # Pastikan semua kolom ditemukan
+                if "Customer" in col_idx and ("ETA" in col_idx or "ETD" in col_idx):
+                    
+                    # Dapatkan nomor kolom
+                    customer_col = col_idx["Customer"]
+                    eta_col = col_idx.get("ETA") # Mungkin None jika kolom tdk ada
+                    etd_col = col_idx.get("ETD") # Mungkin None jika kolom tdk ada
+                
+                    # Iterasi per baris, mulai dari baris 2
+                    for row in ws_ro_vs_real.iter_rows(min_row=2):
+                        
+                        # Ambil sel Customer di baris ini
+                        # (Nomor kolom berbasis 1, iter_rows berbasis 0, jadi kurangi 1)
+                        customer_cell = row[customer_col - 1]
+                        
+                        # Cek apakah ini baris "HUB"
+                        if customer_cell.value == "HUB":
+                            
+                            # Warnai sel Customer
+                            customer_cell.font = RED_FONT
+                            
+                            # Warnai sel ETA di baris yang sama
+                            if eta_col:
+                                eta_cell = row[eta_col - 1]
+                                eta_cell.font = RED_FONT
+                            
+                            # Warnai sel ETD di baris yang sama
+                            if etd_col:
+                                etd_cell = row[etd_col - 1]
+                                etd_cell.font = RED_FONT
 
             # Sheet Update Longlat (Logika Code 1)
             if "Customer ID" in df_longlat.columns:
@@ -653,69 +722,43 @@ def panggil_api_dan_simpan(dates, app_instance):
             else:
                 df_longlat.to_excel(writer, index=False, sheet_name='Update Longlat')
 
-            comment_author = "System" # Definisikan author satu kali
-
+            # --- Penambahan Komentar (Tidak diubah) ---
+            comment_author = "System" 
             if "Total Delivered" in writer.sheets:
                 ws_ro = writer.sheets["Total Delivered"]
-                
-                # Buat kamus (dictionary) untuk semua komentar di sheet ini
-                comments_ro = {
-                    "Total Delivered": "Total Outlet - (Pending + Batal + Terima Sebagian)",
-                }
-                
-                # Loop baris header satu kali saja
+                comments_ro = { "Total Delivered": "Total Outlet - (Pending + Batal + Terima Sebagian)", }
                 for cell in ws_ro[1]: 
                     if cell.value in comments_ro:
-                        comment_text = comments_ro[cell.value]
-                        cell.comment = Comment(comment_text, comment_author)
-            # --- Komentar untuk sheet 'Hasil RO vs Real' ---
+                        cell.comment = Comment(comments_ro[cell.value], comment_author)
             if "Hasil RO vs Real" in writer.sheets:
                 ws_ro = writer.sheets["Hasil RO vs Real"]
-                
-                # Buat kamus (dictionary) untuk semua komentar di sheet ini
                 comments_ro = {
                     "RO Sequence": "Urutan berdasarkan hasil routing",
                     "Real Sequence": "Urutan kunjungan aktual di lapangan.",
                 }
-                
-                # Loop baris header satu kali saja
                 for cell in ws_ro[1]: 
                     if cell.value in comments_ro:
-                        comment_text = comments_ro[cell.value]
-                        cell.comment = Comment(comment_text, comment_author)
-
-            # --- Komentar untuk sheet 'Update Longlat' ---
+                        cell.comment = Comment(comments_ro[cell.value], comment_author)
             if "Update Longlat" in writer.sheets:
                 ws_longlat = writer.sheets["Update Longlat"]
-                
-                # Kamus untuk komentar di sheet Longlat
-                comments_longlat = {
-                    "Beda Jarak (m)": "Perhitungan jarak secara garis lurus antara koordinat lama dan baru."
-                }
-                
-                # Loop baris header satu kali saja
+                comments_longlat = { "Beda Jarak (m)": "Perhitungan jarak secara garis lurus antara koordinat lama dan baru." }
                 for cell in ws_longlat[1]: 
                     if cell.value in comments_longlat:
-                        comment_text = comments_longlat[cell.value]
-                        cell.comment = Comment(comment_text, comment_author)
-            
-            # --- ▼▼▼ KODE BARU UNTUK KOMENTAR KONDISIONAL (REQ 2) ▼▼▼ ---
-            # Cek apakah ada baris yang dialihkan (fill_values punya data)
+                        cell.comment = Comment(comments_longlat[cell.value], comment_author)
             if fill_values is not None and fill_values.notna().any():
                 if "Hasil Pending SO" in writer.sheets:
                     ws_pending_comment = writer.sheets["Hasil Pending SO"]
                     target_header = "Pending"
                     comment_text = 'Warna merah menandakan harusnya pilih "Pending" bukan "Pending GR"'
-                    
-                    for cell in ws_pending_comment[1]: # Loop header
+                    for cell in ws_pending_comment[1]: 
                         if cell.value == target_header:
                             cell.comment = Comment(comment_text, comment_author)
-                            break # Hentikan pencarian
+                            break 
 
-        open_file_externally(NAMA_FILE_OUTPUT)
         return True
-    except Exception as e: show_error_message("Gagal Menyimpan", ERROR_MESSAGES["UNKNOWN_ERROR"].format(error_detail=f"GAGAL MENYIMPAN FILE EXCEL: {e}\n\n{traceback.format_exc()}")); return False
-
+        
+    except Exception as e: 
+        raise Exception(f"GAGAL MENYIMPAN FILE EXCEL: {e}\n\n{traceback.format_exc()}")
 
 def main():
     def process_wrapper(dates, app_instance):
