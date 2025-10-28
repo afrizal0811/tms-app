@@ -9,7 +9,7 @@ from utils.messages import ERROR_MESSAGES
 # =============================================================================
 # PENGELOLAAN PATH TERPUSAT (PYINSTALLER-COMPATIBLE)
 # =============================================================================
-SECRET_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'secret.json')
+
 
 def show_error_message(title, message):
     messagebox.showerror(title, message)
@@ -54,6 +54,7 @@ def resource_path(relative_path):
     return os.path.join(base_path, relative_path)
 
 # --- Definisi Path ---
+SECRET_PATH = resource_path('secret.json')
 BASE_DIR = get_base_path()
 CONFIG_PATH = os.path.join(BASE_DIR, 'config.json')
 MASTER_JSON_PATH = os.path.join(BASE_DIR, 'master.json')
@@ -134,17 +135,17 @@ def load_master_data(lokasi_cabang=None):
             return None
 
         df = pd.DataFrame(data['driver'])  # gunakan key "driver"
-        df.columns = [col.strip() for col in df.columns]
-        if 'Email' not in df.columns or 'Driver' not in df.columns:
-            show_error_message("Gagal Memuat Master Data", ERROR_MESSAGES["MASTER_DATA_MISSING"])
-            return None
+        if not df.empty: 
+            df.columns = [col.strip() for col in df.columns]
+            if 'Email' not in df.columns or 'Driver' not in df.columns:
+                show_error_message("Gagal Memuat Master Data", ERROR_MESSAGES["MASTER_DATA_MISSING"])
+                return None
 
-        df['Email'] = df['Email'].astype(str).str.strip().str.lower()
-        df['Driver'] = df['Driver'].astype(str).str.strip()
-        if lokasi_cabang:
-            df = df[df['Email'].str.contains(lokasi_cabang, case=False, na=False)].copy()
-
-        # return dict yang berisi DataFrame dan hub_ids
+            df['Email'] = df['Email'].astype(str).str.strip().str.lower()
+            df['Driver'] = df['Driver'].astype(str).str.strip()
+            if lokasi_cabang:
+                df = df[df['Email'].str.contains(lokasi_cabang, case=False, na=False)].copy()
+        
         return {
             "df": df,
             "hub_ids": data.get("hub_ids", {})
