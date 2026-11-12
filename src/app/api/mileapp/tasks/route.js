@@ -289,6 +289,7 @@ async function saveTasks(tasks, targetHubId, currentUser = 'System') {
 
       const routingResultId = t.routingResultId || existingTask?.routing_result_id || null;
       const deliveryDate = resolveTaskDeliveryDate(t, existingTask, routingDateMap);
+      const taskReason = t.reason || t.alasan || null;
 
       const others = {
         doneOrder: t.doneOrder ?? null,
@@ -328,7 +329,7 @@ async function saveTasks(tasks, targetHubId, currentUser = 'System') {
           (t.assignedVehicleId || null) !== (existingTask.assigned_vehicle_id || null) ||
           (t.klikJikaSudahSampai || null) !== (existingTask.arrival_time || null) ||
           (t.doneTime || null) !== (existingTask.done_time || null) ||
-          (t.reason || null) !== (existingTask.reason || null) ||
+          taskReason !== (existingTask.reason || null) ||
           (t.klikLokasiClient || null) !== (existingTask.new_coordinate || null) ||
           (t.doneCoordinate || null) !== (existingTask.done_coordinate || null);
 
@@ -357,7 +358,7 @@ async function saveTasks(tasks, targetHubId, currentUser = 'System') {
         type_storage: t.typeStorage || null,
         status: t.status || null,
         status_delivery: t.statusDelivery || null,
-        reason: t.reason || null,
+        reason: taskReason,
         delivery_date: deliveryDate,
         start_time: t.startTime || null,
         end_time: t.endTime || null,

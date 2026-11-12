@@ -268,6 +268,7 @@ export async function GET(request, { params }) {
     if (Array.isArray(data.gpsSesuai)) data.gpsSesuai = data.gpsSesuai.join(', ');
     if (Array.isArray(data.statusDelivery)) data.statusDelivery = data.statusDelivery.join(', ');
     if (Array.isArray(data.assignee)) data.assignee = data.assignee.join(', ');
+    if (!data.reason && data.alasan) data.reason = data.alasan;
 
     let plannedTravelDuration = null;
     if (data.routingResultId && data.routePlannedOrder != null && data.eta) {
@@ -285,7 +286,7 @@ export async function GET(request, { params }) {
           const [pH, pM] = prevTask.etd.split(':').map(Number);
           const [eH, eM] = data.eta.split(':').map(Number);
           if (!isNaN(pH) && !isNaN(eH)) {
-            let diff = (eH * 60 + eM) - (pH * 60 + pM);
+            let diff = eH * 60 + eM - (pH * 60 + pM);
             if (diff < 0) diff += 24 * 60;
             plannedTravelDuration = diff;
           }
@@ -306,7 +307,7 @@ export async function GET(request, { params }) {
           const [hH, hM] = firstHub.etd.split(':').map(Number);
           const [eH, eM] = data.eta.split(':').map(Number);
           if (!isNaN(hH) && !isNaN(eH)) {
-            let diff = (eH * 60 + eM) - (hH * 60 + hM);
+            let diff = eH * 60 + eM - (hH * 60 + hM);
             if (diff < 0) diff += 24 * 60;
             plannedTravelDuration = diff;
           }

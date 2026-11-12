@@ -70,8 +70,9 @@ export default function PendingReasonModal({
   noClose = false,
 }) {
   const { formatStatus, isPendingGr } = useDeliveryStatus();
-  const { isSuperadmin } = useSuperadmin();
+  const { isSuperadmin, isAdmin } = useSuperadmin();
   const { t: translate } = useLanguage();
+  const isCloseBlocked = noClose && !isSuperadmin && !isAdmin;
 
   const items = useMemo(() => {
     if (!data) return [];
@@ -551,8 +552,8 @@ export default function PendingReasonModal({
       />
       <Modal
         isOpen={isOpen && !isConfirmOpen}
-        onClose={noClose ? undefined : onClose}
-        noClose={noClose}
+        onClose={isCloseBlocked ? undefined : onClose}
+        noClose={isCloseBlocked}
         maxWidth="max-w-2xl"
         minHeight="min-h-[65vh]"
         title={modalTitle}
