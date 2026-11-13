@@ -1,5 +1,5 @@
 import prisma from '@/lib/prisma';
-import { processKpiForDates } from '@/lib/kpiService';
+import { processKpiForDates } from '@/lib/services/kpiService';
 import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';

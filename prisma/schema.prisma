@@ -30,6 +30,7 @@ model Hub {
   tasks               Task[]
   location_histories  LocationHistory[]
   kpi_data            KpiData[]
+  daily_fleet         DailyFleet[]
 
   @@map("hubs")
 }
@@ -141,7 +142,7 @@ model VehicleType {
 model VehicleMapping {
   id          Int      @id @default(autoincrement())
   plat        String   @unique
-  mapped_type String
+  mapped_type String?
   created_at  DateTime @default(now())
   updated_at  DateTime @updatedAt
 
@@ -358,4 +359,33 @@ model KpiData {
   @@index([hub_id])
   @@index([date])
   @@map("kpi_data")
+}
+
+model DailyFleet {
+  id                 String   @id @default(cuid())
+  hub_id             String
+  date               String
+  routing_result_ids Json     @default("[]")
+  plat               String
+  driver_name       String
+  driver_email      String?
+  vehicle_type      String?
+  storage_type      String?
+  act_weight        Float    @default(0)
+  max_weight        Float    @default(0)
+  act_volume        Float    @default(0)
+  max_volume        Float    @default(0)
+  task_data         Json     @default("{\"total\": 0, \"success\": 0, \"pending\": 0, \"cancel\": 0, \"partial\": 0, \"pending_gr\": 0}")
+  task_ids          Json     @default("[]")
+  total_distance    Float?
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
+
+  hub               Hub      @relation(fields: [hub_id], references: [id])
+
+  @@unique([hub_id, date, plat])
+  @@index([hub_id, date])
+  @@index([date])
+  @@index([plat])
+  @@map("daily_fleet")
 }
