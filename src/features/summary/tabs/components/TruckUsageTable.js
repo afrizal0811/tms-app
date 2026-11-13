@@ -154,12 +154,36 @@ export default function TruckUsageTable({
     return { tmsDisp, manualDisp, tvuDisp, tmsRaw, manualRaw, manualDesc, manualId, tmsDetails };
   };
 
+  const getVisibleTypes = (cat) =>
+    activeTypes.filter((type) => (hubMasterData?.[cat]?.[type] || 0) > 0);
+  const dryTypes = getVisibleTypes('Dry');
+  const frozenTypes = getVisibleTypes('Frozen');
+  const totalRows = dryTypes.length + frozenTypes.length + 5;
+
+  const renderMasterCell = (masterTotal, isClickable, storage, type, bgClass, isBoldCell = false) => (
+    <td
+      onClick={() => {
+        if (isClickable && onCellClick) {
+          onCellClick({ isMaster: true, storage, type, masterTotal });
+        }
+      }}
+      className={`${tdClass} w-[60px] min-w-[60px] ${isBoldCell ? 'font-bold ' : ''}sticky left-[250px] z-30 ${thickBorderClass} ${bgClass} ${isClickable ? 'cursor-pointer hover:brightness-90 dark:hover:hover:brightness-120 transition-colors' : ''}`}
+    >
+      {isClickable ? (
+        <span className="inline-block border-b-2 border-dotted border-red-700 dark:border-red-400 px-1 pb-0.5">
+          {masterTotal}
+        </span>
+      ) : (
+        masterTotal
+      )}
+    </td>
+  );
+
   const renderSectionRows = (cat, bgClass, types) => {
-    const totalRows = activeTypes.length * 2 + 5;
     return types.map((type, idx) => {
       const masterTotal = getMasterVal(cat, type);
       const isClickableMaster = !isPercentage && masterTotal > 0;
-      const isAbsoluteFirstRow = cat === 'Dry' && idx === 0;
+      const isAbsoluteFirstRow = (cat === 'Dry' || (dryTypes.length === 0 && cat === 'Frozen')) && idx === 0;
       return (
         <tr key={`${cat}-${type}`}>
           {idx === 0 && (
@@ -175,22 +199,7 @@ export default function TruckUsageTable({
           >
             {type}
           </td>
-          <td
-            onClick={() => {
-              if (isClickableMaster && onCellClick) {
-                onCellClick({ isMaster: true, storage: cat, type: type, masterTotal });
-              }
-            }}
-            className={`${tdClass} w-[60px] min-w-[60px] font-bold sticky left-[250px] z-30 ${thickBorderClass} ${bgClass} ${isClickableMaster ? 'cursor-pointer hover:brightness-90 dark:hover:hover:brightness-120 transition-colors' : ''}`}
-          >
-            {isClickableMaster ? (
-              <span className="inline-block border-b-2 border-dotted border-red-700 dark:border-red-400 px-1 pb-0.5">
-                {masterTotal}
-              </span>
-            ) : (
-              masterTotal
-            )}
-          </td>
+          {renderMasterCell(masterTotal, isClickableMaster, cat, type, bgClass, true)}
           {dateKeys.map((d, i) => {
             const {
               tmsDisp,
@@ -218,7 +227,7 @@ export default function TruckUsageTable({
                   </td>
                 );
               }
-              return null; // Skip render karena sudah di-rowspan oleh baris pertama
+              return null;
             }
 
             const isClickableManual = !isPercentage && !isFuture && !isHoliday;
@@ -355,22 +364,7 @@ export default function TruckUsageTable({
     return (
       <tr className={isBold ? 'font-bold' : ''}>
         <Tooltip tooltipContent={tooltip || ''}>{labelTable}</Tooltip>
-        <td
-          onClick={() => {
-            if (isClickableMaster && onCellClick) {
-              onCellClick({ isMaster: true, storage: clickStorage, type: clickType, masterTotal });
-            }
-          }}
-          className={`${tdClass} w-[60px] min-w-[60px] sticky left-[250px] z-30 ${thickBorderClass} ${bgClass} ${isClickableMaster ? 'cursor-pointer hover:brightness-90 dark:hover:hover:brightness-120 transition-colors' : ''}`}
-        >
-          {isClickableMaster ? (
-            <span className="inline-block border-b-2 border-dotted border-red-700 dark:border-red-400 px-1 pb-0.5">
-              {masterTotal}
-            </span>
-          ) : (
-            masterTotal
-          )}
-        </td>
+        {renderMasterCell(masterTotal, isClickableMaster, clickStorage, clickType, bgClass)}
         {dateKeys.map((d, i) => {
           const {
             tmsDisp,
@@ -555,7 +549,7 @@ export default function TruckUsageTable({
           </tr>
         </thead>
         <tbody>
-          {renderSectionRows('Dry', bgDry, activeTypes)}
+          {renderSectionRows('Dry', bgDry, dryTypes)}
           {renderSpecialRow(
             translate('summary.tabs.truck_usage.interbranch'),
             'Dry',
@@ -571,7 +565,7 @@ export default function TruckUsageTable({
             true
           )}
 
-          {renderSectionRows('Frozen', bgFrozen, activeTypes)}
+          {renderSectionRows('Frozen', bgFrozen, frozenTypes)}
           {renderSpecialRow(
             translate('summary.tabs.truck_usage.interbranch'),
             'Frozen',
