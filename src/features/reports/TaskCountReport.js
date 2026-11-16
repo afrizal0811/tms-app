@@ -101,6 +101,7 @@ export default function TaskCountReport() {
           status: 'DONE,ONGOING,UNASSIGNED',
           timeFrom,
           timeTo,
+          isShowAll: true,
         });
 
         const chunkData = Array.isArray(response) ? response : response?.data || [];
@@ -204,24 +205,26 @@ export default function TaskCountReport() {
         </div>
 
         {!isCustomMode ? (
-          <div className="flex flex-col max-w-sm mx-auto w-full">
-            <label className="text-sm font-semibold text-gray-600 dark:text-slate-300 mb-2">
-              {t('report.task_count.date_range')}
-            </label>
-            <CustomDatePicker
-              selected={selectedMonth}
-              onChange={(date) => setSelectedMonth(date)}
-              showMonthYearPicker
-              dateFormat="MMMM yyyy"
-              className="w-full"
-              disabled={isLoading}
-            />
-            <p className="text-xs text-gray-500 dark:text-slate-400 mt-2 italic leading-relaxed flex flex-col gap-1 md:flex-row">
-              <strong className="text-slate-700 dark:text-slate-300">
+          <div className="flex flex-col items-center w-full">
+            <div className="flex flex-col max-w-sm w-full">
+              <label className="text-sm font-semibold text-gray-600 dark:text-slate-300 mb-2">
+                {t('report.task_count.date_range')}
+              </label>
+              <CustomDatePicker
+                selected={selectedMonth}
+                onChange={(date) => setSelectedMonth(date)}
+                showMonthYearPicker
+                dateFormat="MMMM yyyy"
+                className="w-full"
+                disabled={isLoading}
+              />
+            </div>
+            <p className="text-xs text-gray-500 dark:text-slate-400 mt-2 italic leading-relaxed flex flex-wrap items-center justify-center gap-1.5">
+              <strong className="text-slate-700 dark:text-slate-300 whitespace-nowrap">
                 {formatLongDate(startHelp, localeCode)} 08:34 WIB
               </strong>
-              {t('common.to')}
-              <strong className="text-slate-700 dark:text-slate-300">
+              <span>{t('common.to')}</span>
+              <strong className="text-slate-700 dark:text-slate-300 whitespace-nowrap">
                 {formatLongDate(endHelp, localeCode)} 08:34 WIB
               </strong>
               <InformationButton infoText={t('report.tooltip.cut_off')} />
