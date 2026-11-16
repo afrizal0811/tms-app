@@ -331,7 +331,7 @@ export async function processAndStoreKpi({ hubId, deliveryDate, userName = 'syst
   let additionalResults = [];
   if (missingRoutingIds.length > 0) {
     additionalResults = await prisma.routingResult.findMany({
-      where: { id: { in: missingRoutingIds } },
+      where: { id: { in: missingRoutingIds }, hub_id: hubId },
     });
   }
 

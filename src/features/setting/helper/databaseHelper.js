@@ -60,26 +60,36 @@ function createStyledSheet(aoa, colWidths = [], centerIndices = []) {
   return ws;
 }
 
+function formatAuditDate(val) {
+  if (!val) return '';
+  const formatted = formatDateUniversal(val, 'DD-MM-YYYY HH:mm:ss');
+  return formatted === '-' ? '' : formatted;
+}
+
 export function buildDateWorkbook({
   dateStr,
   routing = [],
   tasks = [],
+  dailyFleet = [],
   locations = [],
   kpi = null,
+  translate,
 }) {
   const routingHeader = [
     'No',
-    'ID Routing',
-    'Nama Routing',
-    'Tanggal Pengiriman',
-    'Dropped',
-    'Histories',
-    'Created By',
-    'Created At',
-    'Updated By',
-    'Updated At',
+    translate('common.routing_id'),
+    translate('common.routing_name'),
+    translate('common.delivery_date'),
+    translate('common.dropped_task'),
+    translate('common.histories'),
+    translate('common.created_by'),
+    translate('common.created_time'),
+    translate('common.updated_by'),
+    translate('common.updated_time'),
   ];
   const routingRows = routing.map((r, i) => {
+    const ru = r.route_user || r.routeUser;
+    const su = r.sync_user || r.syncUser;
     const totalHistories =
       typeof r.histories === 'object' && r.histories !== null
         ? (r.histories.total ?? 0)
@@ -101,10 +111,10 @@ export function buildDateWorkbook({
         ? (r.dropped.total ?? 0)
         : (r.dropped ?? 0),
       totalHistories,
-      r.sync_user?.created_by || r.createdBy || '',
-      r.sync_user?.created_at || r.createdAt || '',
-      r.sync_user?.updated_by || r.updatedBy || '',
-      r.sync_user?.updated_at || r.updatedAt || '',
+      ru?.created_by || r.createdBy || '',
+      formatAuditDate(ru?.created_at || r.createdAt),
+      su?.updated_by || su?.created_by || r.updatedBy || '',
+      formatAuditDate(su?.updated_at || su?.created_at || r.updatedAt),
     ];
   });
   const wsRouting = createStyledSheet(
@@ -115,34 +125,35 @@ export function buildDateWorkbook({
 
   const taskHeader = [
     'No',
-    'ID Task',
-    'No Invoice',
-    'Nama Pelanggan',
-    'Alamat',
-    'Status Delivery',
+    translate('common.task_id'),
+    translate('common.invoice_number'),
+    translate('common.customer_name'),
+    translate('common.address'),
+    translate('common.status.delivery_status'),
     'Status',
-    'Reason',
-    'Tipe Storage',
-    'Flow',
-    'Driver',
-    'Plat',
-    'Tipe Kendaraan',
-    'Urutan Rute',
-    'Berat (kg)',
-    'Volume (cbm)',
-    'Jarak (km)',
-    'Waktu Mulai',
-    'Waktu Selesai',
-    'Waktu Tiba',
+    translate('common.reason'),
+    translate('common.storage_type'),
+    translate('common.flow'),
+    translate('common.driver'),
+    translate('common.license_number'),
+    translate('common.vehicle_type'),
+    translate('common.plan_seq'),
+    `${translate('common.weight')} (kg)`,
+    `${translate('common.volume')} (cbm)`,
+    translate('common.distance'),
+    translate('common.start_time'),
+    translate('common.finish_time'),
+    translate('common.actual_arrival'),
     'ETA',
     'ETD',
-    'Created By',
-    'Created At',
-    'Updated By',
-    'Updated At',
+    translate('common.created_by'),
+    translate('common.created_time'),
+    translate('common.updated_by'),
+    translate('common.updated_time'),
   ];
   const taskRows = tasks.map((t, i) => {
     const cust = parseCustomerString(t.customerOrder || t.customer_order);
+    const tu = t.task_user || t.taskUser;
     return [
       i + 1,
       t.id || t._id || '',
@@ -161,42 +172,84 @@ export function buildDateWorkbook({
       t.weightKg ?? t.weight_kg ?? 0,
       t.volumeCbm ?? t.volume_cbm ?? 0,
       t.distance ?? 0,
-      t.startTime || t.start_time || '',
-      t.endTime || t.end_time || '',
-      t.arrivalTime || t.arrival_time || '',
+      formatAuditDate(t.startTime || t.start_time),
+      formatAuditDate(t.endTime || t.end_time),
+      formatAuditDate(t.arrivalTime || t.arrival_time),
       t.eta || '',
       t.etd || '',
-      t.syncUser?.created_by || t.taskUser?.created_by || t.createdBy || '',
-      t.syncUser?.created_at || t.taskUser?.created_at || t.createdAt || '',
-      t.syncUser?.updated_by || t.taskUser?.updated_by || t.updatedBy || '',
-      t.syncUser?.updated_at || t.taskUser?.updated_at || t.updatedAt || '',
+      tu?.created_by || t.createdBy || '',
+      formatAuditDate(tu?.created_at || t.createdAt),
+      tu?.updated_by || t.updatedBy || '',
+      formatAuditDate(tu?.updated_at || t.updatedAt),
     ];
   });
   const wsTask = createStyledSheet(
     [taskHeader, ...taskRows],
     [
-      6, 25, 18, 25, 35, 16, 12, 20, 14, 12, 20, 14, 14, 12, 12, 12, 12, 12, 12, 12, 10, 10, 18, 20,
+      6, 25, 18, 25, 35, 16, 12, 20, 14, 12, 20, 14, 14, 12, 12, 12, 12, 20, 20, 20, 10, 10, 18, 20,
       18, 20,
     ],
     [0, 5, 6, 8, 9, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 25]
   );
 
+  const vehicleDetailsHeader = [
+    'No',
+    translate('common.license_number'),
+    translate('common.driver'),
+    translate('common.vehicle_type'),
+    translate('common.storage_type'),
+    `${translate('common.actual')} ${translate('common.weight')} (kg)`,
+    `${translate('common.weight_max')} (kg)`,
+    `${translate('common.actual')} ${translate('common.volume')} (cbm)`,
+    `${translate('common.volume_max')} (cbm)`,
+    translate('common.distance'),
+    translate('common.total_task'),
+    translate('common.status.success'),
+    translate('common.status.pending'),
+    translate('common.status.partial'),
+    translate('common.status.cancel'),
+    translate('common.status.pending_gr'),
+  ];
+  const vehicleDetailsRows = dailyFleet.map((df, i) => {
+    const td = df.task_data || {};
+    return [
+      i + 1,
+      df.plat || '',
+      df.driver_name || '',
+      df.vehicle_type || '',
+      df.storage_type || '',
+      df.act_weight ?? 0,
+      df.max_weight ?? 0,
+      df.act_volume ?? 0,
+      df.max_volume ?? 0,
+      df.total_distance ?? 0,
+      td.total ?? 0,
+      td.success ?? 0,
+      td.pending ?? 0,
+      td.partial ?? 0,
+      td.cancel ?? 0,
+      td.pending_gr ?? 0,
+    ];
+  });
+  const wsVehicleDetails = createStyledSheet(
+    [vehicleDetailsHeader, ...vehicleDetailsRows],
+    [6, 16, 22, 16, 12, 18, 20, 20, 22, 12, 12, 10, 10, 10, 10, 12],
+    [0, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+  );
+
   const locHeader = [
     'No',
     'Email',
-    'Nama Driver',
-    'Tanggal',
-    'Waktu Mulai',
-    'Waktu Selesai',
-    'Durasi',
-    'Jarak (km)',
-    'Tracked Time',
-    'Start Lat',
-    'Start Lon',
-    'Finish Lat',
-    'Finish Lon',
-    'Updated By',
-    'Updated At',
+    translate('common.driver'),
+    translate('common.date'),
+    translate('common.start_time'),
+    translate('common.finish_time'),
+    translate('common.duration'),
+    translate('common.distance'),
+    translate('common.start_location'),
+    translate('common.finish_location'),
+    translate('common.updated_by'),
+    translate('common.updated_time'),
   ];
   const locRows = locations.map((l, i) => {
     const finish = l.finish || {};
@@ -207,77 +260,109 @@ export function buildDateWorkbook({
     const startLon = l.startLon ?? l.start_lon ?? l.lon ?? '';
     const finishLat = finish.lat ?? l.finish_lat ?? '';
     const finishLon = finish.lon ?? l.finish_lon ?? '';
+    const startLocation = startLat !== '' && startLon !== '' ? `${startLat}, ${startLon}` : '';
+    const finishLocation = finishLat !== '' && finishLon !== '' ? `${finishLat}, ${finishLon}` : '';
 
     return [
       i + 1,
       l.email || '',
       l.driver_name || l.driverName || '',
       l.date || dateStr,
-      l.start_time || l.startTime || '',
-      finishTime,
+      formatAuditDate(l.start_time || l.startTime),
+      formatAuditDate(finishTime),
       formatDurationHHMMSS(totalDuration),
       totalDistance != null && totalDistance !== '' ? Number(totalDistance).toFixed(2) : '',
-      l.tracked_time ?? '',
-      startLat,
-      startLon,
-      finishLat,
-      finishLon,
+      startLocation,
+      finishLocation,
       l.sync_user?.updated_by || l.syncUser?.updated_by || '',
-      l.sync_user?.updated_at || l.syncUser?.updated_at || '',
+      formatAuditDate(l.sync_user?.updated_at || l.syncUser?.updated_at),
     ];
   });
   const wsLoc = createStyledSheet(
     [locHeader, ...locRows],
-    [6, 25, 22, 14, 14, 14, 14, 12, 14, 12, 12, 12, 12, 18, 20],
-    [0, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14]
+    [6, 25, 22, 14, 20, 20, 14, 12, 24, 24, 18, 20],
+    [0, 3, 4, 5, 6, 7, 11]
   );
 
   const kpiItem = Array.isArray(kpi) ? kpi[0] : kpi;
-  const kpiHeader = ['Kategori', 'Metrik', 'Nilai'];
+  const kpiHeader = ['Data', 'Total'];
   const kpiRows = [
-    ['Truk', 'Truk Dry', kpiItem?.truck_dry ?? 0],
-    ['Truk', 'Truk Frozen', kpiItem?.truck_frz ?? 0],
-    ['Truk', 'Total Truk', kpiItem?.total_truck ?? 0],
-    ['Tugas', 'Tugas Dry', kpiItem?.task_dry ?? 0],
-    ['Tugas', 'Tugas Frozen', kpiItem?.task_frz ?? 0],
-    ['Tugas', 'Total Tugas', (kpiItem?.task_dry ?? 0) + (kpiItem?.task_frz ?? 0)],
-    ['Pending', 'Pending Dry', kpiItem?.pending_dry ?? 0],
-    ['Pending', 'Pending Frozen', kpiItem?.pending_frz ?? 0],
-    ['Pending', 'Alasan Routing', kpiItem?.pending_routing ?? 0],
-    ['Pending', 'Alasan Driver', kpiItem?.pending_driver ?? 0],
-    ['Pending', 'Alasan Sales', kpiItem?.pending_sales ?? 0],
-    ['Pending', 'Alasan Customer', kpiItem?.pending_customer ?? 0],
-    ['Pending', 'Alasan Lainnya', kpiItem?.pending_other ?? 0],
-    ['Waktu Operasional', 'Estimasi Jam Dry', kpiItem?.est_hour_dry ?? 0],
-    ['Waktu Operasional', 'Estimasi Jam Frozen', kpiItem?.est_hour_frz ?? 0],
-    ['Waktu Operasional', 'Aktual Jam Dry', kpiItem?.act_hour_dry ?? 0],
-    ['Waktu Operasional', 'Aktual Jam Frozen', kpiItem?.act_hour_frz ?? 0],
-    ['Jarak Tempuh (km)', 'Estimasi Jarak Dry', kpiItem?.est_dist_dry ?? 0],
-    ['Jarak Tempuh (km)', 'Estimasi Jarak Frozen', kpiItem?.est_dist_frz ?? 0],
-    ['Jarak Tempuh (km)', 'Aktual Jarak Dry', kpiItem?.act_dist_dry ?? 0],
-    ['Jarak Tempuh (km)', 'Aktual Jarak Frozen', kpiItem?.act_dist_frz ?? 0],
-    ['Kapasitas Muatan', 'Kapasitas Berat Dry (kg)', kpiItem?.capacity_kg_dry ?? 0],
-    ['Kapasitas Muatan', 'Total Muatan Berat Dry (kg)', kpiItem?.total_kg_dry ?? 0],
-    ['Kapasitas Muatan', 'Kapasitas Volume Dry (cbm)', kpiItem?.capacity_cbm_dry ?? 0],
-    ['Kapasitas Muatan', 'Total Muatan Volume Dry (cbm)', kpiItem?.total_cbm_dry ?? 0],
-    ['Kapasitas Muatan', 'Kapasitas Berat Frozen (kg)', kpiItem?.capacity_kg_frz ?? 0],
-    ['Kapasitas Muatan', 'Total Muatan Berat Frozen (kg)', kpiItem?.total_kg_frz ?? 0],
-    ['Kapasitas Muatan', 'Kapasitas Volume Frozen (cbm)', kpiItem?.capacity_cbm_frz ?? 0],
-    ['Kapasitas Muatan', 'Total Muatan Volume Frozen (cbm)', kpiItem?.total_cbm_frz ?? 0],
+    [`${translate('common.vehicle')} (Dry)`, kpiItem?.truck_dry ?? 0],
+    [`${translate('common.vehicle')} (Frozen)`, kpiItem?.truck_frz ?? 0],
+    [`${translate('common.vehicle')} Total`, kpiItem?.total_truck ?? 0],
+    [`${translate('common.task')} (Dry)`, kpiItem?.task_dry ?? 0],
+    [`${translate('common.task')} (Frozen)`, kpiItem?.task_frz ?? 0],
+    [translate('common.total_task'), (kpiItem?.task_dry ?? 0) + (kpiItem?.task_frz ?? 0)],
+    ['Pending (Dry)', kpiItem?.pending_dry ?? 0],
+    ['Pending (Frozen)', kpiItem?.pending_frz ?? 0],
+    [translate('common.routing'), kpiItem?.pending_routing ?? 0],
+    [translate('common.driver'), kpiItem?.pending_driver ?? 0],
+    ['Sales', kpiItem?.pending_sales ?? 0],
+    [translate('common.customer'), kpiItem?.pending_customer ?? 0],
+    [translate('common.others'), kpiItem?.pending_other ?? 0],
+    [
+      `${translate('common.estimate')} ${translate('common.duration')} (Dry)`,
+      kpiItem?.est_hour_dry ?? 0,
+    ],
+    [
+      `${translate('common.estimate')} ${translate('common.duration')} (Frozen)`,
+      kpiItem?.est_hour_frz ?? 0,
+    ],
+    [
+      `${translate('common.actual')} ${translate('common.duration')} (Dry)`,
+      kpiItem?.act_hour_dry ?? 0,
+    ],
+    [
+      `${translate('common.actual')} ${translate('common.duration')} (Frozen)`,
+      kpiItem?.act_hour_frz ?? 0,
+    ],
+    [
+      `${translate('common.estimate')} ${translate('common.distance')} (Dry)`,
+      kpiItem?.est_dist_dry ?? 0,
+    ],
+    [
+      `${translate('common.estimate')} ${translate('common.distance')} (Frozen)`,
+      kpiItem?.est_dist_frz ?? 0,
+    ],
+    [
+      `${translate('common.actual')} ${translate('common.distance')} (Dry)`,
+      kpiItem?.act_dist_dry ?? 0,
+    ],
+    [
+      `${translate('common.actual')} ${translate('common.distance')} (Frozen)`,
+      kpiItem?.act_dist_frz ?? 0,
+    ],
+    [
+      `${translate('common.weight')} (Dry)`,
+      `${kpiItem?.total_kg_dry ?? 0} / ${kpiItem?.capacity_kg_dry ?? 0}`,
+    ],
+    [
+      `${translate('common.volume')} (Dry)`,
+      `${kpiItem?.total_cbm_dry ?? 0} / ${kpiItem?.capacity_cbm_dry ?? 0}`,
+    ],
+    [
+      `${translate('common.weight')} (Frozen)`,
+      `${kpiItem?.total_kg_frz ?? 0} / ${kpiItem?.capacity_kg_frz ?? 0}`,
+    ],
+    [
+      `${translate('common.volume')} (Frozen)`,
+      `${kpiItem?.total_cbm_frz ?? 0} / ${kpiItem?.capacity_cbm_frz ?? 0}`,
+    ],
   ];
-  const wsKpi = createStyledSheet([kpiHeader, ...kpiRows], [25, 35, 20], [2]);
+  const wsKpi = createStyledSheet([kpiHeader, ...kpiRows], [35, 20], [1]);
 
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, wsRouting, 'Routing');
-  XLSX.utils.book_append_sheet(wb, wsTask, 'Task');
-  XLSX.utils.book_append_sheet(wb, wsLoc, 'Driver Location');
+  XLSX.utils.book_append_sheet(wb, wsRouting, translate('common.routing'));
+  XLSX.utils.book_append_sheet(wb, wsTask, translate('common.task'));
+  XLSX.utils.book_append_sheet(wb, wsVehicleDetails, 'Vehicle Details');
+  XLSX.utils.book_append_sheet(wb, wsLoc, translate('common.driver_location'));
   XLSX.utils.book_append_sheet(wb, wsKpi, 'KPI Data');
 
   return wb;
 }
 
-export function downloadSingleDateExcel({ dateStr, data, hubAcronym = '' }) {
-  const wb = buildDateWorkbook({ dateStr, ...data });
+export function downloadSingleDateExcel({ dateStr, data, hubAcronym = '', translate }) {
+  const wb = buildDateWorkbook({ dateStr, ...data, translate });
   const dFormatted = formatDateUniversal(dateStr, 'DD.MM.YYYY');
   const fileName = hubAcronym
     ? `Database - ${dFormatted} - ${hubAcronym}.xlsx`
@@ -285,12 +370,17 @@ export function downloadSingleDateExcel({ dateStr, data, hubAcronym = '' }) {
   XLSX.writeFile(wb, fileName);
 }
 
-export async function downloadDateRangeZip({ datesList, fetchDateData, hubAcronym = '' }) {
+export async function downloadDateRangeZip({
+  datesList,
+  fetchDateData,
+  hubAcronym = '',
+  translate,
+}) {
   const zip = new JSZip();
 
   for (const dateStr of datesList) {
     const data = await fetchDateData(dateStr);
-    const wb = buildDateWorkbook({ dateStr, ...data });
+    const wb = buildDateWorkbook({ dateStr, ...data, translate });
     const buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
     const dFormatted = formatDateUniversal(dateStr, 'DD.MM.YYYY');
     zip.file(`${dFormatted}.xlsx`, buffer);

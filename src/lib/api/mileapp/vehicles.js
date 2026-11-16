@@ -309,3 +309,16 @@ export async function deleteTruckNonTms(payload) {
     body: JSON.stringify(payload),
   });
 }
+
+export async function getDailyFleet(params = {}) {
+  const q = new URLSearchParams();
+  if (params.hubId) q.append('hubId', params.hubId);
+  if (params.date) q.append('date', params.date);
+  if (params.dateFrom) q.append('dateFrom', params.dateFrom);
+  if (params.dateTo) q.append('dateTo', params.dateTo);
+
+  return await apiFetch(
+    `/api/mileapp/vehicles/daily?${q.toString()}`,
+    'Gagal mengambil data Daily Fleet dari database'
+  );
+}

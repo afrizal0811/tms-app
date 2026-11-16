@@ -30,6 +30,7 @@ export default function TableData({
   rowClassName,
   rowTooltip,
   tableLayout = 'table-auto',
+  emptyText = null,
 }) {
   const [internalSortConfig, setInternalSortConfig] = useState(null);
   const [page, setPage] = useState(1);
@@ -89,14 +90,14 @@ export default function TableData({
 
   return (
     <div className="flex flex-col flex-1 h-full min-h-0 bg-white dark:bg-slate-900 ">
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 overflow-auto flex flex-col">
         {isLoading ? (
-          <div className="flex justify-center items-center h-full min-h-[300px]">
+          <div className="flex flex-1 min-h-[300px] justify-center items-center">
             <Spinner />
           </div>
         ) : sortedData.length === 0 ? (
-          <div className="p-4 text-center text-xs text-gray-500 flex justify-center items-center h-full min-h-[300px]">
-            {t('common.no_data')}
+          <div className="p-4 text-center text-xs text-gray-500 flex flex-1 min-h-[300px] justify-center items-center">
+            {emptyText || t('common.no_data')}
           </div>
         ) : (
           <table className={`w-full ${tableLayout}`} style={{ minWidth: '100%' }}>
