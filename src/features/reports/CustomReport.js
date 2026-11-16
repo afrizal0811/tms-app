@@ -23,10 +23,15 @@ export default function CustomReport({
     custom: false,
   });
   const { bulk: isBulkMode } = selectedMode;
-  const [reportType, setReportType] = useState('detail');
+  const [reportType, setReportType] = useState('bread');
   const [bulkFormat, setBulkFormat] = useState('zip');
 
   const reportOptions = [
+    {
+      id: 'bread',
+      label: t('report.custom.bread_items'),
+      tooltip: t('report.tooltip.bread_items_info'),
+    },
     {
       id: 'detail',
       label: t('report.custom.task_routing'),

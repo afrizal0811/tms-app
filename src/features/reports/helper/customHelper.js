@@ -2,8 +2,11 @@ import { getLocationHistories, getResult, getResults, getTasks } from '@/lib/api
 import { getCachedHubs } from '@/lib/localStorageHandler';
 import { convertLocationHistories } from '@/lib/reportGenerators/helper';
 import {
+  buildDriverMap,
   buildRoutingMap,
   buildSyncTimeMap,
+  extractBreadRows,
+  generateBreadWorkbook,
   generateTaskDetailWorkbook,
   generateTaskManualDetailWorkbook,
   groupTasksByDriver,
@@ -71,6 +74,7 @@ export const handleCustomDownload = async ({
     const locationName = hubAcronym || hubName;
 
     const reportTypeConfig = {
+      bread: { process: processBreadReport, title: t('report.custom.bread_items') },
       detail: { process: processTaskRoutingReport, title: t('report.custom.task_routing') },
       manual: { process: processTaskManualReport, title: t('report.custom.task_manual') },
       service_level: {
@@ -142,6 +146,37 @@ export const handleCustomDownload = async ({
   }
 };
 
+export const processBreadReport = async ({ datesToProcess, locationName, t, driverData }) => {
+  const driverMap = buildDriverMap(driverData);
+  const generatedFiles = [];
+
+  for (const date of datesToProcess) {
+    const { timeFromUtc, timeToUtc } = getReportDates(date, date);
+
+    const tasks = await getTasks({
+      status: 'DONE,ONGOING',
+      timeFrom: timeFromUtc,
+      timeTo: timeToUtc,
+    });
+
+    const tasksData = normalizeTasksData(tasks);
+    if (isEmpty(tasksData)) continue;
+
+    const dateStr = formatDateUniversal(date, 'DD-MM-YYYY');
+    const rows = extractBreadRows(tasksData, driverMap, dateStr);
+    if (rows.length === 0) continue;
+
+    const wb = generateBreadWorkbook(rows, t);
+    const fileDateStr = formatDateUniversal(date, 'DD.MM.YYYY');
+    const fileName = `${t('report.custom.bread_items')} - ${fileDateStr} - ${locationName}.xlsx`;
+    const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+
+    generatedFiles.push({ fileName, wb, wbout });
+  }
+
+  return generatedFiles;
+};
+
 export const processTaskRoutingReport = async ({ datesToProcess, locationName, t, driverData }) => {
   const hubsList = getCachedHubs() || [];
   const activeHub = hubsList.activeHub;
@@ -162,6 +197,7 @@ export const processTaskRoutingReport = async ({ datesToProcess, locationName, t
         timeFrom: timeFromUtc,
         timeTo: timeToUtc,
         isNeedFields: false,
+        source: 'vendor',
       }),
       getLocationHistories({
         date: selectedDateString,
@@ -213,6 +249,7 @@ export const processTaskManualReport = async ({ datesToProcess, locationName, t 
       timeFrom: timeFromUtc,
       timeTo: timeToUtc,
       isNeedFields: false,
+      source: 'vendor',
     });
 
     const tasksData = normalizeTasksData(tasks);
@@ -252,33 +289,33 @@ export const processTaskManualReport = async ({ datesToProcess, locationName, t 
       if (!h) return;
 
       ['move', 'dropped', 'switch', 'change', 'manual'].forEach((key) => {
-        const items = Array.isArray(h[key]) ? h[key] : (h[key]?.data || []);
+        const items = Array.isArray(h[key]) ? h[key] : h[key]?.data || [];
         items.forEach((m) => {
-            const ver = Number(m.version) || 0;
+          const ver = Number(m.version) || 0;
 
-            let targetVisits = m.visits || [];
-            if (key === 'change' && m.description) {
-              if (m.description.toLowerCase().startsWith('visit ')) {
-                const specific = targetVisits.filter(
-                  (v) => v.visitName && m.description.includes(v.visitName)
-                );
-                if (specific.length > 0) targetVisits = specific;
-              }
+          let targetVisits = m.visits || [];
+          if (key === 'change' && m.description) {
+            if (m.description.toLowerCase().startsWith('visit ')) {
+              const specific = targetVisits.filter(
+                (v) => v.visitName && m.description.includes(v.visitName)
+              );
+              if (specific.length > 0) targetVisits = specific;
             }
+          }
 
-            targetVisits.forEach((v) => {
-              if (v.visitId && v.visitId.includes('-')) {
-                const tId = v.visitId.substring(v.visitId.indexOf('-') + 1);
-                if (!overrideTaskMap.has(tId)) overrideTaskMap.set(tId, []);
-                overrideTaskMap.get(tId).push({
-                  action: key === 'manual' ? 'manual' : (m.action || key).toLowerCase(),
-                  version: ver,
-                });
-              }
-            });
+          targetVisits.forEach((v) => {
+            if (v.visitId && v.visitId.includes('-')) {
+              const tId = v.visitId.substring(v.visitId.indexOf('-') + 1);
+              if (!overrideTaskMap.has(tId)) overrideTaskMap.set(tId, []);
+              overrideTaskMap.get(tId).push({
+                action: key === 'manual' ? 'manual' : (m.action || key).toLowerCase(),
+                version: ver,
+              });
+            }
           });
         });
       });
+    });
 
     tasksData.forEach((task) => {
       const taskId = String(task._id || task.id);
@@ -348,8 +385,8 @@ export const processServiceLevelReport = async ({
         timeTo: timeToUtc,
       }),
       getLocationHistories({
-        dateFrom: startString,
-        dateTo: endString,
+        dateFrom: selectedDateString,
+        dateTo: selectedDateString,
         timeFrom: locTimeFrom,
         timeTo: locTimeTo,
       }),
@@ -377,8 +414,11 @@ export const processServiceLevelReport = async ({
       const completed = doneSource || '-';
       let serviceLevel = '-';
       let startTrip = null;
-      let driverName = task.driverName || '-';
-      let licenseNumber = task.basePlat || '-';
+      const assigneeEmail = Array.isArray(task.assignee)
+        ? task.assignee[0] || ''
+        : task.assignee || '';
+      const driverName = task.driverName || assigneeEmail || '-';
+      const licenseNumber = task.basePlat || '-';
 
       const createdTime = new Date(created);
       const doneDate = new Date(doneSource);
@@ -391,7 +431,6 @@ export const processServiceLevelReport = async ({
         }
       }
 
-      let assigneeEmail = task.assignee || '';
       if (assigneeEmail) {
         const driverHistory = filteredTimeData.find((item) => item.email === assigneeEmail);
         const timeDriver =
@@ -479,10 +518,10 @@ export const processTripActivityReport = async ({ datesToProcess, locationName, 
     const { locTimeFrom, locTimeTo, selectedDateString } = getReportDates(date, date);
 
     const locHistories = await getLocationHistories({
-        date: selectedDateString,
-        timeFrom: locTimeFrom,
-        timeTo: locTimeTo,
-      });
+      date: selectedDateString,
+      timeFrom: locTimeFrom,
+      timeTo: locTimeTo,
+    });
 
     const trips = locHistories || [];
     if (isEmpty(trips)) continue;
@@ -505,7 +544,6 @@ export const processTripActivityReport = async ({ datesToProcess, locationName, 
       const username = d.driverName || '-';
       const assignedVehicle = d.basePlat || '-';
 
-      const tripId = trip.tripActivityId || '-';
       const startTripCoordinate = trip.lat && trip.lon ? `${trip.lat}, ${trip.lon}` : '-';
       const endTripCoordinate =
         trip.finish?.lat && trip.finish?.lon ? `${trip.finish.lat}, ${trip.finish.lon}` : '-';
@@ -515,7 +553,6 @@ export const processTripActivityReport = async ({ datesToProcess, locationName, 
 
       rows.push({
         rowData: [
-          tripId,
           assignedVehicleId,
           username,
           assignedVehicle,

@@ -14,12 +14,6 @@ export const APP_NAVIGATION = [
       },
       { id: '/report/kpi', href: '/report/kpi', label: 'KPI Report', labelKey: 'navbar.kpi' },
       {
-        id: '/report/bread',
-        href: '/report/bread',
-        label: 'Bread Report',
-        labelKey: 'navbar.bread_report',
-      },
-      {
         id: '/report/custom',
         href: '/report/custom',
         label: 'Custom Report',

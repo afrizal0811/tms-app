@@ -619,6 +619,39 @@ export async function GET(request) {
     const dateTo = searchParams.get('dateTo');
     const status = searchParams.get('status');
     const deliveryDate = searchParams.get('deliveryDate');
+    const source = searchParams.get('source');
+    const timeBy = searchParams.get('timeBy') || 'startTime';
+    const fields = searchParams.get('fields');
+
+    if (source === 'vendor') {
+      let tFrom = timeFrom;
+      let tTo = timeTo;
+      const targetStart = deliveryDate || dateFrom?.split(/[ T]/)[0];
+      const targetEnd = deliveryDate || dateTo?.split(/[ T]/)[0] || targetStart;
+
+      if ((!tFrom || !tTo) && targetStart) {
+        tFrom = getUtcRange(targetStart).timeFrom;
+        tTo = getUtcRange(targetEnd).timeTo;
+      }
+
+      if (!tFrom || !tTo) {
+        return NextResponse.json(
+          { error: 'Missing required parameters: deliveryDate, dateRange, or timeFrom & timeTo' },
+          { status: 400 }
+        );
+      }
+
+      const vendorTasks = await fetchAndEnrichTasks({
+        hubId,
+        timeFrom: tFrom,
+        timeTo: tTo,
+        status: status || 'DONE,ONGOING,UNASSIGNED',
+        timeBy,
+        fields,
+      });
+
+      return NextResponse.json(vendorTasks);
+    }
 
     let fromDate = null;
     let toDate = null;

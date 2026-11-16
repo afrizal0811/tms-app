@@ -12,6 +12,7 @@ export async function getTasks({
   isNeedFields = true,
   isShowAll = false,
   hubId,
+  source,
 } = {}) {
   const { storedLocation } = getLocalStorage();
   const targetHubId = hubId || (!isShowAll ? storedLocation : null);
@@ -27,6 +28,7 @@ export async function getTasks({
   if (timeFrom) params.append('timeFrom', timeFrom);
   if (timeTo) params.append('timeTo', timeTo);
   if (isNeedFields && tasksFields) params.append('fields', tasksFields);
+  if (source) params.append('source', source);
 
   return await apiFetch(`/api/mileapp/tasks?${params.toString()}`, 'Gagal mengambil data tasks');
 }

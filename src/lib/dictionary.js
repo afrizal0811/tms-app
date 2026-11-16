@@ -176,7 +176,6 @@ export const dictionary = {
       },
     },
     navbar: {
-      bread_report: 'Laporan Barang Roti',
       coordinate: 'Koordinat',
       custom_report: 'Laporan Kustom',
       daily_report: 'Laporan Harian',
@@ -274,9 +273,9 @@ export const dictionary = {
     report: {
       change_date: 'Ubah Tanggal Ruting',
       daily_report: 'Laporan Harian',
-      bread_report: 'Laporan Barang Roti',
       kpi_report: 'Laporan KPI',
       custom: {
+        bread_items: 'Barang Roti',
         title: 'Laporan Kustom',
         service_level: 'Perjanjian Tingkat Layanan',
         task_manual: 'Tugas Manual',
@@ -322,6 +321,7 @@ export const dictionary = {
         skip_sunday: 'Melewati {sundaysSkipped} tanggal hari Minggu',
       },
       tooltip: {
+        bread_items_info: 'Laporan barang roti yang terkirim',
         cut_off: 'Batas Waktu',
         info_change_time: 'Untuk ruting non H-1',
         info_delivery: 'Ruting otomatis H-1',
@@ -948,7 +948,6 @@ export const dictionary = {
       },
     },
     navbar: {
-      bread_report: 'Bread Item Report',
       coordinate: 'Coordinates',
       custom_report: 'Custom Report',
       daily_report: 'Daily Report',
@@ -1048,9 +1047,9 @@ export const dictionary = {
     report: {
       change_date: 'Change Routing Date',
       daily_report: 'Daily Report',
-      bread_report: 'Bread Item Report',
       kpi_report: 'KPI Report',
       custom: {
+        bread_items: 'Bread Item',
         title: 'Custom Report',
         service_level: 'Service Level Agreement',
         task_manual: 'Manual Tasks',
@@ -1096,6 +1095,7 @@ export const dictionary = {
         skip_sunday: 'Skipped {sundaysSkipped} Sundays',
       },
       tooltip: {
+        bread_items_info: 'Report of delivered bread items',
         cut_off: 'Cut-off Time',
         info_change_time: 'For non-D-1 routing',
         info_delivery: 'Automatic D-1 routing',
