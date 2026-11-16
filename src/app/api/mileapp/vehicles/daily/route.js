@@ -23,7 +23,7 @@ export async function GET(request) {
       where.date = { gte: dateFrom };
     }
 
-    const data = await prisma.dailyFleet.findMany({
+    const data = await prisma.vehicleUsage.findMany({
       where,
       orderBy: [{ date: 'asc' }, { driver_name: 'asc' }, { plat: 'asc' }],
     });

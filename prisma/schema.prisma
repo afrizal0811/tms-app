@@ -30,7 +30,7 @@ model Hub {
   tasks               Task[]
   location_histories  LocationHistory[]
   kpi_data            KpiData[]
-  daily_fleet         DailyFleet[]
+  vehicle_usage       VehicleUsage[]
 
   @@map("hubs")
 }
@@ -163,6 +163,21 @@ model TruckUsage {
 
   @@unique([hub_id, date, storage_type, vehicle_type])
   @@map("truck_usages")
+}
+
+model VehicleExternal {
+  id           Int      @id @default(autoincrement())
+  hub_id       String
+  date         String  
+  storage_type String   
+  vehicle_type String 
+  count        Int      
+  description  String?  @db.Text
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  @@unique([hub_id, date, storage_type, vehicle_type])
+  @@map("vehicles_external")
 }
 
 model Reason {
@@ -361,7 +376,7 @@ model KpiData {
   @@map("kpi_data")
 }
 
-model DailyFleet {
+model VehicleUsage {
   id                 String   @id @default(cuid())
   hub_id             String
   date               String
@@ -386,5 +401,5 @@ model DailyFleet {
   @@index([hub_id, date])
   @@index([date])
   @@index([plat])
-  @@map("daily_fleet")
+  @@map("vehicle_usage")
 }

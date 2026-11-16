@@ -85,7 +85,7 @@ export async function syncDailyFleetForDate(hubId, deliveryDate, userName = 'sys
         storage: true,
       },
     }),
-    prisma.dailyFleet.findMany({
+    prisma.vehicleUsage.findMany({
       where: existingFleetWhere,
       select: { hub_id: true, date: true, plat: true, sync_user: true },
     }),
@@ -206,7 +206,7 @@ export async function syncDailyFleetForDate(hubId, deliveryDate, userName = 'sys
       sync_user: syncUser,
     };
 
-    return prisma.dailyFleet.upsert({
+    return prisma.vehicleUsage.upsert({
       where: {
         hub_id_date_plat: {
           hub_id: item.hub_id,

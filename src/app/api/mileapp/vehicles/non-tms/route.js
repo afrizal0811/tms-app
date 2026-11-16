@@ -8,7 +8,7 @@ export async function GET(request) {
   const endDate = searchParams.get('endDate');
 
   try {
-    const data = await prisma.truckUsage.findMany({
+    const data = await prisma.vehicleExternal.findMany({
       where: {
         hub_id: hubId,
         date: { gte: startDate, lte: endDate },
@@ -53,7 +53,7 @@ export async function POST(request) {
 
     const parsedCount = parseInt(count, 10) || 0;
 
-    const upserted = await prisma.truckUsage.upsert({
+    const upserted = await prisma.vehicleExternal.upsert({
       where: {
         hub_id_date_storage_type_vehicle_type: {
           hub_id: hubId,
@@ -107,7 +107,7 @@ export async function DELETE(request) {
       );
     }
 
-    await prisma.truckUsage.delete({
+    await prisma.vehicleExternal.delete({
       where: {
         hub_id_date_storage_type_vehicle_type: {
           hub_id: hubId,
