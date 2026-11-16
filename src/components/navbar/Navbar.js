@@ -304,7 +304,7 @@ export default function Navbar() {
               </DynamicNavMenu>
             ) : (
               <div className="flex items-center space-x-4 sm:space-x-6">
-                {isSecret && <NavLink href="/setting">{t('setting.title')}</NavLink>}
+                {isSecret && <NavLink href="/setting">{t('common.setting')}</NavLink>}
                 <NavDropdown label={t('navbar.help')} links={HELP_LINKS} />
               </div>
             )}

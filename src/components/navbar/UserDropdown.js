@@ -82,7 +82,7 @@ export default function UserDropdown({ isDarkMode }) {
               onClick={() => setIsOpen(false)}
               className="w-full text-left px-4 py-2.5 text-sm flex items-center gap-2 text-slate-700 dark:text-slate-300 hover:bg-sky-50 dark:hover:bg-slate-700 hover:text-sky-600 dark:hover:text-sky-400 transition-colors cursor-pointer"
             >
-              {t('navbar.setting')}
+              {t('common.setting')}
             </Link>
             <button
               onClick={handleLogout}

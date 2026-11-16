@@ -749,7 +749,7 @@ export default function DeliveryPage() {
         <ToggleButton
           options={[
             { label: t('delivery.view_summary'), value: false },
-            { label: t('delivery.view_detail'), value: true },
+            { label: t('common.detail'), value: true },
           ]}
           value={isDetailView}
           onChange={handleToggleView}
@@ -909,7 +909,7 @@ export default function DeliveryPage() {
   return (
     <>
       <PageTemplate
-        title={t('delivery.title')}
+        title={t('common.delivery')}
         subtitle={
           <>
             {t('delivery.subtitle')}{' '}

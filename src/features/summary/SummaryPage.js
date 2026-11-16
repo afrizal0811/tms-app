@@ -724,7 +724,7 @@ export default function SummaryPage() {
   return (
     <>
       <PageTemplate
-        title={t('summary.title')}
+        title={t('common.summary')}
         subtitle={
           <>
             {t('summary.subtitle_1')}{' '}

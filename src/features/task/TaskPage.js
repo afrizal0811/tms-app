@@ -517,7 +517,7 @@ export default function TaskPage() {
   return (
     <>
       <PageTemplate
-        title={t('task_detail.title')}
+        title={t('common.task_details')}
         subtitle={
           <>
             <span className="font-semibold text-sky-600">

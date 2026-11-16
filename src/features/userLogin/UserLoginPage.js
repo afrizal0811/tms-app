@@ -284,7 +284,7 @@ export default function UserLoginPage({ t, allHubsList, currentHubListView, hand
                   htmlFor="email"
                   className="block text-sm font-medium text-gray-500 dark:text-slate-400 mb-1"
                 >
-                  {t('home.email')}
+                  {t('common.email')}
                 </label>
                 <input
                   autoComplete="off"

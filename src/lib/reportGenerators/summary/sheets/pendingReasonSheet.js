@@ -204,7 +204,7 @@ export function generatePendingReasonSheet(
     translate('common.customer_name'),
     translate('common.invoice_number'),
     translate('common.status.delivery_status'),
-    translate('summary.tabs.pending_reasons.reason'),
+    translate('common.reason'),
   ];
 
   let currentIdx = headers.length;
@@ -218,7 +218,7 @@ export function generatePendingReasonSheet(
     headers.push(
       translate('summary.tabs.pending_reasons.group_reason'),
       translate('summary.tabs.pending_reasons.detail'),
-      translate('summary.tabs.pending_reasons.category'),
+      translate('common.category'),
       'PIC'
     );
     currentIdx += 4;

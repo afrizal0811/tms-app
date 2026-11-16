@@ -54,7 +54,7 @@ export default function SettingPage() {
     () => [
       { tab: 'general', label: t('setting.tab.general.title') },
       ...(isSuperadmin ? [{ tab: 'permission', label: t('setting.tab.permission.title') }] : []),
-      { tab: 'sync', label: t('setting.tab.sync_data.title') },
+      { tab: 'sync', label: t('common.synchronize') },
       ...(detailConfig
         ? [
             {
@@ -248,7 +248,7 @@ export default function SettingPage() {
     <div className="mx-auto px-4 sm:px-6 py-2 pb-3 w-full h-full flex flex-col grow">
       <div className="mb-2">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-slate-100">
-          {t('setting.title')}
+          {t('common.setting')}
         </h1>
       </div>
       <div className="flex border-b border-gray-200 dark:border-slate-700 mb-6 mt-4 overflow-x-auto">

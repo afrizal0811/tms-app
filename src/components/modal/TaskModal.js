@@ -798,7 +798,7 @@ export default function TaskModal({ isOpen, onClose, taskId, isAllHub = false })
       <Modal
         isOpen={isOpen}
         onClose={onClose}
-        title={translate('task_detail.modal.title')}
+        title={translate('common.task_details')}
         maxWidth="max-w-5xl lg:max-w-6xl"
         bodyClassName="p-6 overflow-y-auto"
       >
@@ -814,7 +814,7 @@ export default function TaskModal({ isOpen, onClose, taskId, isAllHub = false })
       <Modal
         isOpen={isOpen}
         onClose={onClose}
-        title={translate('task_detail.modal.title')}
+        title={translate('common.task_details')}
         subtitle=""
         maxWidth="max-w-5xl lg:max-w-6xl"
         bodyClassName="p-6 overflow-y-auto"
@@ -849,7 +849,7 @@ export default function TaskModal({ isOpen, onClose, taskId, isAllHub = false })
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={translate('task_detail.modal.title')}
+      title={translate('common.task_details')}
       subtitle={getSubtitle(taskData, pendingDetail, formatStatus, translate)}
       maxWidth="max-w-5xl lg:max-w-6xl"
       bodyClassName="p-6 overflow-y-auto"

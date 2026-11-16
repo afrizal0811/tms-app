@@ -103,7 +103,7 @@ export default function DetailTab({ loading, summaryData }) {
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
             <StatCard
-              title={t('dashboard.tab.detail.unassigned')}
+              title={t('common.status.unassigned')}
               value={summaryData?.unassigned}
               isLoading={loading}
               tooltipContent={renderTooltip(

@@ -52,7 +52,7 @@ export default function CustomerHistoryModal({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={`${t('longlat.modal.title')} (${dateTitle})`}
+      title={`${t('coordinate.modal.title')} (${dateTitle})`}
       subtitle={customerData}
       maxWidth="max-w-5xl"
       contentClassName="h-[80vh] sm:h-[70vh]"

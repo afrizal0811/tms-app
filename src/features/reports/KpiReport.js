@@ -88,8 +88,8 @@ export default function KpiReport({
   const bulkText = isBulkMode ? t('common.bulk') : '';
   const prefixText = `${manualText} ${bulkText}`.trim();
   const titleMenu = isIndonesian
-    ? `${t('report.kpi_report')} ${prefixText}`.trim()
-    : `${prefixText} ${t('report.kpi_report')}`.trim();
+    ? `${t('common.kpi_report')} ${prefixText}`.trim()
+    : `${prefixText} ${t('common.kpi_report')}`.trim();
 
   const handleSingleDateChange = (date) => {
     if (date) {

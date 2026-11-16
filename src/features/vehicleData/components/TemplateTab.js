@@ -46,7 +46,7 @@ export default function TemplateTab({ paginatedData, searchQuery, t }) {
       width: 'w-[10%]',
       sortable: false,
       align: 'left',
-      label: t('vehicle.tabs.template.name'),
+      label: t('common.name'),
       render: (row) => (
         <div className="text-left w-full">
           <HighlightText text={row.plat} highlight={searchQuery} />

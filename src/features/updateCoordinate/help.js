@@ -87,7 +87,7 @@ export const handleDownloadExcel = (processedData, setIsDownloading, selectedDat
       }
     }
 
-    XLSX.utils.book_append_sheet(wb, ws, t('longlat.title'));
+    XLSX.utils.book_append_sheet(wb, ws, t('coordinate.title'));
     let dateStr = '';
     if (Array.isArray(selectedDate)) {
       const [start, end] = selectedDate;
@@ -98,7 +98,7 @@ export const handleDownloadExcel = (processedData, setIsDownloading, selectedDat
       dateStr = formatDateUniversal(selectedDate, 'DD.MM.YYYY');
     }
     const { storedLocationAcronym: locationName } = getLocalStorage() || '-';
-    const fileName = `${t('longlat.title')} - ${dateStr} - ${locationName}.xlsx`;
+    const fileName = `${t('coordinate.title')} - ${dateStr} - ${locationName}.xlsx`;
     XLSX.writeFile(wb, fileName);
     toastSuccess(t('common.toast.success'));
   } catch (e) {

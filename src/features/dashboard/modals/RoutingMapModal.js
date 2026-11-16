@@ -338,7 +338,7 @@ export default function RoutingMapModal({ isOpen, onClose, data, selectedDate })
                 },
                 {
                   id: 'real',
-                  label: t('dashboard.map.real'),
+                  label: t('common.actual_seq'),
                   activeBg: 'bg-green-700',
                   dotBg: 'bg-green-700',
                 },
@@ -435,7 +435,7 @@ export default function RoutingMapModal({ isOpen, onClose, data, selectedDate })
           />
 
           <MapViewSection
-            title={t('dashboard.map.real')}
+            title={t('common.actual_seq')}
             tasks={filteredTasks}
             sequenceKey="realSequence"
             colorClass="bg-[#10B981]"

@@ -87,8 +87,8 @@ export default function CustomReport({
 
   const bulkText = isBulkMode ? t('common.bulk') : '';
   const titleMenu = isIndonesian
-    ? `${t('report.custom.title')} ${bulkText}`.trim()
-    : `${bulkText} ${t('report.custom.title')}`.trim();
+    ? `${t('common.custom_report')} ${bulkText}`.trim()
+    : `${bulkText} ${t('common.custom_report')}`.trim();
 
   return (
     <ReportTemplate

@@ -752,7 +752,7 @@ export function routingActualSheet(wb, data, t) {
     }
   }
 
-  XLSX.utils.book_append_sheet(wb, ws, t('excel.reports.routing_actual.sheet_name'));
+  XLSX.utils.book_append_sheet(wb, ws, t('common.routing_vs_actual'));
 }
 
 export const downloadRoutingActualExcel = (data, t, selectedDate, hubLabel) => {
@@ -761,7 +761,7 @@ export const downloadRoutingActualExcel = (data, t, selectedDate, hubLabel) => {
     routingActualSheet(wb, data, t);
     const dateStr = formatDateUniversal(selectedDate || new Date(), 'DD.MM.YYYY');
     const safeHubLabel = hubLabel ? ` - ${hubLabel}` : '';
-    XLSX.writeFile(wb, `${t('dashboard.tabs.routing_vs_actual')} - ${dateStr}${safeHubLabel}.xlsx`);
+    XLSX.writeFile(wb, `${t('common.routing_vs_actual')} - ${dateStr}${safeHubLabel}.xlsx`);
     toastSuccess(t('common.toast.success'));
   } catch (e) {
     toastError(t('common.toast.error', { err: e.message }), e);

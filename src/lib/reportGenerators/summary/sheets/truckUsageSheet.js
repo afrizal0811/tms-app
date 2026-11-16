@@ -841,7 +841,7 @@ export async function generateTruckUsageSheet(
     excelData.push(...table2.tableRows);
     excelData.push([]);
   }
-  excelData.push([translate('summary.tabs.truck_usage.explanation')]);
+  excelData.push([translate('common.explanation')]);
 
   const legendTitleRow = excelData.length - 1;
   merges.push({ s: { r: legendTitleRow, c: 0 }, e: { r: legendTitleRow, c: 2 } });

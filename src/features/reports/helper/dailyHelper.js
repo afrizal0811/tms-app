@@ -173,7 +173,7 @@ export const handleSingleDownload = async ({
       true
     );
 
-    const baseDailyReport = t('navbar.daily_report');
+    const baseDailyReport = t('common.daily_report');
     const formattedDate = formatDateUniversal(dateStr, 'DD.MM.YYYY');
     const singleExcelFileName = `${baseDailyReport} - ${formattedDate} - ${hubLabel}.xlsx`;
 
@@ -321,7 +321,7 @@ export const handleBulkDownload = async ({
 
     const { storedLocationAcronym } = getLocalStorage();
     const hubLabel = storedLocationAcronym || hubName;
-    const baseDailyReport = t('report.daily_report');
+    const baseDailyReport = t('common.daily_report');
     const bulkLabel = t('common.bulk');
     const formattedStart = formatDateUniversal(startStr, 'DD.MM.YYYY');
     const formattedEnd = formatDateUniversal(endStr, 'DD.MM.YYYY');
@@ -420,7 +420,7 @@ export const handleManualDownload = async ({
       true // isManualMode
     );
 
-    const baseDailyReport = t('report.daily_report') || t('navbar.daily_report') || 'Daily Report';
+    const baseDailyReport = t('common.daily_report');
     const formattedDate = formatDateUniversal(extractedStartDate, 'DD.MM.YYYY');
     const excelFileName = `${baseDailyReport} (Manual) - ${formattedDate} - ${hubLabel}.xlsx`;
 
