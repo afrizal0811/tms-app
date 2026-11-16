@@ -22,7 +22,7 @@ export function categorizeDeliveryStatus(rawStatus) {
   return null;
 }
 
-export async function syncDailyFleetForDate(hubId, deliveryDate) {
+export async function syncDailyFleetForDate(hubId, deliveryDate, userName = 'system') {
   if (!deliveryDate) return 0;
 
   const taskWhere = { delivery_date: deliveryDate };
@@ -54,7 +54,12 @@ export async function syncDailyFleetForDate(hubId, deliveryDate) {
   if (!tasks || tasks.length === 0) return 0;
 
   const taskIds = tasks.map((t) => t.id);
-  const [pendingDetails, vehicles, drivers] = await Promise.all([
+  const existingFleetWhere = { date: deliveryDate };
+  if (hubId && hubId !== 'all') {
+    existingFleetWhere.hub_id = hubId;
+  }
+
+  const [pendingDetails, vehicles, drivers, existingFleets] = await Promise.all([
     prisma.pendingDetail.findMany({
       where: { task_id: { in: taskIds } },
       select: { task_id: true, new_status: true },
@@ -80,7 +85,15 @@ export async function syncDailyFleetForDate(hubId, deliveryDate) {
         storage: true,
       },
     }),
+    prisma.dailyFleet.findMany({
+      where: existingFleetWhere,
+      select: { hub_id: true, date: true, plat: true, sync_user: true },
+    }),
   ]);
+
+  const existingSyncMap = new Map(
+    existingFleets.map((f) => [`${f.hub_id}_${f.date}_${f.plat}`, f.sync_user])
+  );
 
   const pendingMap = new Map(pendingDetails.map((p) => [p.task_id, p.new_status]));
 
@@ -165,7 +178,18 @@ export async function syncDailyFleetForDate(hubId, deliveryDate) {
     }
   });
 
+  const nowIso = new Date().toISOString();
+  const resolvedUser = userName || 'system';
+
   const upsertOps = Array.from(groups.values()).map((item) => {
+    const existingSync = existingSyncMap.get(`${item.hub_id}_${item.date}_${item.plat}`);
+    const syncUser = {
+      created_by: existingSync?.created_by || resolvedUser,
+      created_at: existingSync?.created_at || nowIso,
+      updated_by: resolvedUser,
+      updated_at: nowIso,
+    };
+
     const payload = {
       routing_result_ids: Array.from(item._routingSet),
       driver_name: item.driver_name,
@@ -179,6 +203,7 @@ export async function syncDailyFleetForDate(hubId, deliveryDate) {
       task_data: item.task_data,
       task_ids: item.task_ids,
       total_distance: item.total_distance,
+      sync_user: syncUser,
     };
 
     return prisma.dailyFleet.upsert({
@@ -206,14 +231,14 @@ export async function syncDailyFleetForDate(hubId, deliveryDate) {
   return upsertOps.length;
 }
 
-export async function recalculateDailyFleetForTask(taskId) {
+export async function recalculateDailyFleetForTask(taskId, userName = 'system') {
   if (!taskId) return;
   const task = await prisma.task.findUnique({
     where: { id: taskId },
     select: { hub_id: true, delivery_date: true },
   });
   if (task?.delivery_date) {
-    await syncDailyFleetForDate(task.hub_id, task.delivery_date);
+    await syncDailyFleetForDate(task.hub_id, task.delivery_date, userName);
   }
 }
 

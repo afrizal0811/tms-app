@@ -189,7 +189,7 @@ export async function POST(request) {
 
     if (summary.tasks?.success !== false) {
       try {
-        await syncDailyFleetForDate(hubId, deliveryDate);
+        await syncDailyFleetForDate(hubId, deliveryDate, payload.userName || 'system');
       } catch (vhErr) {
         console.warn(`[Sync] Gagal generate daily vehicle usage untuk ${deliveryDate}:`, vhErr.message);
       }

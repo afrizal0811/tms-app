@@ -378,8 +378,7 @@ model DailyFleet {
   task_data         Json     @default("{\"total\": 0, \"success\": 0, \"pending\": 0, \"cancel\": 0, \"partial\": 0, \"pending_gr\": 0}")
   task_ids          Json     @default("[]")
   total_distance    Float?
-  created_at        DateTime @default(now())
-  updated_at        DateTime @updatedAt
+  sync_user         Json?
 
   hub               Hub      @relation(fields: [hub_id], references: [id])
 

@@ -3,6 +3,7 @@
 import HighlightText from '@/components/HighlightText';
 import TableData from '@/components/table/TableData';
 import { useMemo } from 'react';
+import UserAuditCell from './UserAuditCell';
 
 export default function VehicleDetailsTable({
   data = [],
@@ -123,6 +124,20 @@ export default function VehicleDetailsTable({
                 </span>
               )}
             </div>
+          );
+        },
+      },
+      {
+        label: translate('common.sync_by'),
+        key: 'syncBy',
+        render: (row) => {
+          const su = row.sync_user || row.syncUser;
+          return (
+            <UserAuditCell
+              user={su?.updated_by || su?.created_by}
+              timestamp={su?.updated_at || su?.created_at}
+              highlight={searchQuery}
+            />
           );
         },
       },

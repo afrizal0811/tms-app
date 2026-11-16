@@ -119,7 +119,9 @@ export async function POST(request) {
     const results = await prisma.$transaction(upsertOperations);
     clearPendingCheckCache();
 
-    Promise.all(taskIds.map((tId) => recalculateDailyFleetForTask(tId))).catch((err) =>
+    const batchUser = rawList.find((e) => e.updated_by || e.created_by || e.userName);
+    const resolvedUser = batchUser?.updated_by || batchUser?.created_by || batchUser?.userName || 'system';
+    Promise.all(taskIds.map((tId) => recalculateDailyFleetForTask(tId, resolvedUser))).catch((err) =>
       console.warn('[PendingDetails] Gagal recalculate vehicle usage:', err.message)
     );
 

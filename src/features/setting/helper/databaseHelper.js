@@ -209,9 +209,12 @@ export function buildDateWorkbook({
     translate('common.status.partial'),
     translate('common.status.cancel'),
     translate('common.status.pending_gr'),
+    translate('common.sync_by'),
+    translate('common.updated_time'),
   ];
   const vehicleDetailsRows = dailyFleet.map((df, i) => {
     const td = df.task_data || {};
+    const su = df.sync_user || df.syncUser;
     return [
       i + 1,
       df.plat || '',
@@ -229,12 +232,14 @@ export function buildDateWorkbook({
       td.partial ?? 0,
       td.cancel ?? 0,
       td.pending_gr ?? 0,
+      su?.updated_by || su?.created_by || '',
+      formatAuditDate(su?.updated_at || su?.created_at),
     ];
   });
   const wsVehicleDetails = createStyledSheet(
     [vehicleDetailsHeader, ...vehicleDetailsRows],
-    [6, 16, 22, 16, 12, 18, 20, 20, 22, 12, 12, 10, 10, 10, 10, 12],
-    [0, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+    [6, 16, 22, 16, 12, 18, 20, 20, 22, 12, 12, 10, 10, 10, 10, 12, 18, 20],
+    [0, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 17]
   );
 
   const locHeader = [
