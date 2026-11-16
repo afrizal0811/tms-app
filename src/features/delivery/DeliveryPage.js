@@ -47,6 +47,36 @@ const getStoragePrefix = (storageFilter) => {
   return '';
 };
 
+const buildActivePlatsByEmail = (driverData = [], resultsData = []) => {
+  const platesInResults = new Set();
+  (resultsData || []).forEach((res) => {
+    [
+      ...Object.keys(res?.totalDistance || {}),
+      ...Object.keys(res?.time || {}),
+      ...Object.keys(res?.hubTimes || {}),
+    ].forEach((p) => {
+      const base = getBasePlate(p) || p;
+      if (base) platesInResults.add(base);
+    });
+  });
+
+  const activePlatsByEmail = new Map();
+  (driverData || []).forEach((driver) => {
+    if (!driver?.email || !driver?.plat) return;
+    const normalizedEmail = normalizeEmail(driver.email);
+    const candidatePlat = getBasePlate(driver.plat) || driver.plat;
+    if (!normalizedEmail || !candidatePlat) return;
+    const existingPlat = activePlatsByEmail.get(normalizedEmail);
+    if (
+      !existingPlat ||
+      (!platesInResults.has(existingPlat) && platesInResults.has(candidatePlat))
+    ) {
+      activePlatsByEmail.set(normalizedEmail, candidatePlat);
+    }
+  });
+  return activePlatsByEmail;
+};
+
 const persistDeliveryPageSetting = (key, value) => {
   const { storedSession } = getLocalStorage();
   if (storedSession) {
@@ -344,29 +374,11 @@ export default function DeliveryPage() {
           }
         });
 
-        const taskIdToRoutingInfo = new Map();
-        const activePlatsByEmail = new Map();
-        (driverData || []).forEach((driver) => {
-          if (driver?.email && driver?.plat) {
-            const normalizedEmail = normalizeEmail(driver.email);
-            if (normalizedEmail)
-              activePlatsByEmail.set(normalizedEmail, getBasePlate(driver.plat) || driver.plat);
-          }
-        });
+        const activePlatsByEmail = buildActivePlatsByEmail(driverData, resultsData);
 
         const tasksByPlat = filteredTasks.reduce((groups, task) => {
           const email = normalizeEmail(task?.assignee);
-          const taskId = task._id || task.taskId || task.id;
-          const routingInfo = taskId ? taskIdToRoutingInfo.get(String(taskId)) : null;
-          const activeRoutingPlat = activePlatsByEmail.get(email);
-
-          let plat = null;
-          if (email) {
-            plat = activeRoutingPlat || task.basePlat || routingInfo?.plat;
-          } else {
-            plat = routingInfo?.plat || task.basePlat;
-          }
-          plat = plat || t('common.others');
+          const plat = task.basePlat || activePlatsByEmail.get(email) || t('common.others');
           const groupKey = `${email}_${plat}`;
 
           if (!groups[groupKey])
@@ -404,17 +416,9 @@ export default function DeliveryPage() {
 
         const finalRoutes = Object.values(tasksByPlat).map(
           ({ vehicleId, plat, tasks, email, assigneeName, vehicleType }) => {
-            tasks.sort((a, b) => {
-              const aId = a._id || a.taskId || a.id;
-              const bId = b._id || b.taskId || b.id;
-              const aInfo = aId ? taskIdToRoutingInfo.get(String(aId)) : null;
-              const bInfo = bId ? taskIdToRoutingInfo.get(String(bId)) : null;
-              const aReassigned = Boolean(aInfo && aInfo.assignee && aInfo.assignee !== email);
-              const bReassigned = Boolean(bInfo && bInfo.assignee && bInfo.assignee !== email);
-              const aOrder = aReassigned ? Infinity : (a.routePlannedOrder ?? Infinity);
-              const bOrder = bReassigned ? Infinity : (b.routePlannedOrder ?? Infinity);
-              return aOrder - bOrder;
-            });
+            tasks.sort(
+              (a, b) => (a.routePlannedOrder ?? Infinity) - (b.routePlannedOrder ?? Infinity)
+            );
 
             const taskTrips = tasks.map((task) => {
               const sos = (task.orderId || '')
@@ -424,11 +428,7 @@ export default function DeliveryPage() {
 
               const startFormat = task.startTime ? formatDateUniversal(task.startTime) : null;
               const taskId = task._id || task.taskId || task.id;
-              const routingInfo = taskId ? taskIdToRoutingInfo.get(String(taskId)) : null;
-              const isReassigned = Boolean(
-                routingInfo && routingInfo.assignee && routingInfo.assignee !== email
-              );
-              const effectiveOrder = isReassigned ? null : task.routePlannedOrder;
+              const effectiveOrder = task.routePlannedOrder;
               const isManual = effectiveOrder == null;
 
               return {

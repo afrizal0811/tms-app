@@ -268,7 +268,7 @@ export const handleFullDeliveryListDownload = async ({
 
     filteredVehicleRoutes.forEach((route) => {
       const plat = route.basePlat;
-      const driverName = route.driverName || '-';
+      const driverName = route.driverName || route.assigneeName || '-';
 
       const isDefaultSort = sortConfig?.key === 'no' && sortConfig?.direction === 'asc';
 
