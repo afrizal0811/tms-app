@@ -50,6 +50,17 @@ export async function getTask(id, isAllHub) {
   return result;
 }
 
+export async function getExtraTasks(id) {
+  if (!id) {
+    throw new Error('ID task harus disertakan');
+  }
+
+  return await apiFetch(
+    `/api/mileapp/tasks/${id}?vendorOnly=1`,
+    `Gagal mengambil riwayat task dengan ID ${id}`
+  );
+}
+
 export async function syncTasks({
   deliveryDate,
   hubId,
