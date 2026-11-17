@@ -31,7 +31,7 @@ export async function GET(request) {
     return NextResponse.json(data, { status: 200 });
   } catch (error) {
     return NextResponse.json(
-      { error: 'Gagal mengambil data Daily Fleet', detail: error.message },
+      { error: 'Gagal mengambil data Vehicle Usage', detail: error.message },
       { status: 500 }
     );
   }

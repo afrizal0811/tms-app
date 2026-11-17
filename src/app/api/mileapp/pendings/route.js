@@ -1,5 +1,5 @@
 import prisma from '@/lib/prisma';
-import { recalculateDailyFleetForTask } from '@/lib/services/dailyFleetService';
+import { recalculateVehicleUsageForTask } from '@/lib/services/vehicleUsageService';
 import { NextResponse } from 'next/server';
 import { clearPendingCheckCache } from './check/route';
 
@@ -121,7 +121,7 @@ export async function POST(request) {
 
     const batchUser = rawList.find((e) => e.updated_by || e.created_by || e.userName);
     const resolvedUser = batchUser?.updated_by || batchUser?.created_by || batchUser?.userName || 'system';
-    Promise.all(taskIds.map((tId) => recalculateDailyFleetForTask(tId, resolvedUser))).catch((err) =>
+    Promise.all(taskIds.map((tId) => recalculateVehicleUsageForTask(tId, resolvedUser))).catch((err) =>
       console.warn('[PendingDetails] Gagal recalculate vehicle usage:', err.message)
     );
 
@@ -150,7 +150,7 @@ export async function DELETE(request) {
     });
     clearPendingCheckCache();
 
-    recalculateDailyFleetForTask(taskId).catch((err) =>
+    recalculateVehicleUsageForTask(taskId).catch((err) =>
       console.warn('[PendingDetails] Gagal recalculate vehicle usage saat delete:', err.message)
     );
 

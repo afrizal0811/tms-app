@@ -1,8 +1,8 @@
-import { POST as syncResults } from '@/app/api/mileapp/results/route';
+import { POST as syncResults } from '@/app/api/mileapp/routing-results/route';
 import { POST as syncTasks } from '@/app/api/mileapp/tasks/route';
 import { POST as syncLocationHistories } from '@/app/api/mileapp/drivers/location-histories/route';
 import prisma from '@/lib/prisma';
-import { syncDailyFleetForDate } from '@/lib/services/dailyFleetService';
+import { syncVehicleUsageForDate } from '@/lib/services/vehicleUsageService';
 import { NextResponse } from 'next/server';
 
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
@@ -189,7 +189,7 @@ export async function POST(request) {
 
     if (summary.tasks?.success !== false) {
       try {
-        await syncDailyFleetForDate(hubId, deliveryDate, payload.userName || 'system');
+        await syncVehicleUsageForDate(hubId, deliveryDate, payload.userName || 'system');
       } catch (vhErr) {
         console.warn(`[Sync] Gagal generate daily vehicle usage untuk ${deliveryDate}:`, vhErr.message);
       }

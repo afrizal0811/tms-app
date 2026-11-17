@@ -3,7 +3,7 @@
 import Button from '@/components/button/Button';
 import SearchBar from '@/components/SearchBar';
 import {
-  getDailyFleet,
+  getVehicleUsages,
   getKpiData,
   getLocationHistories,
   getResults,
@@ -43,7 +43,7 @@ export default function DatabaseTab({ hubId, hubName = '', dateRange = [], trans
     tasks: [],
     locations: [],
     kpi: null,
-    dailyFleet: [],
+    vehicleUsage: [],
   });
 
   const cacheRef = useRef({});
@@ -61,7 +61,7 @@ export default function DatabaseTab({ hubId, hubName = '', dateRange = [], trans
 
   const fetchDateData = useCallback(
     async (dateStr) => {
-      if (!dateStr) return { routing: [], tasks: [], locations: [], kpi: null, dailyFleet: [] };
+      if (!dateStr) return { routing: [], tasks: [], locations: [], kpi: null, vehicleUsage: [] };
       if (cacheRef.current[dateStr]) {
         return cacheRef.current[dateStr];
       }
@@ -71,7 +71,7 @@ export default function DatabaseTab({ hubId, hubName = '', dateRange = [], trans
         getTasks({ deliveryDate: dateStr, hubId, isShowAll: true }).catch(() => []),
         getLocationHistories({ dateFrom: dateStr, dateTo: dateStr, hubId }).catch(() => []),
         getKpiData({ date: dateStr, hubId }).catch(() => null),
-        getDailyFleet({ date: dateStr, hubId }).catch(() => []),
+        getVehicleUsages({ date: dateStr, hubId }).catch(() => []),
       ]);
 
       const routing = Array.isArray(rRes) ? rRes : [];
@@ -97,9 +97,9 @@ export default function DatabaseTab({ hubId, hubName = '', dateRange = [], trans
         }))
         .sort((a, b) => a.driverName.localeCompare(b.driverName));
       const kpi = Array.isArray(kRes) ? kRes[0] || null : kRes || null;
-      const dailyFleet = Array.isArray(dfRes) ? dfRes : [];
+      const vehicleUsage = Array.isArray(dfRes) ? dfRes : [];
 
-      const result = { routing, tasks, locations, kpi, dailyFleet };
+      const result = { routing, tasks, locations, kpi, vehicleUsage };
       cacheRef.current[dateStr] = result;
       return result;
     },
@@ -134,7 +134,7 @@ export default function DatabaseTab({ hubId, hubName = '', dateRange = [], trans
       currentData.routing.length === 0 &&
       currentData.tasks.length === 0 &&
       currentData.locations.length === 0 &&
-      currentData.dailyFleet.length === 0 &&
+      currentData.vehicleUsage.length === 0 &&
       !currentData.kpi
     );
   }, [currentData]);
@@ -214,7 +214,7 @@ export default function DatabaseTab({ hubId, hubName = '', dateRange = [], trans
       case 'vehicle_details':
         return (
           <VehicleDetailsTable
-            data={currentData.dailyFleet}
+            data={currentData.vehicleUsage}
             searchQuery={searchQuery}
             isLoading={isLoading}
             emptyText={emptyText}

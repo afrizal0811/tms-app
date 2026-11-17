@@ -70,7 +70,7 @@ export function buildDateWorkbook({
   dateStr,
   routing = [],
   tasks = [],
-  dailyFleet = [],
+  vehicleUsage = [],
   locations = [],
   kpi = null,
   translate,
@@ -212,7 +212,7 @@ export function buildDateWorkbook({
     translate('common.sync_by'),
     translate('common.updated_time'),
   ];
-  const vehicleDetailsRows = dailyFleet.map((df, i) => {
+  const vehicleDetailsRows = vehicleUsage.map((df, i) => {
     const td = df.task_data || {};
     const su = df.sync_user || df.syncUser;
     return [

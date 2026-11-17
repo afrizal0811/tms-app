@@ -1,4 +1,4 @@
-import { getVehicles, getTruckNonTms } from '@/lib/api/mileapp';
+import { getVehicles, getVehicleExternals } from '@/lib/api/mileapp';
 import {
   formatLongDate,
   formatDateUniversal,
@@ -150,7 +150,7 @@ export async function calculateTruckUsageData(
   }
   const [allDriversDB, manualUsageDB] = await Promise.all([
     getVehicles(),
-    getTruckNonTms({ startDate: startDateStr, endDate: endDateStr }),
+    getVehicleExternals({ startDate: startDateStr, endDate: endDateStr }),
   ]);
 
   const activeTypes = masterTruckData?.activeTypes || [];

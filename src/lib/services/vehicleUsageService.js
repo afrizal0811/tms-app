@@ -22,7 +22,7 @@ export function categorizeDeliveryStatus(rawStatus) {
   return null;
 }
 
-export async function syncDailyFleetForDate(hubId, deliveryDate, userName = 'system') {
+export async function syncVehicleUsageForDate(hubId, deliveryDate, userName = 'system') {
   if (!deliveryDate) return 0;
 
   const taskWhere = { delivery_date: deliveryDate };
@@ -278,13 +278,13 @@ export async function syncDailyFleetForDate(hubId, deliveryDate, userName = 'sys
   return upsertOps.length;
 }
 
-export async function recalculateDailyFleetForTask(taskId, userName = 'system') {
+export async function recalculateVehicleUsageForTask(taskId, userName = 'system') {
   if (!taskId) return;
   const task = await prisma.task.findUnique({
     where: { id: taskId },
     select: { hub_id: true, delivery_date: true },
   });
   if (task?.delivery_date) {
-    await syncDailyFleetForDate(task.hub_id, task.delivery_date, userName);
+    await syncVehicleUsageForDate(task.hub_id, task.delivery_date, userName);
   }
 }

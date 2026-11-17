@@ -13,7 +13,7 @@ export async function getResults({ deliveryDate, dateFrom, dateTo, deliveryDateO
   if (storedLocation) params.append('hubId', storedLocation);
 
   return await apiFetch(
-    `/api/mileapp/results?${params.toString()}`,
+    `/api/mileapp/routing-results?${params.toString()}`,
     'Gagal mengambil data results'
   );
 }
@@ -24,7 +24,7 @@ export async function getResult(id) {
   }
 
   return await apiFetch(
-    `/api/mileapp/results/${id}`,
+    `/api/mileapp/routing-results/${id}`,
     `Gagal mengambil data result dengan ID ${id}`
   );
 }
@@ -32,7 +32,7 @@ export async function getResult(id) {
 export async function syncRoutingResults({ deliveryDate, hubId, force = false, created_by, updated_by } = {}) {
   const { storedUser } = getLocalStorage();
   const userName = storedUser?.name || null;
-  return await apiFetch('/api/mileapp/results', 'Gagal sinkronisasi data routing', {
+  return await apiFetch('/api/mileapp/routing-results', 'Gagal sinkronisasi data routing', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -51,7 +51,7 @@ export async function updateRoutingResult(id, { deliveryDate, updatedBy } = {}) 
   }
   const { storedUser } = getLocalStorage();
   const userName = updatedBy || storedUser?.name || null;
-  return await apiFetch(`/api/mileapp/results/${id}`, 'Gagal memperbarui data routing', {
+  return await apiFetch(`/api/mileapp/routing-results/${id}`, 'Gagal memperbarui data routing', {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ deliveryDate, updatedBy: userName }),
