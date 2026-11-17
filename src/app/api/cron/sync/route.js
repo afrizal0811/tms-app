@@ -1,6 +1,6 @@
 import { POST as syncOperational } from '@/app/api/mileapp/sync/route';
 import { processKpiForDates } from '@/lib/services/kpiService';
-import { NextResponse } from 'next/server';
+import { after, NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -30,6 +30,45 @@ function isAuthorized(request) {
   return { ok: true };
 }
 
+async function runCronSync({ hubId, dates, pastDates, force }) {
+  const syncResults = [];
+
+  for (const deliveryDate of dates) {
+    const req = new Request('http://localhost/api/mileapp/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        deliveryDate,
+        hubId,
+        force,
+        created_by: 'SYSTEM',
+        updated_by: 'SYSTEM',
+      }),
+    });
+
+    const res = await syncOperational(req);
+    const data = await res.json().catch(() => ({}));
+    syncResults.push({
+      deliveryDate,
+      status: res.status,
+      success: res.ok && data?.success !== false,
+      skipped: Boolean(data?.skipped),
+      message: data?.message || data?.error || null,
+    });
+  }
+
+  let kpiResult = null;
+  if (pastDates.length > 0) {
+    kpiResult = await processKpiForDates({
+      hubId,
+      deliveryDates: pastDates,
+      userName: 'SYSTEM',
+    }).catch((err) => ({ error: err.message }));
+  }
+
+  return { syncResults, kpiResult };
+}
+
 async function handleCronSync(request) {
   const auth = isAuthorized(request);
   if (!auth.ok) {
@@ -41,46 +80,38 @@ async function handleCronSync(request) {
     const hubId = searchParams.get('hubId') || 'all';
     const range = searchParams.get('range') || 'full';
     const force = searchParams.get('force') === 'true';
+    const wait = searchParams.get('wait') === 'true';
 
-    const offsets = range === 'light' ? [0, 1] : [-3, -2, -1, 0, 1];
+    const offsets = range === 'light' ? [0, 1] : [0, 1, -1, -2, -3];
     const dates = offsets.map((offset) => getJakartaDateString(offset));
-    const pastDates = dates.filter((d) => d < getJakartaDateString(0));
+    const todayStr = getJakartaDateString(0);
+    const pastDates = dates.filter((d) => d < todayStr);
 
-    const syncResults = [];
-    for (const deliveryDate of dates) {
-      const req = new Request('http://localhost/api/mileapp/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          deliveryDate,
+    if (!wait) {
+      after(async () => {
+        try {
+          const result = await runCronSync({ hubId, dates, pastDates, force });
+          console.log('[Cron Sync Completed]:', JSON.stringify(result));
+        } catch (err) {
+          console.error('[Cron Sync Background Error]:', err);
+        }
+      });
+
+      return NextResponse.json(
+        {
+          success: true,
+          scheduled: true,
           hubId,
-          force,
-          created_by: 'SYSTEM',
-          updated_by: 'SYSTEM',
-        }),
-      });
-
-      const res = await syncOperational(req);
-      const data = await res.json().catch(() => ({}));
-      syncResults.push({
-        deliveryDate,
-        status: res.status,
-        success: res.ok && data?.success !== false,
-        skipped: Boolean(data?.skipped),
-        message: data?.message || data?.error || null,
-      });
+          range,
+          dates,
+        },
+        { status: 200 }
+      );
     }
 
-    let kpiResult = null;
-    if (pastDates.length > 0) {
-      kpiResult = await processKpiForDates({
-        hubId,
-        deliveryDates: pastDates,
-        userName: 'SYSTEM',
-      }).catch((err) => ({ error: err.message }));
-    }
-
+    const { syncResults, kpiResult } = await runCronSync({ hubId, dates, pastDates, force });
     const hasFailure = syncResults.some((r) => !r.success);
+
     return NextResponse.json(
       {
         success: !hasFailure,
