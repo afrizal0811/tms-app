@@ -10,20 +10,14 @@ export const APP_NAVIGATION = [
         id: '/report/daily',
         href: '/report/daily',
         label: 'Daily Report',
-        labelKey: 'navbar.daily_report',
+        labelKey: 'common.daily_report',
       },
-      { id: '/report/kpi', href: '/report/kpi', label: 'KPI Report', labelKey: 'navbar.kpi' },
-      {
-        id: '/report/bread',
-        href: '/report/bread',
-        label: 'Bread Report',
-        labelKey: 'navbar.bread_report',
-      },
+      { id: '/report/kpi', href: '/report/kpi', label: 'KPI Report', labelKey: 'common.kpi_report' },
       {
         id: '/report/custom',
         href: '/report/custom',
         label: 'Custom Report',
-        labelKey: 'navbar.custom_report',
+        labelKey: 'common.custom_report',
       },
       {
         id: '/report/counter',
@@ -38,7 +32,7 @@ export const APP_NAVIGATION = [
     groupLabelKey: 'common.menu',
     isDropdown: false,
     items: [
-      { id: '/task', href: '/task', label: 'Task', labelKey: 'navbar.task' },
+      { id: '/task', href: '/task', label: 'Task', labelKey: 'common.task' },
       {
         id: '/tracking',
         href: '/tracking',
@@ -46,7 +40,7 @@ export const APP_NAVIGATION = [
         labelKey: 'navbar.tracking',
         requiresVms: true,
       },
-      { id: '/summary', href: '/summary', label: 'Summary', labelKey: 'navbar.summary' },
+      { id: '/summary', href: '/summary', label: 'Summary', labelKey: 'common.summary' },
       {
         id: '/coordinate',
         href: '/coordinate',
@@ -54,7 +48,7 @@ export const APP_NAVIGATION = [
         labelKey: 'navbar.coordinate',
         isCoordinate: true,
       },
-      { id: '/delivery', href: '/delivery', label: 'Delivery', labelKey: 'navbar.delivery' },
+      { id: '/delivery', href: '/delivery', label: 'Delivery', labelKey: 'common.delivery' },
       {
         id: '/vehicles',
         href: '/vehicles',

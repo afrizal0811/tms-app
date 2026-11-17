@@ -6,6 +6,31 @@ import { isEmpty, parseCoordinates } from '@/lib/utils';
 import { useMemo } from 'react';
 import InfoCard from './InfoCard';
 
+const isHubTask = (t) => t.type === 'HUB_START' || t.type === 'HUB_END';
+
+const parseTaskCoordinates = (tasks) =>
+  tasks
+    .filter((t) => t.longlat && t.longlat.includes(','))
+    .map((t) => {
+      const parsed = parseCoordinates(t.longlat);
+      if (parsed) return { ...t, lat: parsed.lat, lng: parsed.lon };
+      const [lat, lng] = t.longlat.split(',').map(Number);
+      return { ...t, lat, lng };
+    });
+
+const assignPlanSequences = (tasks, sequenceKey = 'roSequence') => {
+  let nextSeq =
+    tasks.reduce((max, t) => {
+      if (isHubTask(t) || t.isManualAssign || !t[sequenceKey]) return max;
+      return Math.max(max, t[sequenceKey]);
+    }, 0) + 1;
+
+  return tasks.map((t) => {
+    if (isHubTask(t) || (!t.isManualAssign && t[sequenceKey])) return t;
+    return { ...t, [sequenceKey]: nextSeq++ };
+  });
+};
+
 const getAngle = (lat1, lng1, lat2, lng2) => {
   const dy = lat2 - lat1;
   const dx = lng2 - lng1;
@@ -86,7 +111,7 @@ const ArrowPolyline = ({ Marker, Polyline, icons, segments, defaultColor }) => {
   );
 };
 
-export { applyJitter, ArrowPolyline, getAngle };
+export { applyJitter, ArrowPolyline, assignPlanSequences, getAngle, parseTaskCoordinates };
 export default function MapViewSection({
   title,
   tasks,
@@ -104,17 +129,12 @@ export default function MapViewSection({
   const { t } = useLanguage();
 
   const sortedTasks = useMemo(() => {
-    const valid = tasks
-      .filter((t) => t.longlat && t.longlat.includes(','))
-      .map((t) => {
-        const parsed = parseCoordinates(t.longlat);
-        if (parsed) return { ...t, lat: parsed.lat, lng: parsed.lon };
-        const [lat, lng] = t.longlat.split(',').map(Number);
-        return { ...t, lat, lng };
-      })
-      .sort((a, b) => (a[sequenceKey] || 9999) - (b[sequenceKey] || 9999));
-    return applyJitter(valid);
-  }, [tasks, sequenceKey]);
+    const valid = parseTaskCoordinates(tasks).sort(
+      (a, b) => (a[sequenceKey] || 9999) - (b[sequenceKey] || 9999)
+    );
+    const sequenced = !isActualMap ? assignPlanSequences(valid, sequenceKey) : valid;
+    return applyJitter(sequenced);
+  }, [tasks, sequenceKey, isActualMap]);
 
   const { pickupCount, completedPickupCount } = useMemo(() => {
     if (!tasks) return { pickupCount: 0, completedPickupCount: 0 };
@@ -250,13 +270,12 @@ export default function MapViewSection({
                       markerBgClass = 'bg-[#000000]';
                       finalContent = 'HUB';
                       textSizeClass = 'text-[8px] tracking-tighter';
+                    } else if (task.isManualAssign) {
+                      markerBgClass = 'bg-[#DC2626]';
                     } else if (isCompleted) {
                       markerBgClass = isActualMap ? 'bg-[#10B981]' : 'bg-[#D97706]';
                     } else {
                       markerBgClass = 'bg-[#2563EB]';
-                      if (task.isManualAssign) {
-                        finalContent = isActualMap ? seqNum : '-';
-                      }
                     }
 
                     if (isEmpty(finalContent) || finalContent === '?') textSizeClass = 'text-lg';

@@ -20,9 +20,9 @@ const TD_CLASS =
 const TD_CLICKABLE = `${TD_CLASS} cursor-pointer hover:opacity-80 transition-opacity`;
 
 const STICKY_TYPE = 'md:sticky md:left-0 md:z-20 md:border-r dark:md:border-r-slate-700';
-const STICKY_PLATE = 'md:sticky md:left-[80px] md:z-20 md:border-r dark:md:border-r-slate-700';
+const STICKY_PLATE = 'md:sticky md:left-[65px] md:z-20 md:border-r dark:md:border-r-slate-700';
 const STICKY_DRIVER =
-  'md:sticky md:left-[260px] md:z-20 md:border-r dark:md:border-r-slate-700 md:shadow-md';
+  'md:sticky md:left-[175px] md:z-20 md:border-r dark:md:border-r-slate-700 md:shadow-md';
 
 function formatPercentage(data, maxData) {
   if (!maxData) return '0.0%';
@@ -56,7 +56,11 @@ function getMetricTooltip({
     return translate('summary.tabs.truck_detail.tooltip.split_task');
   }
 
-  if (hasManualError && (!isEmpty(metrics.weight) || !isEmpty(metrics.volume)) && hasManualTooltip) {
+  if (
+    hasManualError &&
+    (!isEmpty(metrics.weight) || !isEmpty(metrics.volume)) &&
+    hasManualTooltip
+  ) {
     if (isTotalOutlet) return null;
     const metricLabel = translate(isWeightKey ? 'common.weight' : 'common.volume');
     const routingText = isIndonesian
@@ -271,19 +275,19 @@ export default function TruckDetailTab({ data, translate, localeCode, isIndonesi
             <tr>
               <th
                 rowSpan="2"
-                className={`${TH_CLASS} min-w-20 md:sticky md:left-0 md:z-40 ${TITLE_COLOR}`}
+                className={`${TH_CLASS} min-w-[65px] w-[65px] md:sticky md:left-0 md:z-40 ${TITLE_COLOR}`}
               >
                 {translate('common.storage_type')}
               </th>
               <th
                 rowSpan="2"
-                className={`${TH_CLASS} min-w-[180px] md:sticky md:left-20 md:z-40 ${TITLE_COLOR}`}
+                className={`${TH_CLASS} min-w-[110px] w-[110px] md:sticky md:left-[65px] md:z-40 ${TITLE_COLOR}`}
               >
                 {translate('common.license_number')}
               </th>
               <th
                 rowSpan="2"
-                className={`${TH_CLASS} min-w-[200px] md:sticky md:left-[260px] md:z-40 ${TITLE_COLOR} md:border-r-2 md:border-slate-400 dark:md:border-slate-600`}
+                className={`${TH_CLASS} min-w-[200px] md:sticky md:left-[175px] md:z-40 ${TITLE_COLOR} md:border-r-2 md:border-slate-400 dark:md:border-slate-600`}
               >
                 {translate('common.driver')}
               </th>
@@ -369,7 +373,9 @@ export default function TruckDetailTab({ data, translate, localeCode, isIndonesi
             {driverEmails.map((email, rowIndex) => {
               const driver = driverMap[email] || {};
               const driverMaxW = driver.maxWeight || 0;
-              const driverMaxV = (driver.maxVolume != null ? Number(driver.maxVolume) : 0).toFixed(2);
+              const driverMaxV = (driver.maxVolume != null ? Number(driver.maxVolume) : 0).toFixed(
+                2
+              );
               const capacityTooltip =
                 driverMaxW > 0 || Number(driverMaxV) > 0 ? (
                   <span>
@@ -410,8 +416,15 @@ export default function TruckDetailTab({ data, translate, localeCode, isIndonesi
                     const holidayInfo = holidayStatusMap[d.str] || {};
                     const shouldMergeHoliday = holidayInfo.isHoliday && holidayInfo.dayIsEmpty;
 
-                    const cellBg = getCellBg(metrics, holidayInfo.isHoliday, HOLIDAY_COLOR, colorLegendMap);
-                    const emptyBg = holidayInfo.isHoliday ? HOLIDAY_COLOR : 'bg-gray-50 dark:bg-slate-800';
+                    const cellBg = getCellBg(
+                      metrics,
+                      holidayInfo.isHoliday,
+                      HOLIDAY_COLOR,
+                      colorLegendMap
+                    );
+                    const emptyBg = holidayInfo.isHoliday
+                      ? HOLIDAY_COLOR
+                      : 'bg-gray-50 dark:bg-slate-800';
 
                     if (shouldMergeHoliday) {
                       if (rowIndex === 0) {

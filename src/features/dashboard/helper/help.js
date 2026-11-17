@@ -4,17 +4,31 @@ import {
   getBasePlate,
   isEmpty,
   normalizeEmail,
-  parseCoordinates,
   parseCustomerString,
 } from '@/lib/utils';
-import { applyJitter, getAngle } from '../components/MapViewSection';
+import {
+  applyJitter,
+  assignPlanSequences,
+  getAngle,
+  parseTaskCoordinates,
+} from '../components/MapViewSection';
 
-const getGroupKey = (item) => {
+export const getGroupKey = (item) => {
   const driver = item?.driver || item?.assignee || 'N/A';
   const plat =
     getBasePlate(item?.plat || item?.vehicleName) || item?.plat || item?.vehicleName || '';
   return `${driver}_${plat}`;
 };
+
+export const getGroupTasks = (data, groupValue) =>
+  data
+    ? data
+        .filter((d) => (d.groupKey || getGroupKey(d)) === groupValue)
+        .map((t) => ({
+          ...t,
+          longlat: t.longlat || t.rawTask?.longlat || t.coordinate || t.location || '',
+        }))
+    : [];
 
 export const calculateDashboard = (tasksArray, driverMap, isIndonesian) => {
   const keys = [
@@ -185,26 +199,12 @@ export const calculateDashboard = (tasksArray, driverMap, isIndonesian) => {
 };
 
 export const renderGroupToJpeg = async (groupValue, data, L, toJpeg) => {
-  const groupTasks = data
-    ? data
-        .filter((d) => (d.groupKey || getGroupKey(d)) === groupValue)
-        .map((t) => ({
-          ...t,
-          longlat: t.longlat || t.rawTask?.longlat || t.coordinate || t.location || '',
-        }))
-    : [];
-
-  const validTasks = groupTasks
-    .filter((t) => t.longlat && t.longlat.includes(','))
-    .map((t) => {
-      const parsed = parseCoordinates(t.longlat);
-      if (parsed) return { ...t, lat: parsed.lat, lng: parsed.lon };
-      const [lat, lng] = t.longlat.split(',').map(Number);
-      return { ...t, lat, lng };
-    })
-    .sort((a, b) => (a.roSequence || 9999) - (b.roSequence || 9999));
-
-  const jitteredTasks = applyJitter(validTasks);
+  const groupTasks = getGroupTasks(data, groupValue);
+  const validTasks = parseTaskCoordinates(groupTasks).sort(
+    (a, b) => (a.roSequence || 9999) - (b.roSequence || 9999)
+  );
+  const numberedTasks = assignPlanSequences(validTasks, 'roSequence');
+  const jitteredTasks = applyJitter(numberedTasks);
   const allCoordinates = jitteredTasks.map((t) => [t.lat, t.lng]);
 
   if (allCoordinates.length === 0) return null;
@@ -324,22 +324,16 @@ export const renderGroupToJpeg = async (groupValue, data, L, toJpeg) => {
   jitteredTasks.forEach((task) => {
     const seqNum = task.roSequence ?? '?';
     let finalContent = seqNum;
-    let markerBgClass = 'bg-[#2563EB]';
+    let markerBgClass = 'bg-[#D97706]';
     let textSizeClass = 'text-xs';
     const isHub = task.type === 'HUB_START' || task.type === 'HUB_END';
-    const isCompleted = !isEmpty(task.realSequence);
 
     if (isHub) {
       markerBgClass = 'bg-[#000000]';
       finalContent = 'HUB';
       textSizeClass = 'text-[9px] tracking-tighter';
-    } else if (isCompleted) {
-      markerBgClass = 'bg-[#D97706]';
-    } else {
-      markerBgClass = 'bg-[#2563EB]';
-      if (task.isManualAssign) {
-        finalContent = '-';
-      }
+    } else if (task.isManualAssign) {
+      markerBgClass = 'bg-[#DC2626]';
     }
 
     if (isEmpty(finalContent) || finalContent === '?') textSizeClass = 'text-sm';
@@ -372,7 +366,7 @@ export const renderGroupToJpeg = async (groupValue, data, L, toJpeg) => {
 
   if (!rawMapDataUrl) return null;
 
-  const legendTasks = validTasks.filter((t) => t.type !== 'HUB_START' && t.type !== 'HUB_END');
+  const legendTasks = numberedTasks.filter((t) => t.type !== 'HUB_START' && t.type !== 'HUB_END');
 
   if (legendTasks.length === 0) return rawMapDataUrl;
 
@@ -478,12 +472,11 @@ export const renderGroupToJpeg = async (groupValue, data, L, toJpeg) => {
       task.type === 'HUB_END' ||
       task.type === 'HUB' ||
       task.customerName === 'HUB';
-    const isCompleted = !isEmpty(task.realSequence);
-    let badgeBg = '#2563EB';
+    let badgeBg = '#D97706';
     if (isHub) {
       badgeBg = '#000000';
-    } else if (isCompleted) {
-      badgeBg = '#D97706';
+    } else if (task.isManualAssign) {
+      badgeBg = '#DC2626';
     }
 
     const radius = 13;
@@ -506,7 +499,8 @@ export const renderGroupToJpeg = async (groupValue, data, L, toJpeg) => {
 
     const rawCust = task.originalCustomerString || task.customerName || '';
     const { name } = parseCustomerString(rawCust);
-    const custName = name || task.customerName || 'Customer';
+    const baseCustName = name || task.customerName || 'Customer';
+    const custName = task.isManualAssign ? `[M] ${baseCustName}` : baseCustName;
 
     const rawAddress =
       task.rawTask?.address ||

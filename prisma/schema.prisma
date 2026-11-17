@@ -30,6 +30,7 @@ model Hub {
   tasks               Task[]
   location_histories  LocationHistory[]
   kpi_data            KpiData[]
+  vehicle_usage       VehicleUsage[]
 
   @@map("hubs")
 }
@@ -141,7 +142,7 @@ model VehicleType {
 model VehicleMapping {
   id          Int      @id @default(autoincrement())
   plat        String   @unique
-  mapped_type String
+  mapped_type String?
   created_at  DateTime @default(now())
   updated_at  DateTime @updatedAt
 
@@ -164,6 +165,21 @@ model TruckUsage {
   @@map("truck_usages")
 }
 
+model VehicleExternal {
+  id           Int      @id @default(autoincrement())
+  hub_id       String
+  date         String  
+  storage_type String   
+  vehicle_type String 
+  count        Int      
+  description  String?  @db.Text
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  @@unique([hub_id, date, storage_type, vehicle_type])
+  @@map("vehicles_external")
+}
+
 model Reason {
   id          Int      @id @default(autoincrement())
   reasons     String 
@@ -179,18 +195,20 @@ model Reason {
 }
 
 model PendingDetail {
-  id               String   @id @default(cuid())
-  task_id          String   @unique
-  date             String  
-  new_status       String?
+  id                String   @id @default(cuid())
+  task_id           String   @unique
+  date              String
+  new_status        String?
   internal_external String?
-  detail_reason    String?  @db.Text
-  group_reason     String?
-  pic              String?
-  created_by       String?
-  updated_by       String?
-  created_at       DateTime @default(now())
-  updated_at       DateTime @updatedAt
+  detail_reason     String?  @db.Text
+  group_reason      String?
+  pic               String?
+  created_by        String?
+  updated_by        String?
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
+
+  task              Task     @relation(fields: [task_id], references: [id], onDelete: Cascade)
 
   @@map("pendings")
 }
@@ -222,8 +240,13 @@ model Task {
   id                  String   @id
   hub_id              String
   routing_result_id   String?
+  vehicle_usage_id    String?
 
   customer_order      String?  @db.Text
+  customer_id         String?
+  location_id         String?
+  customer_name       String?
+  invoice_number      String?  @db.Text
   address             String?  @db.Text
   flow                String?
   type_storage        String?
@@ -258,7 +281,6 @@ model Task {
   done_coordinate     String?
   new_coordinate      String?
 
-  list_product        Json?
   others              Json?
 
   created_from        String?
@@ -266,13 +288,36 @@ model Task {
   task_user           Json?
 
   hub                 Hub            @relation(fields: [hub_id], references: [id])
+  vehicle_usage       VehicleUsage?  @relation(fields: [vehicle_usage_id], references: [id], onDelete: SetNull)
+  pending_detail      PendingDetail?
+  list_products       ListProduct[]
 
   @@index([hub_id, delivery_date])
   @@index([delivery_date])
   @@index([routing_result_id])
+  @@index([vehicle_usage_id])
   @@index([status_delivery])
   @@index([plat])
   @@map("tasks")
+}
+
+model ListProduct {
+  id             Int     @id @default(autoincrement())
+  task_id        String
+  invoice_number String?
+  inventory_id   String?
+  inventory_name String  @db.Text
+  uom            String?
+  qty            Float?
+  weight         Float?
+  volume         Float?
+
+  task           Task    @relation(fields: [task_id], references: [id], onDelete: Cascade)
+
+  @@index([task_id])
+  @@index([invoice_number])
+  @@index([inventory_id])
+  @@map("list_product")
 }
 
 enum TimeZone {
@@ -358,4 +403,31 @@ model KpiData {
   @@index([hub_id])
   @@index([date])
   @@map("kpi_data")
+}
+
+model VehicleUsage {
+  id             String   @id @default(cuid())
+  hub_id         String
+  date           String
+  plat           String
+  driver_name    String
+  driver_email   String?
+  vehicle_type   String?
+  storage_type   String?
+  act_weight     Float    @default(0)
+  max_weight     Float    @default(0)
+  act_volume     Float    @default(0)
+  max_volume     Float    @default(0)
+  task_data      Json     @default("{\"total\": 0, \"success\": 0, \"pending\": 0, \"cancel\": 0, \"partial\": 0, \"pending_gr\": 0}")
+  total_distance Float?
+  sync_user      Json?
+
+  hub            Hub      @relation(fields: [hub_id], references: [id])
+  tasks          Task[]
+
+  @@unique([hub_id, date, plat])
+  @@index([hub_id, date])
+  @@index([date])
+  @@index([plat])
+  @@map("vehicle_usage")
 }

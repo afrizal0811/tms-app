@@ -64,7 +64,7 @@ export default function MapLocation({ data, activeCoords, highlightTrigger, t, i
   if (isEmpty(allPoints)) {
     return (
       <div className="flex items-center justify-center h-full bg-gray-100 dark:bg-slate-800 text-gray-400 dark:text-slate-500 text-sm rounded-lg">
-        {t('longlat.map.invalid_data')}
+        {t('coordinate.map.invalid_data')}
       </div>
     );
   }

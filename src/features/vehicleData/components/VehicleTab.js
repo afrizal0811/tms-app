@@ -71,7 +71,7 @@ export default function VehicleTab({ localeCode, paginatedData, searchQuery, t }
       key: 'name',
       width: 'w-[25%]',
       sortable: true,
-      label: t('vehicle.tabs.name'),
+      label: t('common.name'),
       render: (row) => (
         <div className="text-left w-full">
           <HighlightText text={row.name || '-'} highlight={searchQuery} />
@@ -82,7 +82,7 @@ export default function VehicleTab({ localeCode, paginatedData, searchQuery, t }
       key: 'email',
       width: 'w-[25%]',
       sortable: true,
-      label: t('vehicle.tabs.email'),
+      label: t('common.email'),
       render: (row) => (
         <div className="text-left w-full">
           <HighlightText text={row.email || '-'} highlight={searchQuery} />

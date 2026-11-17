@@ -3,32 +3,20 @@ import {
   formatDateUniversal,
   formatMinutesToHHMM,
   formatUTC7,
-  getBasePlate,
   parseCustomerString,
+  parseProductItem,
   tomorrowDate,
 } from '@/lib/utils';
 import { resolveUserName } from '../help';
+import {
+  buildDriversByEmailMap,
+  formatTask,
+  parseJsonField,
+  TASK_TIMESTAMP_FIELDS,
+} from './taskFormatter';
 import { NextResponse } from 'next/server';
 
-const TASK_TIMESTAMP_FIELDS = [
-  'startTime',
-  'endTime',
-  'assignedTime',
-  'doneTime',
-  'createdTime',
-  'updatedTime',
-  'klikJikaSudahSampai',
-  'page1DoneTime',
-  'page2DoneTime',
-  'page3DoneTime',
-];
-
 const STRIPPED_TASK_FIELDS = ['assignedVehicle', 'parentId', 'subId', 'label', 'taskType'];
-
-function parseJsonField(val, fallback = {}) {
-  if (typeof val === 'string') return JSON.parse(val || '{}');
-  return val || fallback;
-}
 
 function extractDatePart(val) {
   if (!val) return '';
@@ -91,75 +79,6 @@ function getLocalDateFromUtcString(utcStr, offsetHours = 7) {
   }
   const shiftedMs = dateObj.getTime() + offsetHours * 3600 * 1000;
   return new Date(shiftedMs).toISOString().split('T')[0];
-}
-
-function formatDbTask(dbTask) {
-  const cust = parseCustomerString(dbTask.customer_order);
-  const others = parseJsonField(dbTask.others);
-  const listProduct =
-    typeof dbTask.list_product === 'string'
-      ? JSON.parse(dbTask.list_product || '[]')
-      : dbTask.list_product || [];
-  const syncUser = parseJsonField(dbTask.sync_user);
-  const taskUser = parseJsonField(dbTask.task_user);
-
-  return {
-    _id: dbTask.id,
-    id: dbTask.id,
-    hubId: dbTask.hub_id,
-    routingResultId: dbTask.routing_result_id,
-    customerOrder: dbTask.customer_order,
-    customerName: cust.fullCustomerName || cust.name || '',
-    orderId: cust.invoiceNumber || '',
-    address: dbTask.address,
-    flow: dbTask.flow,
-    typeStorage: dbTask.type_storage,
-    status: dbTask.status,
-    statusDelivery: dbTask.status_delivery,
-    reason: dbTask.reason,
-    deliveryDate: dbTask.delivery_date,
-    startTime: dbTask.start_time,
-    endTime: dbTask.end_time,
-    assignedTime: dbTask.assigned_time,
-    doneTime: dbTask.done_time,
-    arrival_time: dbTask.arrival_time,
-    klikJikaSudahSampai: dbTask.arrival_time,
-    assignedVehicleId: dbTask.assigned_vehicle_id,
-    assignee: dbTask.assignee,
-    driverName: dbTask.driver_name,
-    plat: dbTask.plat,
-    basePlat: getBasePlate(dbTask.plat),
-    vehicleType: dbTask.vehicle_type,
-    routePlannedOrder: dbTask.route_planned_order,
-    weightKg: dbTask.weight_kg,
-    volumeCbm: dbTask.volume_cbm,
-    distance: dbTask.distance,
-    travelDistance: dbTask.travel_distance,
-    travelDuration: dbTask.travel_duration,
-    eta: dbTask.eta,
-    etd: dbTask.etd,
-    expectedCoordinate: dbTask.expected_coordinate,
-    longlat: dbTask.expected_coordinate,
-    doneCoordinate: dbTask.done_coordinate,
-    gpsSesuai: dbTask.new_coordinate ? 'TIDAK' : 'YA',
-    newCoordinate: dbTask.new_coordinate,
-    klikLokasiClient: dbTask.new_coordinate,
-    listProduct,
-    ...others,
-    createdFrom: dbTask.created_from || null,
-    syncUser,
-    taskUser,
-    sync_user: syncUser,
-    task_user: taskUser,
-    createdTime: taskUser.created_at || null,
-    createdBy: taskUser.created_by || null,
-    createdByName: taskUser.created_by || null,
-    updatedBy: taskUser.updated_by || null,
-    updatedByName: taskUser.updated_by || null,
-    updatedTime: taskUser.updated_at || null,
-    createdAt: taskUser.created_at || null,
-    updatedAt: taskUser.updated_at || null,
-  };
 }
 
 async function saveTasks(tasks, targetHubId, currentUser = 'System') {
@@ -349,10 +268,16 @@ async function saveTasks(tasks, targetHubId, currentUser = 'System') {
         updated_at: nowIso,
       };
 
+      const parsedCust = parseCustomerString(t.customerOrder);
+
       const data = {
         hub_id: resolvedHubId,
         routing_result_id: routingResultId,
         customer_order: t.customerOrder || null,
+        customer_id: parsedCust.id || null,
+        location_id: parsedCust.location || null,
+        customer_name: parsedCust.name || null,
+        invoice_number: parsedCust.invoiceNumber || null,
         address: t.address || null,
         flow: t.flow || null,
         type_storage: t.typeStorage || null,
@@ -381,12 +306,13 @@ async function saveTasks(tasks, targetHubId, currentUser = 'System') {
         expected_coordinate: t.expectedCoordinate || t.longlat || null,
         done_coordinate: t.doneCoordinate || null,
         new_coordinate: t.klikLokasiClient || null,
-        list_product: t.listProduct || [],
         others,
         created_from: t.createdFrom || 'API',
         sync_user: syncUser,
         task_user: taskUser,
       };
+
+      const rawProducts = Array.isArray(t.listProduct) ? t.listProduct : [];
 
       if (existingTask) {
         return prisma.task
@@ -394,7 +320,7 @@ async function saveTasks(tasks, targetHubId, currentUser = 'System') {
             where: { id },
             data,
           })
-          .then(() => ({ type: 'update' }));
+          .then(() => ({ type: 'update', id, products: rawProducts }));
       }
 
       return prisma.task
@@ -406,17 +332,36 @@ async function saveTasks(tasks, targetHubId, currentUser = 'System') {
             ...data,
           },
         })
-        .then(() => ({ type: 'insert' }))
+        .then(() => ({ type: 'insert', id, products: rawProducts }))
         .catch(async (err) => {
           if (err?.code === 'P2002') {
             await prisma.task.update({ where: { id }, data });
-            return { type: 'update' };
+            return { type: 'update', id, products: rawProducts };
           }
           throw err;
         });
     });
 
     const results = await Promise.all(operations);
+    const syncedTasks = results.filter((r) => r && r.type !== 'skip' && r.id);
+
+    if (syncedTasks.length > 0) {
+      const syncedIds = syncedTasks.map((r) => r.id);
+      const productRows = syncedTasks.flatMap((r) =>
+        r.products.map((item) => ({
+          task_id: r.id,
+          ...parseProductItem(item),
+        }))
+      );
+
+      await prisma.$transaction(async (tx) => {
+        await tx.listProduct.deleteMany({ where: { task_id: { in: syncedIds } } });
+        if (productRows.length > 0) {
+          await tx.listProduct.createMany({ data: productRows });
+        }
+      });
+    }
+
     insertedCount += results.filter((r) => r?.type === 'insert').length;
     updatedCount += results.filter((r) => r?.type === 'update').length;
     skippedCount += results.filter((r) => r?.type === 'skip').length;
@@ -496,66 +441,7 @@ async function fetchAndEnrichTasks({
     });
   }
 
-  const driverWhere = hubId && hubId !== 'all' ? { hub_id: hubId } : {};
-  const vehicleWhere = hubId && hubId !== 'all' ? { hubs_id: hubId } : {};
-  const [driverList, vehicleList] = await Promise.all([
-    prisma.driverList.findMany({ where: driverWhere }),
-    prisma.vehicle.findMany({ where: vehicleWhere }),
-  ]);
-
-  const vehiclesByDriverId = new Map(
-    vehicleList.filter((v) => v.driver_id).map((v) => [v.driver_id, v])
-  );
-
-  const driversByEmail = {};
-  driverList.forEach((d) => {
-    const email = (d.email || '').toLowerCase().trim();
-    if (email && email !== '-') {
-      const v = vehiclesByDriverId.get(d.id);
-      const mappedTypeStr = v?.type ? (v.storage ? `${v.storage}-${v.type}` : v.type) : null;
-      driversByEmail[email] = {
-        id: d.id,
-        name: d.name,
-        email: d.email,
-        plat: v?.license_number || null,
-        basePlat: v ? getBasePlate(v.license_number) : null,
-        type: mappedTypeStr,
-        assignedVehicleId: v?.vehicle_id || null,
-      };
-    }
-  });
-
-  if (driverList.length === 0 && vehicleList.length === 0) {
-    const where = hubId && hubId !== 'all' ? { hubs: { some: { id: hubId } } } : {};
-    const [rawDrivers, mappingsDB] = await Promise.all([
-      prisma.driver.findMany({ where }),
-      prisma.vehicleMapping.findMany(),
-    ]);
-
-    const mappingsObj = mappingsDB.reduce((acc, curr) => {
-      acc[curr.plat] = curr.mapped_type ?? curr.mappedType;
-      acc[getBasePlate(curr.plat)] = curr.mapped_type ?? curr.mappedType;
-      return acc;
-    }, {});
-
-    rawDrivers.forEach((d) => {
-      const basePlat = getBasePlate(d.plat);
-      const mappedType = mappingsObj[basePlat] || mappingsObj[d.plat];
-      let mappedTypeStr = d.type;
-      if (mappedType) {
-        mappedTypeStr = d.storage ? `${d.storage}-${mappedType}` : mappedType;
-      }
-
-      const email = (d.email || '').toLowerCase().trim();
-      if (email && email !== '-' && !driversByEmail[email]) {
-        driversByEmail[email] = {
-          ...d,
-          type: mappedTypeStr,
-          basePlat,
-        };
-      }
-    });
-  }
+  const driversByEmail = await buildDriversByEmailMap(hubId);
 
   allTasks.sort((a, b) => new Date(a.createdTime || 0) - new Date(b.createdTime || 0));
 
@@ -619,6 +505,39 @@ export async function GET(request) {
     const dateTo = searchParams.get('dateTo');
     const status = searchParams.get('status');
     const deliveryDate = searchParams.get('deliveryDate');
+    const source = searchParams.get('source');
+    const timeBy = searchParams.get('timeBy') || 'startTime';
+    const fields = searchParams.get('fields');
+
+    if (source === 'vendor') {
+      let tFrom = timeFrom;
+      let tTo = timeTo;
+      const targetStart = deliveryDate || dateFrom?.split(/[ T]/)[0];
+      const targetEnd = deliveryDate || dateTo?.split(/[ T]/)[0] || targetStart;
+
+      if ((!tFrom || !tTo) && targetStart) {
+        tFrom = getUtcRange(targetStart).timeFrom;
+        tTo = getUtcRange(targetEnd).timeTo;
+      }
+
+      if (!tFrom || !tTo) {
+        return NextResponse.json(
+          { error: 'Missing required parameters: deliveryDate, dateRange, or timeFrom & timeTo' },
+          { status: 400 }
+        );
+      }
+
+      const vendorTasks = await fetchAndEnrichTasks({
+        hubId,
+        timeFrom: tFrom,
+        timeTo: tTo,
+        status: status || 'DONE,ONGOING,UNASSIGNED',
+        timeBy,
+        fields,
+      });
+
+      return NextResponse.json(vendorTasks);
+    }
 
     let fromDate = null;
     let toDate = null;
@@ -668,10 +587,15 @@ export async function GET(request) {
 
     const existingDbTasks = await prisma.task.findMany({
       where,
+      include: {
+        list_products: {
+          orderBy: { id: 'asc' },
+        },
+      },
       orderBy: [{ route_planned_order: 'asc' }, { start_time: 'asc' }],
     });
 
-    return NextResponse.json(existingDbTasks.map(formatDbTask));
+    return NextResponse.json(existingDbTasks.map(formatTask));
   } catch (error) {
     console.error('Error Tasks:', error);
     const errorMessage =

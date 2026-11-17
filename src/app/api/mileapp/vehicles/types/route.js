@@ -3,6 +3,12 @@ import { getBasePlate, getStorageType, isEmpty } from '@/lib/utils';
 import { NextResponse } from 'next/server';
 export const dynamic = 'force-dynamic';
 
+function handleApiError(logLabel, message, error) {
+  console.error(logLabel, error);
+  const detail = error instanceof Error ? error.message : 'Kesalahan sistem tidak diketahui';
+  return NextResponse.json({ error: message, detail }, { status: 500 });
+}
+
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -11,13 +17,13 @@ export async function GET(request) {
     const vehicleWhere = hubId && hubId !== 'all' ? { hubs_id: hubId } : {};
     const driverWhere = hubId && hubId !== 'all' ? { hub_id: hubId } : {};
 
-    const [dbVehicles, driverList, rawVehiclesType] = await Promise.all([
+    const [dbVehicles, driverList, allTypes] = await Promise.all([
       prisma.vehicle.findMany({ where: vehicleWhere }),
       prisma.driverList.findMany({ where: driverWhere }),
-      prisma.vehicleType.findMany(),
+      prisma.vehicleType.findMany({ orderBy: { name: 'asc' } }),
     ]);
 
-    const allowedTypes = new Set(rawVehiclesType.map((v) => v.name.toUpperCase()));
+    const allowedTypes = new Set(allTypes.map((v) => v.name.toUpperCase()));
 
     let parsedDrivers = [];
     if (dbVehicles.length > 0) {
@@ -98,17 +104,12 @@ export async function GET(request) {
 
       if (isConditional) return;
 
-      let resolvedType = d.type || 'Lainnya';
-      if (resolvedType && resolvedType.includes('-')) {
-        const parts = resolvedType.split('-');
-        resolvedType = parts.length > 1 ? parts[1].toUpperCase() : resolvedType.toUpperCase();
-        if (parts.length > 2 && parts[2].toUpperCase() === 'LONG') {
-          if (['CDE', 'CDD', 'FUSO'].includes(resolvedType)) {
-            resolvedType = `${resolvedType}-LONG`;
-          }
-        }
-      } else {
-        resolvedType = resolvedType.toUpperCase();
+      let resolvedType = (d.type || 'Lainnya').trim().toUpperCase();
+      if (!allowedTypes.has(resolvedType)) {
+        resolvedType = resolvedType.replace(/^(DRY|FROZEN|FRZ)-/, '');
+      }
+      if (!allowedTypes.has(resolvedType)) {
+        resolvedType = resolvedType.replace(/-\d+$/, '');
       }
 
       if (!allowedTypes.has(resolvedType)) return;
@@ -139,8 +140,6 @@ export async function GET(request) {
       }
     });
 
-    const allTypes = await prisma.vehicleType.findMany({ orderBy: { name: 'asc' } });
-
     const CUSTOM_SORT_ORDER = ['L300', 'CDE', 'CDE-LONG', 'CDD', 'CDD-LONG', 'FUSO', 'FUSO-LONG'];
 
     const activeTypes = Array.from(activeTypesSet).sort((a, b) => {
@@ -156,13 +155,7 @@ export async function GET(request) {
 
     return NextResponse.json({ masterData, activeTypes, allTypes });
   } catch (error) {
-    console.error('Gagal memproses tipe kendaraan', error);
-    const errorMessage =
-      error instanceof Error ? error.message : 'Kesalahan sistem tidak diketahui';
-    return NextResponse.json(
-      { error: 'Gagal memproses tipe kendaraan', detail: errorMessage },
-      { status: 500 }
-    );
+    return handleApiError('Gagal memproses tipe kendaraan', 'Gagal memproses tipe kendaraan', error);
   }
 }
 
@@ -183,12 +176,10 @@ export async function POST(request) {
       { status: 201 }
     );
   } catch (error) {
-    console.error('Error Create Vehicle Type:', error);
-    const errorMessage =
-      error instanceof Error ? error.message : 'Kesalahan sistem tidak diketahui';
-    return NextResponse.json(
-      { error: 'Gagal menambahkan tipe kendaraan baru ke database', detail: errorMessage },
-      { status: 500 }
+    return handleApiError(
+      'Error Create Vehicle Type:',
+      'Gagal menambahkan tipe kendaraan baru ke database',
+      error
     );
   }
 }
@@ -210,12 +201,10 @@ export async function PUT(request) {
       { status: 200 }
     );
   } catch (error) {
-    console.error('Error Update Vehicle Type:', error);
-    const errorMessage =
-      error instanceof Error ? error.message : 'Kesalahan sistem tidak diketahui';
-    return NextResponse.json(
-      { error: 'Gagal memperbarui data tipe kendaraan di database', detail: errorMessage },
-      { status: 500 }
+    return handleApiError(
+      'Error Update Vehicle Type:',
+      'Gagal memperbarui data tipe kendaraan di database',
+      error
     );
   }
 }
@@ -228,12 +217,10 @@ export async function DELETE(request) {
     await prisma.vehicleType.delete({ where: { id: Number(id) } });
     return NextResponse.json({ message: 'Tipe berhasil dihapus' }, { status: 200 });
   } catch (error) {
-    console.error('Error Delete Vehicle Type:', error);
-    const errorMessage =
-      error instanceof Error ? error.message : 'Kesalahan sistem tidak diketahui';
-    return NextResponse.json(
-      { error: 'Gagal menghapus data tipe kendaraan dari database', detail: errorMessage },
-      { status: 500 }
+    return handleApiError(
+      'Error Delete Vehicle Type:',
+      'Gagal menghapus data tipe kendaraan dari database',
+      error
     );
   }
 }

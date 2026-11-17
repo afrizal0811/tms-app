@@ -4,7 +4,7 @@ import Accordion from '@/components/Accordion';
 import Spinner from '@/components/Spinner';
 import TableData from '@/components/table/TableData';
 import { useLanguage } from '@/context/LanguageContext';
-import { getResult, getTask } from '@/lib/api/mileapp';
+import { getResult, getTask, getExtraTasks } from '@/lib/api/mileapp';
 import { useDeliveryStatus } from '@/lib/hooks/useDeliveryStatus';
 import { useSuperadmin } from '@/lib/hooks/useSuperadmin';
 import { toastError } from '@/lib/toast';
@@ -491,7 +491,7 @@ function DataTab({ taskData, pendingDetail, goToMapTab, translate }) {
   );
 }
 
-function RoutingTab({ taskData, resultData, translate }) {
+function RoutingTab({ taskData, resultData, vendorLoading, translate }) {
   const rName = resultData?.name || '-';
 
   let visitMins = Number(taskData?.visitTime ?? taskData?.others?.visitTime);
@@ -505,26 +505,30 @@ function RoutingTab({ taskData, resultData, translate }) {
     }
   }
   const planVisitMins = !isNaN(visitMins) ? visitMins : 0;
-  const planVisitHour = formatMinutesToHHMM(planVisitMins);
-  const planVisitTooltip = planVisitMins > 0 ? `${planVisitMins} ${translate('common.minute')}` : '';
+  const planVisitHour = formatMinutesToHHMM(planVisitMins, true);
+  const planVisitTooltip =
+    planVisitMins > 60 ? `${planVisitMins} ${translate('common.minute')}` : '';
 
+  const hasVendorWait = taskData?.waitingTime != null || taskData?.others?.waitingTime != null;
   const waitingMins = Number(taskData?.waitingTime ?? taskData?.others?.waitingTime ?? 0) || 0;
-  const waitingHour = formatMinutesToHHMM(waitingMins);
-  const waitingTooltip = waitingMins > 0 ? `${waitingMins} ${translate('common.minute')}` : '';
+  const waitingHour =
+    vendorLoading && !hasVendorWait ? '...' : formatMinutesToHHMM(waitingMins, true);
+  const waitingTooltip = waitingMins > 60 ? `${waitingMins} ${translate('common.minute')}` : '';
 
   let plannedTravelMins =
     taskData?.plannedTravelDuration != null ? Number(taskData.plannedTravelDuration) : null;
   let plannedTravelHour =
-    taskData?.plannedTravelDurationHour ||
-    (plannedTravelMins != null ? formatMinutesToHHMM(plannedTravelMins) : null);
+    plannedTravelMins != null
+      ? formatMinutesToHHMM(plannedTravelMins, true)
+      : taskData?.plannedTravelDurationHour;
 
   if (!plannedTravelHour && taskData?.travelDuration != null) {
     plannedTravelMins = Math.round(Number(taskData.travelDuration));
-    plannedTravelHour = formatMinutesToHHMM(plannedTravelMins);
+    plannedTravelHour = formatMinutesToHHMM(plannedTravelMins, true);
   }
 
   const plannedTravelTooltip =
-    plannedTravelMins != null && plannedTravelMins > 0
+    plannedTravelMins != null && plannedTravelMins > 60
       ? `${plannedTravelMins} ${translate('common.minute')}`
       : '';
 
@@ -544,7 +548,11 @@ function RoutingTab({ taskData, resultData, translate }) {
       />
       <Field label={translate('common.eta')} value={taskData?.eta} />
       <Field label={translate('common.etd')} value={taskData?.etd} />
-      <Field label={translate('common.plan_visit')} tooltip={planVisitTooltip} value={planVisitHour} />
+      <Field
+        label={translate('common.plan_visit')}
+        tooltip={planVisitTooltip}
+        value={planVisitHour}
+      />
       <Field label={translate('common.plan_seq')} value={taskData?.routePlannedOrder} />
       <Field label={translate('common.plan_travel_distance')} value={taskData?.distance} />
       <Field
@@ -579,7 +587,15 @@ function ProductTab({ products, translate }) {
   );
 }
 
-function HistoryTab({ histories, putDiffs, reassignSet, translate }) {
+function HistoryTab({ histories, putDiffs, reassignSet, loading, translate }) {
+  if (loading && (!histories || histories.length === 0)) {
+    return (
+      <div className="flex justify-center items-center p-6">
+        <Spinner />
+      </div>
+    );
+  }
+
   if (!histories || histories.length === 0) {
     return (
       <div className="text-center text-sm text-gray-500 p-4">{translate('common.no_data')}</div>
@@ -742,6 +758,7 @@ function JsonTab({ data, expandAll = false }) {
 
 export default function TaskModal({ isOpen, onClose, taskId, isAllHub = false }) {
   const [loading, setLoading] = useState(false);
+  const [vendorLoading, setVendorLoading] = useState(false);
   const [taskData, setTaskData] = useState(null);
   const [pendingDetail, setPendingDetail] = useState(null);
   const [activeTab, setActiveTab] = useState('Data');
@@ -752,45 +769,90 @@ export default function TaskModal({ isOpen, onClose, taskId, isAllHub = false })
   const { formatStatus } = useDeliveryStatus();
 
   useEffect(() => {
+    let isCancelled = false;
+
     if (!isOpen || !taskId || taskId === '-') {
-      setTaskData(null);
-      setPendingDetail(null);
-      setResultData(null);
-      setActiveTab('Data');
-      return;
+      Promise.resolve().then(() => {
+        if (isCancelled) return;
+        setTaskData(null);
+        setPendingDetail(null);
+        setResultData(null);
+        setVendorLoading(false);
+        setActiveTab('Data');
+      });
+      return () => {
+        isCancelled = true;
+      };
     }
 
     const loadData = async () => {
       setLoading(true);
+      setVendorLoading(false);
       try {
-        const [taskRes, pendingRes] = await Promise.allSettled([
-          getTask(taskId, isAllHub),
-          getPendingDetailByTaskId(taskId),
-        ]);
+        const taskRes = await getTask(taskId, isAllHub);
+        if (isCancelled) return;
 
-        const task =
-          taskRes.status === 'fulfilled' && taskRes.value
-            ? taskRes.value?.task || taskRes.value
-            : null;
+        const task = taskRes?.task || taskRes || null;
         setTaskData(task);
 
-        const pd =
-          pendingRes.status === 'fulfilled' && pendingRes.value?.taskId ? pendingRes.value : null;
-        setPendingDetail(pd);
+        if (task?.source === 'db') {
+          setPendingDetail(task.pendingDetail || null);
+        } else {
+          const pdRes = await getPendingDetailByTaskId(taskId).catch(() => null);
+          if (isCancelled) return;
+          setPendingDetail(pdRes?.taskId ? pdRes : null);
+        }
 
-        const [resultRes] = await Promise.allSettled([
-          task?.routingResultId ? getResult(task.routingResultId) : Promise.resolve(null),
-        ]);
-
-        setResultData(resultRes.status === 'fulfilled' && resultRes.value ? resultRes.value : null);
-      } catch (err) {
-        toastError(translate('common.toast.error', { err: err.message }), err);
-      } finally {
         setLoading(false);
+
+        if (task?.routingResultId) {
+          getResult(task.routingResultId)
+            .then((res) => {
+              if (!isCancelled) setResultData(res || null);
+            })
+            .catch(() => {
+              if (!isCancelled) setResultData(null);
+            });
+        } else {
+          setResultData(null);
+        }
+
+        if (task?.source === 'db') {
+          setVendorLoading(true);
+          getExtraTasks(taskId)
+            .then((extras) => {
+              if (isCancelled || !extras) return;
+              setTaskData((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      histories: extras.histories ?? [],
+                      waitingTime: extras.waitingTime ?? prev.waitingTime,
+                    }
+                  : prev
+              );
+            })
+            .catch(() => {})
+            .finally(() => {
+              if (!isCancelled) setVendorLoading(false);
+            });
+        }
+      } catch (err) {
+        if (!isCancelled) {
+          setTaskData(null);
+          setPendingDetail(null);
+          setResultData(null);
+          toastError(translate('common.toast.error', { err: err.message }), err);
+          setLoading(false);
+        }
       }
     };
 
     loadData();
+
+    return () => {
+      isCancelled = true;
+    };
   }, [isOpen, taskId, translate, isAllHub]);
 
   if (loading) {
@@ -798,7 +860,7 @@ export default function TaskModal({ isOpen, onClose, taskId, isAllHub = false })
       <Modal
         isOpen={isOpen}
         onClose={onClose}
-        title={translate('task_detail.modal.title')}
+        title={translate('common.task_details')}
         maxWidth="max-w-5xl lg:max-w-6xl"
         bodyClassName="p-6 overflow-y-auto"
       >
@@ -814,7 +876,7 @@ export default function TaskModal({ isOpen, onClose, taskId, isAllHub = false })
       <Modal
         isOpen={isOpen}
         onClose={onClose}
-        title={translate('task_detail.modal.title')}
+        title={translate('common.task_details')}
         subtitle=""
         maxWidth="max-w-5xl lg:max-w-6xl"
         bodyClassName="p-6 overflow-y-auto"
@@ -849,7 +911,7 @@ export default function TaskModal({ isOpen, onClose, taskId, isAllHub = false })
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={translate('task_detail.modal.title')}
+      title={translate('common.task_details')}
       subtitle={getSubtitle(taskData, pendingDetail, formatStatus, translate)}
       maxWidth="max-w-5xl lg:max-w-6xl"
       bodyClassName="p-6 overflow-y-auto"
@@ -884,7 +946,12 @@ export default function TaskModal({ isOpen, onClose, taskId, isAllHub = false })
               />
             )}
             {activeTab === translate('common.routing') && (
-              <RoutingTab taskData={taskData} resultData={resultData} translate={translate} />
+              <RoutingTab
+                taskData={taskData}
+                resultData={resultData}
+                vendorLoading={vendorLoading}
+                translate={translate}
+              />
             )}
             {activeTab === translate('task_detail.modal.list_product') && (
               <ProductTab products={products} translate={translate} />
@@ -894,6 +961,7 @@ export default function TaskModal({ isOpen, onClose, taskId, isAllHub = false })
                 histories={histories}
                 putDiffs={putDiffs}
                 reassignSet={reassignSet}
+                loading={vendorLoading}
                 translate={translate}
               />
             )}

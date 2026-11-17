@@ -594,7 +594,7 @@ export default function SyncDataTab({
         onClick={() => executeSync(type)}
         isLoading={syncLoading === type}
         disabled={syncLoading !== null}
-        text={translate('setting.tab.button.btn_sync')}
+        text={translate('common.synchronize')}
         size="md"
       />
     );

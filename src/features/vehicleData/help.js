@@ -79,8 +79,8 @@ export const handleConfirmDownload = ({
     const tableHeader = [
       t('common.license_number'),
       t('common.type'),
-      t('vehicle.tabs.name'),
-      t('vehicle.tabs.email'),
+      t('common.name'),
+      t('common.email'),
     ];
 
     if (sheetSelection.master) {
@@ -155,7 +155,7 @@ export const handleConfirmDownload = ({
     const { storedLocationAcronym: locationName } = getLocalStorage() || '-';
     const date = formatDateUniversal(new Date(), 'DD.MM.YYYY');
     const prefix = fileNamePrefix ? `${fileNamePrefix} - ` : '';
-    const fileName = `${t('vehicle.title')} - ${prefix}${date} - ${locationName}.xlsx`;
+    const fileName = `${t('common.vehicle_data')} - ${prefix}${date} - ${locationName}.xlsx`;
     XLSX.writeFile(wb, fileName);
     toastSuccess(t('common.toast.success'));
   } catch (e) {

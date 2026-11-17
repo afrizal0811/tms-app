@@ -1,4 +1,4 @@
-import { getVehicles, getTruckNonTms } from '@/lib/api/mileapp';
+import { getVehicles, getVehicleExternals } from '@/lib/api/mileapp';
 import {
   formatLongDate,
   formatDateUniversal,
@@ -13,20 +13,41 @@ import { BASE_STYLES, BORDERS, FILL_STYLES, FONT_STYLES, HEADER_STYLES } from '.
 
 const normalizePlate = (plate) => (plate || '').replace(/\s+/g, '').toLowerCase();
 
+function extractTaskEmail(task) {
+  if (task.assignee) {
+    return typeof task.assignee === 'string' ? task.assignee.split(',')[0].trim() : task.assignee;
+  }
+  if (task.assignedTo?.email) return task.assignedTo.email;
+  if (task.doneBy) return task.doneBy;
+  return null;
+}
+
+function isTaskVehicleFrozen(driverInfo, taskTypeStorage) {
+  if (driverInfo) {
+    const driverDataArr = [driverInfo.name, driverInfo.plat, driverInfo.rawType];
+    let isFrozen = getStorageType(driverDataArr) === 'Frozen';
+    const typeUpper = (driverInfo.rawType || '').toUpperCase();
+    if (typeUpper.includes('FROZEN') || typeUpper.includes('FRZ')) isFrozen = true;
+    if (typeUpper.includes('DRY')) isFrozen = false;
+    return isFrozen;
+  }
+
+  let isFrozen = getStorageType(taskTypeStorage || '') === 'Frozen';
+  const tStorage = (taskTypeStorage || '').toUpperCase();
+  if (tStorage.includes('FROZEN') || tStorage.includes('FRZ')) isFrozen = true;
+  if (tStorage.includes('DRY')) isFrozen = false;
+  return isFrozen;
+}
+
 function extractVehicleType(dType, vehicleTypes) {
   if (!dType) return 'Lainnya';
-  const cleanTag = dType.replace(/["'\\]/g, '').trim();
-  const parts = cleanTag.split('-');
+  const cleanUpper = dType.replace(/["'\\]/g, '').trim().toUpperCase();
+  if (vehicleTypes.includes(cleanUpper)) return cleanUpper;
 
-  let specificType = parts.length > 1 ? parts[1].toUpperCase() : cleanTag.toUpperCase();
+  const withoutStorage = cleanUpper.replace(/^(DRY|FROZEN|FRZ)-/, '');
+  if (vehicleTypes.includes(withoutStorage)) return withoutStorage;
 
-  if (parts.length > 2 && parts[2].toUpperCase() === 'LONG') {
-    if (['CDE', 'CDD', 'FUSO'].includes(specificType)) {
-      specificType = `${specificType}-LONG`;
-    }
-  }
-  if (vehicleTypes.includes(specificType)) return specificType;
-  return specificType;
+  return withoutStorage.replace(/-\d+$/, '');
 }
 
 function buildUsageStat(tms, manual, vehicleCount, workingDays) {
@@ -132,7 +153,7 @@ export async function calculateTruckUsageData(
   }
   const [allDriversDB, manualUsageDB] = await Promise.all([
     getVehicles(),
-    getTruckNonTms({ startDate: startDateStr, endDate: endDateStr }),
+    getVehicleExternals({ startDate: startDateStr, endDate: endDateStr }),
   ]);
 
   const activeTypes = masterTruckData?.activeTypes || [];
@@ -339,12 +360,7 @@ export async function calculateTruckUsageData(
         if (!usedVehiclesPerDay.has(dateKey)) usedVehiclesPerDay.set(dateKey, new Map());
         const dailyVehicles = usedVehiclesPerDay.get(dateKey);
 
-        let rawEmail = null;
-        if (task.assignee)
-          rawEmail =
-            typeof task.assignee === 'string' ? task.assignee.split(',')[0].trim() : task.assignee;
-        else if (task.assignedTo && task.assignedTo.email) rawEmail = task.assignedTo.email;
-        else if (task.doneBy) rawEmail = task.doneBy;
+        const rawEmail = extractTaskEmail(task);
 
         const rawPlate = task.basePlat || task.vehicleName || task.plat || '';
         const rawCanonical = normalizePlate(rawPlate);
@@ -362,20 +378,7 @@ export async function calculateTruckUsageData(
         }
 
         const firstTag = driverInfo?.storage || task.typeStorage || '';
-        let isFrozen = false;
-
-        if (driverInfo) {
-          const driverDataArr = [driverInfo.name, driverInfo.plat, driverInfo.rawType];
-          isFrozen = getStorageType(driverDataArr) === 'Frozen';
-          const typeUpper = (driverInfo.rawType || '').toUpperCase();
-          if (typeUpper.includes('FROZEN') || typeUpper.includes('FRZ')) isFrozen = true;
-          if (typeUpper.includes('DRY')) isFrozen = false;
-        } else {
-          isFrozen = getStorageType(task.typeStorage || '') === 'Frozen';
-          const tStorage = (task.typeStorage || '').toUpperCase();
-          if (tStorage.includes('FROZEN') || tStorage.includes('FRZ')) isFrozen = true;
-          if (tStorage.includes('DRY')) isFrozen = false;
-        }
+        const isFrozen = isTaskVehicleFrozen(driverInfo, task.typeStorage);
 
         if (!dailyVehicles.has(canonicalPlate)) {
           dailyVehicles.set(canonicalPlate, {
@@ -399,12 +402,7 @@ export async function calculateTruckUsageData(
         if (!usedVehiclesPerDay.has(dateKey)) usedVehiclesPerDay.set(dateKey, new Map());
         const dailyVehicles = usedVehiclesPerDay.get(dateKey);
 
-        let rawEmail = null;
-        if (task.assignee)
-          rawEmail =
-            typeof task.assignee === 'string' ? task.assignee.split(',')[0].trim() : task.assignee;
-        else if (task.assignedTo && task.assignedTo.email) rawEmail = task.assignedTo.email;
-        else if (task.doneBy) rawEmail = task.doneBy;
+        const rawEmail = extractTaskEmail(task);
 
         const emailClean = (rawEmail || '').toLowerCase().trim();
         const rawPlate = task.basePlat || task.vehicleName || task.plat || '';
@@ -430,20 +428,7 @@ export async function calculateTruckUsageData(
           normalizePlate(plateForCanonical) || emailClean || `unknown-task-${Math.random()}`;
 
         const firstTag = driverInfo?.storage || task.typeStorage || '';
-        let isFrozen = false;
-
-        if (driverInfo) {
-          const driverDataArr = [driverInfo.name, driverInfo.plat, driverInfo.rawType];
-          isFrozen = getStorageType(driverDataArr) === 'Frozen';
-          const typeUpper = (driverInfo.rawType || '').toUpperCase();
-          if (typeUpper.includes('FROZEN') || typeUpper.includes('FRZ')) isFrozen = true;
-          if (typeUpper.includes('DRY')) isFrozen = false;
-        } else {
-          isFrozen = getStorageType(task.typeStorage || '') === 'Frozen';
-          const tStorage = (task.typeStorage || '').toUpperCase();
-          if (tStorage.includes('FROZEN') || tStorage.includes('FRZ')) isFrozen = true;
-          if (tStorage.includes('DRY')) isFrozen = false;
-        }
+        const isFrozen = isTaskVehicleFrozen(driverInfo, task.typeStorage);
 
         if (!dailyVehicles.has(canonicalPlate)) {
           dailyVehicles.set(canonicalPlate, {
@@ -582,6 +567,9 @@ export async function generateTruckUsageSheet(
   const hidePercentageTable = Boolean(isDailyReport);
   const { dateMap, dateKeys, activeTypes, hubMasterData, summaryData } =
     await calculateTruckUsageData(resultsData, startDateStr, endDateStr, taskData, masterTruckData);
+  const dryTypes = activeTypes.filter((type) => (hubMasterData?.Dry?.[type] || 0) > 0);
+  const frozenTypes = activeTypes.filter((type) => (hubMasterData?.Frozen?.[type] || 0) > 0);
+  const typesByCat = { Dry: dryTypes, Frozen: frozenTypes };
 
   const monthName = formatLongDate(startDateStr, localeCode).split(' ').slice(1).join(' ');
   const excelData = [];
@@ -625,7 +613,7 @@ export async function generateTruckUsageSheet(
     ]);
 
     const addSummarySection = (cat, isPercentage = false) => {
-      activeTypes.forEach((type) => {
+      typesByCat[cat].forEach((type) => {
         const d = summaryData[cat].types[type];
         if (isPercentage) {
           excelData.push([type, d.PctTMS, d.PctManual, d.PctTVU]);
@@ -783,7 +771,7 @@ export async function generateTruckUsageSheet(
     };
 
     let rIdx = 2;
-    activeTypes.forEach((type, idx) =>
+    dryTypes.forEach((type, idx) =>
       tableRows.push(createRow(idx === 0 ? 'Dry' : '', type, 'Dry', rIdx++))
     );
     tableRows.push(
@@ -793,7 +781,7 @@ export async function generateTruckUsageSheet(
       createRow(translate('summary.tabs.truck_usage.total_used'), '', 'DryTotal', rIdx++)
     );
 
-    activeTypes.forEach((type, idx) =>
+    frozenTypes.forEach((type, idx) =>
       tableRows.push(createRow(idx === 0 ? 'Frozen' : '', type, 'Frozen', rIdx++))
     );
     tableRows.push(
@@ -807,7 +795,7 @@ export async function generateTruckUsageSheet(
     const H1 = startRowIndex;
     const H2 = startRowIndex + 1;
     let colIdx = 3;
-    const totalRows = activeTypes.length * 2 + 5;
+    const totalRows = dryTypes.length + frozenTypes.length + 5;
     dateKeys.forEach((d) => {
       merges.push({ s: { r: H1, c: colIdx }, e: { r: H1, c: colIdx + 2 } });
       const isHoliday = d.isSunday || d.isDynamicHoliday;
@@ -822,15 +810,17 @@ export async function generateTruckUsageSheet(
     merges.push({ s: { r: H1, c: 2 }, e: { r: H2, c: 2 } });
 
     const dryStart = startRowIndex + 2;
-    const dryInter = dryStart + activeTypes.length;
+    const dryInter = dryStart + dryTypes.length;
     const dryTot = dryInter + 1;
     const frzStart = dryTot + 1;
-    const frzInter = frzStart + activeTypes.length;
+    const frzInter = frzStart + frozenTypes.length;
     const frzTot = frzInter + 1;
     const otvRow = frzTot + 1;
 
-    if (activeTypes.length > 1) {
+    if (dryTypes.length > 1) {
       merges.push({ s: { r: dryStart, c: 0 }, e: { r: dryInter - 1, c: 0 } });
+    }
+    if (frozenTypes.length > 1) {
       merges.push({ s: { r: frzStart, c: 0 }, e: { r: frzInter - 1, c: 0 } });
     }
     merges.push({ s: { r: dryInter, c: 0 }, e: { r: dryInter, c: 1 } });
@@ -854,7 +844,7 @@ export async function generateTruckUsageSheet(
     excelData.push(...table2.tableRows);
     excelData.push([]);
   }
-  excelData.push([translate('summary.tabs.truck_usage.explanation')]);
+  excelData.push([translate('common.explanation')]);
 
   const legendTitleRow = excelData.length - 1;
   merges.push({ s: { r: legendTitleRow, c: 0 }, e: { r: legendTitleRow, c: 2 } });
@@ -892,12 +882,10 @@ export async function generateTruckUsageSheet(
   ws['!views'] = [{ state: 'frozen', xSplit: 3, ySplit: table1StartRow + 2 }];
 
   const range = XLSX.utils.decode_range(ws['!ref']);
-  const tableHeight = 2 + activeTypes.length + 1 + 1 + activeTypes.length + 1 + 1 + 1;
-  const sumDryEnd = 2 + activeTypes.length;
-  const sumDryTot = sumDryEnd;
+  const tableHeight = 2 + dryTypes.length + 1 + 1 + frozenTypes.length + 1 + 1 + 1;
+  const sumDryTot = 2 + dryTypes.length;
   const sumFrzStart = sumDryTot + 1;
-  const sumFrzEnd = sumFrzStart + activeTypes.length;
-  const sumFrzTot = sumFrzEnd;
+  const sumFrzTot = sumFrzStart + frozenTypes.length;
   const sumOTV = sumFrzTot + 1;
 
   for (let R = range.s.r; R <= range.e.r; ++R) {
@@ -942,7 +930,7 @@ export async function generateTruckUsageSheet(
           else if (relR === sumDryTot) {
             cell.s.fill = FILL_STYLES.dryTotal;
             cell.s.font = FONT_STYLES.bold;
-          } else if (relR >= sumFrzStart && relR < sumFrzEnd) cell.s.fill = FILL_STYLES.frozen;
+          } else if (relR >= sumFrzStart && relR < sumFrzTot) cell.s.fill = FILL_STYLES.frozen;
           else if (relR === sumFrzTot) {
             cell.s.fill = FILL_STYLES.frozenTotal;
             cell.s.font = FONT_STYLES.bold;
@@ -990,10 +978,10 @@ export async function generateTruckUsageSheet(
           ? table1.rowMasterTotals
           : table2?.rowMasterTotals || {};
         const startDry = 2;
-        const dryInter = startDry + activeTypes.length;
+        const dryInter = startDry + dryTypes.length;
         const dryTot = dryInter + 1;
         const frzStart = dryTot + 1;
-        const frzInter = frzStart + activeTypes.length;
+        const frzInter = frzStart + frozenTypes.length;
         const frzTot = frzInter + 1;
         const otvRow = frzTot + 1;
 
@@ -1081,12 +1069,7 @@ export async function generateTruckUsageSheet(
                   cell.s.font = { ...FONT_STYLES.bold, color: { rgb: '9C0006' } };
                 }
               } else if ((isTMSCol || isTVUCol) && typeof val === 'number' && val > 0) {
-                if (val > 1) finalFill = FILL_STYLES.alertRed;
-                else if (val >= 0.75)
-                  finalFill = { patternType: 'solid', fgColor: { rgb: 'B7E1CD' } };
-                else if (val >= 0.5)
-                  finalFill = { patternType: 'solid', fgColor: { rgb: 'F1C232' } };
-                else finalFill = { patternType: 'solid', fgColor: { rgb: 'F4CCCC' } };
+                finalFill = getPctFill(val);
               }
             }
 

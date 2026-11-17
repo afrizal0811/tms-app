@@ -12,6 +12,7 @@ export async function getTasks({
   isNeedFields = true,
   isShowAll = false,
   hubId,
+  source,
 } = {}) {
   const { storedLocation } = getLocalStorage();
   const targetHubId = hubId || (!isShowAll ? storedLocation : null);
@@ -27,6 +28,7 @@ export async function getTasks({
   if (timeFrom) params.append('timeFrom', timeFrom);
   if (timeTo) params.append('timeTo', timeTo);
   if (isNeedFields && tasksFields) params.append('fields', tasksFields);
+  if (source) params.append('source', source);
 
   return await apiFetch(`/api/mileapp/tasks?${params.toString()}`, 'Gagal mengambil data tasks');
 }
@@ -46,6 +48,17 @@ export async function getTask(id, isAllHub) {
   );
 
   return result;
+}
+
+export async function getExtraTasks(id) {
+  if (!id) {
+    throw new Error('ID task harus disertakan');
+  }
+
+  return await apiFetch(
+    `/api/mileapp/tasks/${id}?vendorOnly=1`,
+    `Gagal mengambil riwayat task dengan ID ${id}`
+  );
 }
 
 export async function syncTasks({

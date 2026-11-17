@@ -236,11 +236,11 @@ export default function MobileMenu({
           <LanguageToggle showLabel={true} className="text-base px-3 py-2.5 mb-1 " />
           <MobileNavGroup label={t('navbar.help')} links={HELP_LINKS} />
           {!isLoggedIn && isSecret && (
-            <MobileNavLink href="/setting">{t('setting.title')}</MobileNavLink>
+            <MobileNavLink href="/setting">{t('common.setting')}</MobileNavLink>
           )}
           {isLoggedIn && (
             <>
-              <MobileNavLink href="/setting">{t('setting.title')}</MobileNavLink>
+              <MobileNavLink href="/setting">{t('common.setting')}</MobileNavLink>
               <button
                 onClick={handleLogout}
                 className="block w-full text-left px-3 py-3 text-base font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 hover:text-red-700 dark:hover:text-red-300 transition-colors cursor-pointer"

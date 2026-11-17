@@ -212,11 +212,10 @@ export const taskKeyMapping = {
   routingResultId: 'routingResultId',
 };
 
-export const taskManualHeaders = [...taskHeaders, 'isManual', 'Manual Type', 'Action'];
+export const taskManualHeaders = [...taskHeaders, 'Manual Type', 'Action'];
 
 export const taskManualKeyMapping = {
   ...taskKeyMapping,
-  isManual: 'isManual',
   'Manual Type': 'manualType',
   Action: 'action',
 };
@@ -239,7 +238,6 @@ export const serviceLevelHeaders = [
 ];
 
 export const tripActivityHeaders = [
-  'tripId',
   'assignedVehicleId',
   'username',
   'assignedVehicle',

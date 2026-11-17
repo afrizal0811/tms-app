@@ -103,7 +103,7 @@ export default function ReasonManager({ reasons, onRefresh, isReadOnly, translat
         ),
       },
       {
-        header: translate('setting.tab.general.category'),
+        header: translate('common.category'),
         field: 'category',
         headerClassName: 'w-24 sm:w-32 md:w-48',
         render: (item) => (
@@ -197,7 +197,7 @@ export default function ReasonManager({ reasons, onRefresh, isReadOnly, translat
             placeholder={translate('common.search')}
             size="md"
             width="w-full"
-            tooltip={`${translate('setting.tab.general.category')}, PIC, ${translate('setting.tab.general.reasons_title')}`}
+            tooltip={`${translate('common.category')}, PIC, ${translate('setting.tab.general.reasons_title')}`}
           />
         </div>
       </div>

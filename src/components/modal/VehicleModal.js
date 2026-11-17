@@ -7,13 +7,13 @@ import { useLanguage } from '@/context/LanguageContext';
 import { configureVehicles, getVehicleTypes } from '@/lib/api/mileapp';
 import { getLocalStorage } from '@/lib/localStorageHandler';
 import { toastError, toastSuccess } from '@/lib/toast';
-import { getBasePlate, ProperCaseText } from '@/lib/utils';
+import { getBasePlate } from '@/lib/utils';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as XLSX from 'xlsx-js-style';
 
 const STORAGE_OPTIONS = [
-  { label: 'Dry', value: 'Dry' },
-  { label: 'Frozen', value: 'Frozen' },
+  { label: 'DRY', value: 'DRY' },
+  { label: 'FROZEN', value: 'FROZEN' },
 ];
 
 const getItemKey = (item) =>
@@ -22,9 +22,29 @@ const getItemKey = (item) =>
 const getPlatDisplay = (item) =>
   item.base_plate || getBasePlate(item.license_number || item.plat || '');
 
-const formatStorage = (val) => (val ? ProperCaseText(String(val).toLowerCase().trim()) : '');
+const formatStorage = (val) => (val ? String(val).toUpperCase().trim() : '');
 
 const formatType = (val) => (val ? String(val).toUpperCase().trim() : '');
+
+const sanitizeCapacity = (val) =>
+  String(val || '')
+    .replace(/\D/g, '')
+    .slice(0, 5);
+
+const splitVehicleType = (val) => {
+  const formatted = formatType(val);
+  const match = formatted.match(/^(.+)-(\d+)$/);
+  return match
+    ? { type: match[1], capacity: sanitizeCapacity(match[2]) }
+    : { type: formatted, capacity: '' };
+};
+
+const buildVehicleType = (type, capacity) => {
+  const cleanType = formatType(type);
+  const cleanCapacity = sanitizeCapacity(capacity);
+  if (!cleanType) return '';
+  return cleanCapacity ? `${cleanType}-${cleanCapacity}` : cleanType;
+};
 
 export default function VehicleModal({ isOpen, unmappedData = [], onCompleted, t: propT }) {
   const { t: contextT } = useLanguage();
@@ -34,12 +54,17 @@ export default function VehicleModal({ isOpen, unmappedData = [], onCompleted, t
   const [vehicleTypes, setVehicleTypes] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [hasUploadedExcel, setHasUploadedExcel] = useState(false);
   const fileInputRef = useRef(null);
 
   const isModalOpen = isOpen !== undefined ? isOpen : unmappedData.length > 0;
 
   useEffect(() => {
-    if (!isModalOpen || !unmappedData || unmappedData.length === 0) return;
+    if (!isModalOpen) {
+      setHasUploadedExcel(false);
+      return;
+    }
+    if (!unmappedData || unmappedData.length === 0) return;
 
     async function fetchVehicleTypes() {
       setIsLoading(true);
@@ -53,9 +78,11 @@ export default function VehicleModal({ isOpen, unmappedData = [], onCompleted, t
           unmappedData.forEach((item) => {
             const key = getItemKey(item);
             if (!next[key]) {
+              const parsed = splitVehicleType(item.type);
               next[key] = {
                 storage: formatStorage(item.storage),
-                type: formatType(item.type),
+                type: parsed.type,
+                capacity: parsed.capacity,
               };
             }
           });
@@ -92,7 +119,7 @@ export default function VehicleModal({ isOpen, unmappedData = [], onCompleted, t
 
   const isAllSelected = sortedData.every((item) => {
     const sel = selections[getItemKey(item)];
-    return sel?.storage && sel?.type;
+    return sel?.storage && sel?.type && sel?.capacity;
   });
 
   const handleDownloadTemplate = () => {
@@ -101,23 +128,25 @@ export default function VehicleModal({ isOpen, unmappedData = [], onCompleted, t
       const rows =
         sortedData.length > 0
           ? sortedData.map((item) => {
+              const key = getItemKey(item);
               const plat = getPlatDisplay(item);
               return {
                 number_license: plat,
-                storage: selections[plat]?.storage || '',
-                type: selections[plat]?.type || '',
+                storage: selections[key]?.storage || '',
+                type: selections[key]?.type || '',
+                capacity: selections[key]?.capacity || '',
               };
             })
-          : [{ number_license: '', storage: '', type: '' }];
+          : [{ number_license: '', storage: '', type: '', capacity: '' }];
 
       const ws = XLSX.utils.json_to_sheet(rows, {
-        header: ['number_license', 'storage', 'type'],
+        header: ['number_license', 'storage', 'type', 'capacity'],
       });
 
-      ws['!cols'] = [{ wch: 18 }, { wch: 15 }, { wch: 20 }];
+      ws['!cols'] = [{ wch: 18 }, { wch: 15 }, { wch: 20 }, { wch: 15 }];
 
       if (ws['B1']) {
-        ws['B1'].c = [{ a: 'System', t: 'Dry/Frozen' }];
+        ws['B1'].c = [{ a: 'System', t: 'DRY/FROZEN' }];
       }
       if (ws['C1']) {
         ws['C1'].c = [
@@ -126,6 +155,9 @@ export default function VehicleModal({ isOpen, unmappedData = [], onCompleted, t
             t: typeListStr ? `Pilihan: ${typeListStr}` : 'Tipe kendaraan dari database',
           },
         ];
+      }
+      if (ws['D1']) {
+        ws['D1'].c = [{ a: 'System', t: 'Wajib angka (1-5 digit, maks 99999), contoh: 2500' }];
       }
 
       const wb = XLSX.utils.book_new();
@@ -147,7 +179,7 @@ export default function VehicleModal({ isOpen, unmappedData = [], onCompleted, t
 
       const sheetName = wb.SheetNames.find((name) => name.trim().toLowerCase() === 'data');
       if (!sheetName) {
-        toastError('Sheet bernama "Data" tidak ditemukan dalam file excel');
+        toastError(t('common.toast.error', { err: t('common.no_data') }));
         return;
       }
 
@@ -155,17 +187,8 @@ export default function VehicleModal({ isOpen, unmappedData = [], onCompleted, t
       const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
 
       if (rows.length === 0) {
-        toastError('File excel tidak memiliki baris data');
-        return;
-      }
+        toastError(t('common.toast.error', { err: t('common.no_data') }));
 
-      const firstRowKeys = Object.keys(rows[0]).map((k) => k.trim().toLowerCase());
-      const hasNumberLicense = firstRowKeys.includes('number_license');
-      const hasStorage = firstRowKeys.includes('storage');
-      const hasType = firstRowKeys.includes('type');
-
-      if (!hasNumberLicense || !hasStorage || !hasType) {
-        toastError('Header kolom file excel harus memiliki number_license, storage, dan type');
         return;
       }
 
@@ -175,7 +198,6 @@ export default function VehicleModal({ isOpen, unmappedData = [], onCompleted, t
 
       for (let i = 0; i < rows.length; i++) {
         const row = rows[i];
-        const rowNum = i + 2;
         const normalizedRow = Object.fromEntries(
           Object.entries(row).map(([k, v]) => [k.trim().toLowerCase(), String(v).trim()])
         );
@@ -183,67 +205,62 @@ export default function VehicleModal({ isOpen, unmappedData = [], onCompleted, t
         const rawPlat = normalizedRow['number_license'] || '';
         const rawStorage = normalizedRow['storage'] || '';
         const rawType = normalizedRow['type'] || '';
+        const rawCapacity = normalizedRow['capacity'] || '';
 
         if (!rawPlat) {
-          toastError(`Baris ${rowNum}: Kolom number_license tidak boleh kosong`);
-          return;
+          continue;
         }
 
-        if (!rawStorage) {
-          toastError(`Baris ${rowNum}: Kolom storage untuk ${rawPlat} tidak boleh kosong`);
-          return;
-        }
-
-        if (!validStorage.has(rawStorage.toUpperCase())) {
-          toastError(
-            `Baris ${rowNum}: Storage "${rawStorage}" untuk ${rawPlat} tidak valid. Harus Dry atau Frozen`
+        const matchedItem = sortedData.find((item) => {
+          const itemKey = getItemKey(item);
+          return (
+            itemKey.replace(/\s+/g, '').toUpperCase() ===
+            getBasePlate(rawPlat).replace(/\s+/g, '').toUpperCase()
           );
-          return;
+        });
+
+        if (!matchedItem) {
+          continue;
         }
 
-        if (!rawType) {
-          toastError(`Baris ${rowNum}: Kolom type untuk ${rawPlat} tidak boleh kosong`);
-          return;
+        const storageVal = validStorage.has(rawStorage.toUpperCase())
+          ? formatStorage(rawStorage)
+          : '';
+        const parsedType = splitVehicleType(rawType);
+        const typeVal = validTypes.has(parsedType.type) ? parsedType.type : '';
+        const capacityVal = sanitizeCapacity(rawCapacity || parsedType.capacity);
+
+        if (!storageVal && !typeVal && !capacityVal) {
+          continue;
         }
 
-        if (!validTypes.has(rawType.toUpperCase())) {
-          const typeNames = vehicleTypes.map((v) => v.value).join(', ');
-          toastError(
-            `Baris ${rowNum}: Tipe kendaraan "${rawType}" untuk ${rawPlat} tidak valid. Pilihan: ${typeNames}`
-          );
-          return;
-        }
-
-        const basePlat = getBasePlate(rawPlat);
-        updates[basePlat] = {
-          storage: formatStorage(rawStorage),
-          type: formatType(rawType),
+        updates[getItemKey(matchedItem)] = {
+          storage: storageVal,
+          type: typeVal,
+          capacity: capacityVal,
         };
+      }
+
+      const updateEntries = Object.entries(updates);
+      if (updateEntries.length === 0) {
+        toastError(t('common.toast.error', { err: t('common.no_data') }));
+        return;
       }
 
       setSelections((prev) => {
         const next = { ...prev };
-        Object.entries(updates).forEach(([platKey, val]) => {
-          const matchedItem = sortedData.find((item) => {
-            const itemKey = getItemKey(item);
-            return (
-              itemKey.replace(/\s+/g, '').toUpperCase() ===
-              platKey.replace(/\s+/g, '').toUpperCase()
-            );
-          });
-
-          const finalKey = matchedItem ? getItemKey(matchedItem) : platKey;
+        updateEntries.forEach(([finalKey, val]) => {
           next[finalKey] = {
             storage: val.storage,
             type: val.type,
+            capacity: val.capacity,
           };
         });
         return next;
       });
-
-      toastSuccess('Berhasil memuat data kendaraan dari excel');
+      setHasUploadedExcel(true);
     } catch (err) {
-      toastError(`Gagal membaca file excel: ${err.message}`);
+      toastError(t('common.toast.error', { err: err }), err);
     }
   };
 
@@ -260,7 +277,7 @@ export default function VehicleModal({ isOpen, unmappedData = [], onCompleted, t
           license_number: plat,
           vehicle_ids: item.vehicle_ids || (item.vehicle_id ? [item.vehicle_id] : []),
           storage: formatStorage(sel.storage),
-          type: formatType(sel.type),
+          type: buildVehicleType(sel.type, sel.capacity),
           vendorData: item.vendorData,
           vendorVehicles: item.vendorVehicles,
         };
@@ -358,7 +375,7 @@ export default function VehicleModal({ isOpen, unmappedData = [], onCompleted, t
           >
             {sortedData.map((info, idx) => {
               const key = getItemKey(info);
-              const currentSel = selections[key] || { storage: '', type: '' };
+              const currentSel = selections[key] || { storage: '', type: '', capacity: '' };
               const plat = getPlatDisplay(info);
 
               return (
@@ -370,7 +387,7 @@ export default function VehicleModal({ isOpen, unmappedData = [], onCompleted, t
                     {plat}
                   </p>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div>
                       <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">
                         {t('common.storage_type')}
@@ -381,7 +398,7 @@ export default function VehicleModal({ isOpen, unmappedData = [], onCompleted, t
                         onChange={(val) => handleSelectionChange(key, 'storage', val)}
                         getLabel={(val) => val || t('common.select')}
                         size="sm"
-                        className="w-full"
+                        className={`w-full ${hasUploadedExcel && !currentSel.storage ? 'ring-2 ring-red-500 rounded' : ''}`}
                       />
                     </div>
 
@@ -395,7 +412,30 @@ export default function VehicleModal({ isOpen, unmappedData = [], onCompleted, t
                         onChange={(val) => handleSelectionChange(key, 'type', val)}
                         getLabel={(val) => val || t('common.select')}
                         size="sm"
-                        className="w-full"
+                        className={`w-full ${hasUploadedExcel && !currentSel.type ? 'ring-2 ring-red-500 rounded' : ''}`}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">
+                        {t('common.capacity')}
+                      </label>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        maxLength={5}
+                        required
+                        value={currentSel.capacity || ''}
+                        onChange={(e) =>
+                          handleSelectionChange(key, 'capacity', sanitizeCapacity(e.target.value))
+                        }
+                        placeholder="2500,5000"
+                        className={`w-full h-8 px-2.5 text-sm rounded-md border bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 ${
+                          hasUploadedExcel && !currentSel.capacity
+                            ? 'border-red-500 ring-1 ring-red-500 focus:ring-red-500'
+                            : 'border-slate-300 dark:border-slate-600 focus:ring-sky-500'
+                        }`}
                       />
                     </div>
                   </div>

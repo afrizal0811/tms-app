@@ -183,7 +183,7 @@ export async function generateSummaryWorkbook(
   const formattedStart = formatDateUniversal(startDateStr, 'DD.MM.YYYY');
   const formattedEnd = formatDateUniversal(endDateStr, 'DD.MM.YYYY');
   const { storedLocationAcronym: locationName } = getLocalStorage() || '-';
-  const excelFileName = `${translate('summary.title')} - (${formattedStart} - ${formattedEnd}) - ${locationName}.xlsx`;
+  const excelFileName = `${translate('common.summary')} - (${formattedStart} - ${formattedEnd}) - ${locationName}.xlsx`;
 
   return { wb, excelFileName };
 }

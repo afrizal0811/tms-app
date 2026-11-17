@@ -23,10 +23,15 @@ export default function CustomReport({
     custom: false,
   });
   const { bulk: isBulkMode } = selectedMode;
-  const [reportType, setReportType] = useState('detail');
+  const [reportType, setReportType] = useState('bread');
   const [bulkFormat, setBulkFormat] = useState('zip');
 
   const reportOptions = [
+    {
+      id: 'bread',
+      label: t('report.custom.bread_items'),
+      tooltip: t('report.tooltip.bread_items_info'),
+    },
     {
       id: 'detail',
       label: t('report.custom.task_routing'),
@@ -82,8 +87,8 @@ export default function CustomReport({
 
   const bulkText = isBulkMode ? t('common.bulk') : '';
   const titleMenu = isIndonesian
-    ? `${t('report.custom.title')} ${bulkText}`.trim()
-    : `${bulkText} ${t('report.custom.title')}`.trim();
+    ? `${t('common.custom_report')} ${bulkText}`.trim()
+    : `${bulkText} ${t('common.custom_report')}`.trim();
 
   return (
     <ReportTemplate

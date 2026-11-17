@@ -166,12 +166,20 @@ export function parseCustomerString(fullString) {
     const commaSplit = rawLocation.split(',');
     location = commaSplit[0].trim();
     if (commaSplit.length > 1) {
-      invoiceNumber = commaSplit.slice(1).join(', ').trim();
+      invoiceNumber = commaSplit
+        .slice(1)
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .join(', ');
     }
   } else if (parts.length === 2 && id.includes(',')) {
     const commaSplit = id.split(',');
     id = commaSplit[0].trim();
-    invoiceNumber = commaSplit.slice(1).join(', ').trim();
+    invoiceNumber = commaSplit
+      .slice(1)
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .join(', ');
   }
   if (invoiceNumber) {
     const orderParts = invoiceNumber.split(',').filter(Boolean);
@@ -195,6 +203,59 @@ export function parseCustomerString(fullString) {
   const fullCustomerName = id !== '' || location !== '' ? `${name} - ${id} - ${location}` : name;
 
   return { name, id, location, fullCustomerName, invoiceNumber, isTruncated, truncateInvoice };
+}
+
+export function parseProductItem(item) {
+  const rawTitle = String(item?.title || item?.inventory_name || '').trim();
+  let inventoryId = item?.inventory_id ? String(item.inventory_id).trim() : null;
+  let inventoryName = rawTitle;
+
+  if (!inventoryId && rawTitle) {
+    const match = rawTitle.match(/^(?:Barang\s+)?(\d+)\s*-\s*(.+)$/i);
+    if (match) {
+      inventoryId = match[1].trim();
+      inventoryName = match[2].trim();
+    }
+  }
+
+  const toTextOrNull = (val) => {
+    if (val == null) return null;
+    const str = String(val).trim();
+    return str || null;
+  };
+
+  const toNumOrNull = (val) => {
+    if (val == null || val === '') return null;
+    const num = Number(val);
+    return Number.isNaN(num) ? null : num;
+  };
+
+  return {
+    invoice_number: toTextOrNull(item?.caption ?? item?.invoice_number),
+    inventory_id: inventoryId || null,
+    inventory_name: inventoryName || '-',
+    uom: toTextOrNull(item?.content ?? item?.uom),
+    qty: toNumOrNull(item?.qtyProcessed ?? item?.qty),
+    weight: toNumOrNull(item?.weight),
+    volume: toNumOrNull(item?.volume),
+  };
+}
+
+export function formatListProductsForApi(rows) {
+  if (!Array.isArray(rows) || rows.length === 0) return [];
+  return rows.map((row) => ({
+    title: row.inventory_id ? `${row.inventory_id}-${row.inventory_name}` : row.inventory_name,
+    caption: row.invoice_number || '',
+    content: row.uom || '',
+    qtyProcessed: row.qty ?? 0,
+    weight: row.weight ?? 0,
+    volume: row.volume ?? 0,
+    inventoryId: row.inventory_id || null,
+    inventoryName: row.inventory_name,
+    invoiceNumber: row.invoice_number || null,
+    uom: row.uom || null,
+    qty: row.qty ?? 0,
+  }));
 }
 
 export function getStorageType(input) {

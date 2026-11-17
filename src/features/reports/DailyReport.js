@@ -104,8 +104,8 @@ export default function DailyReport({
   const bulkText = isBulkMode ? t('common.bulk') : '';
   const prefixText = `${manualText} ${bulkText}`.trim();
   const titleMenu = isIndonesian
-    ? `${t('report.daily_report')} ${prefixText}`.trim()
-    : `${prefixText} ${t('report.daily_report')}`.trim();
+    ? `${t('common.daily_report')} ${prefixText}`.trim()
+    : `${prefixText} ${t('common.daily_report')}`.trim();
 
   const handleSingleDateChange = (date) => {
     if (date) {

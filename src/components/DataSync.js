@@ -6,14 +6,9 @@ import VehicleModal from '@/components/modal/VehicleModal';
 import PendingReasonModal from '@/features/summary/tabs/modals/PendingReasonModal';
 import { useLanguage } from '@/context/LanguageContext';
 import {
-  getHubs,
   getKpiData,
   getReasons,
   getVehicles,
-  patchDriverMceasy,
-  patchVehicleMceasy,
-  postDriverList,
-  postVehicles,
   processKpiData,
   syncOperationalData,
 } from '@/lib/api/mileapp';
@@ -22,26 +17,63 @@ import { toastWarning } from '@/lib/toast';
 import { formatDateUniversal, getBasePlate, tomorrowDate } from '@/lib/utils';
 import { useEffect, useRef, useState } from 'react';
 
-function getActiveWeekDays(baseDate = new Date()) {
-  const d = new Date(baseDate);
-  const diffToMonday = d.getDay() === 0 ? -6 : 1 - d.getDay();
-  const monday = new Date(d);
-  monday.setDate(d.getDate() + diffToMonday);
-  monday.setHours(0, 0, 0, 0);
-
-  return Array.from({ length: 6 }, (_, i) => {
-    const day = new Date(monday);
-    day.setDate(monday.getDate() + i);
-    return formatDateUniversal(day, 'YYYY-MM-DD');
-  });
-}
-
 function withTimeout(promise, ms = 15000) {
   let timer;
   const timeout = new Promise((_, reject) => {
     timer = setTimeout(() => reject(new Error(`Timeout after ${ms}ms`)), ms);
   });
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
+function buildSyncDates(now = new Date()) {
+  const todayStr = formatDateUniversal(now, 'YYYY-MM-DD');
+
+  const pastDates = [];
+  for (let i = 3; i >= 1; i--) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - i);
+    pastDates.push(formatDateUniversal(d, 'YYYY-MM-DD'));
+  }
+
+  const tomorrow = new Date(now);
+  tomorrow.setDate(now.getDate() + 1);
+
+  return {
+    todayStr,
+    pastDates,
+    yesterdayStr: pastDates[pastDates.length - 1],
+    tomorrowStr: formatDateUniversal(tomorrow, 'YYYY-MM-DD'),
+    nextDeliveryStr: formatDateUniversal(tomorrowDate(true), 'YYYY-MM-DD'),
+  };
+}
+
+function buildEntityPlan(datesByEntity) {
+  const plan = new Map();
+  for (const [entity, dates] of Object.entries(datesByEntity)) {
+    dates.forEach((dStr) => {
+      if (!plan.has(dStr)) plan.set(dStr, []);
+      const list = plan.get(dStr);
+      if (!list.includes(entity)) list.push(entity);
+    });
+  }
+  return Array.from(plan.entries());
+}
+
+async function fetchMissingPendingTasks(hubId, dateStr, user) {
+  if (!hubId || hubId === 'all' || !dateStr) return [];
+  try {
+    const res = await processKpiData({
+      hubId,
+      deliveryDate: dateStr,
+      userName: user?.name || 'system',
+    });
+    if (res?.status === 'MISSING_PENDING_REASONS' && res?.missingTasks?.length > 0) {
+      return res.missingTasks.filter((task) => !task.hubId || String(task.hubId) === String(hubId));
+    }
+  } catch (err) {
+    console.warn('[DataSync] KPI process error:', err.message);
+  }
+  return [];
 }
 
 export default function DataSync({ children }) {
@@ -56,36 +88,7 @@ export default function DataSync({ children }) {
   const [unmappedVehicles, setUnmappedVehicles] = useState([]);
   const [uncompletedPendingTasks, setUncompletedPendingTasks] = useState([]);
   const [pendingReasonsList, setPendingReasonsList] = useState([]);
-  const pendingDateRef = useRef(null);
-
-  const handleKpiProcess = async (hubId, dateStr, user) => {
-    if (!hubId || hubId === 'all' || !dateStr) return;
-    try {
-      const res = await processKpiData({
-        hubId,
-        deliveryDate: dateStr,
-        userName: user?.name || 'system',
-      });
-      if (res?.status === 'MISSING_PENDING_REASONS' && res?.missingTasks?.length > 0) {
-        pendingDateRef.current = dateStr;
-        const tasksForHub = res.missingTasks.filter(
-          (t) => !t.hubId || String(t.hubId) === String(hubId)
-        );
-        if (tasksForHub.length > 0) {
-          setUncompletedPendingTasks(tasksForHub);
-          const reasons = await getReasons().catch(() => []);
-          setPendingReasonsList(Array.isArray(reasons) ? reasons : []);
-          const template =
-            tRef.current?.('summary.tabs.pending_reasons.toast_uncompleted', {
-              count: tasksForHub.length,
-            }) || `Terdapat ${tasksForHub.length} data pending yang belum memiliki alasan!`;
-          toastWarning(template.replace('{count}', tasksForHub.length));
-        }
-      }
-    } catch (err) {
-      console.warn('[DataSync] KPI process error:', err.message);
-    }
-  };
+  const pendingDatesRef = useRef([]);
 
   const checkUncompletedVehicles = async (hubId) => {
     if (!hubId || hubId === 'all') return;
@@ -135,32 +138,13 @@ export default function DataSync({ children }) {
     const runSync = async () => {
       if (typeof window === 'undefined' || isSyncingRef.current || hasRunRef.current) return;
 
-      const { storedUser, storedLocation, storedLocationName } = getLocalStorage();
+      const { storedUser, storedLocation } = getLocalStorage();
       if (!storedUser || !storedLocation) return;
 
       hasRunRef.current = true;
       isSyncingRef.current = true;
 
-      const now = new Date();
-      const todayStr = formatDateUniversal(now, 'YYYY-MM-DD');
-
-      const pastDates = [];
-      for (let i = 3; i >= 1; i--) {
-        const d = new Date(now);
-        d.setDate(d.getDate() - i);
-        pastDates.push(formatDateUniversal(d, 'YYYY-MM-DD'));
-      }
-      const yesterdayStr = pastDates[pastDates.length - 1];
-
-      const tomorrow = new Date(now);
-      tomorrow.setDate(now.getDate() + 1);
-      const tomorrowStr = formatDateUniversal(tomorrow, 'YYYY-MM-DD');
-
-      const dayAfterTomorrow = new Date(now);
-      dayAfterTomorrow.setDate(now.getDate() + 2);
-      const dayAfterTomorrowStr = formatDateUniversal(dayAfterTomorrow, 'YYYY-MM-DD');
-
-      const nextDeliveryStr = formatDateUniversal(tomorrowDate(true), 'YYYY-MM-DD');
+      const { todayStr, pastDates, yesterdayStr, tomorrowStr, nextDeliveryStr } = buildSyncDates();
 
       const targetHubId = storedLocation;
       const syncKey = `tms_last_sync_date_${targetHubId}`;
@@ -168,75 +152,25 @@ export default function DataSync({ children }) {
 
       if (isInitialSync) {
         setSyncStartTime(Date.now());
+        setSyncStatus(`${tRef.current('common.sync')}...`);
       }
 
-      const translate = tRef.current;
-      const setStatus = (key) => {
-        if (isInitialSync) {
-          setSyncStatus(`${translate('common.sync')} ${translate(key)}`);
-        }
-      };
-
-      const sync = (entities, deliveryDate, timeoutMs) =>
-        withTimeout(syncOperationalData({ deliveryDate, hubId: targetHubId, entities }), timeoutMs);
-
       try {
-        setStatus('common.task');
-        if (isInitialSync) {
-          await Promise.allSettled(
-            [...pastDates, todayStr, nextDeliveryStr].map((dStr) => sync(['tasks'], dStr, 20000))
-          );
-        } else {
-          await Promise.allSettled(
-            [todayStr, tomorrowStr].map((dStr) => sync(['tasks'], dStr, 20000))
-          );
-        }
+        const entityPlan = buildEntityPlan({
+          results: isInitialSync ? [yesterdayStr, todayStr, tomorrowStr] : [todayStr, tomorrowStr],
+          'location-histories': [...pastDates, todayStr],
+          tasks: isInitialSync ? [...pastDates, todayStr, nextDeliveryStr] : [todayStr, tomorrowStr],
+        });
 
-        if (isInitialSync) {
-          setStatus('common.routing');
-          await Promise.allSettled(
-            [...pastDates, todayStr, nextDeliveryStr].map((dStr) =>
-              sync(['results'], dStr, 15000).catch((err) =>
-                console.warn('[DataSync] Routing sync error:', err.message)
-              )
-            )
-          );
-
-          setStatus('common.driver');
-          await postDriverList([targetHubId]).catch((err) =>
-            console.warn('[DataSync] Driver sync error:', err.message)
-          );
-
-          setStatus('common.vehicle');
-          await postVehicles([targetHubId]).catch((err) =>
-            console.warn('[DataSync] Vehicle sync error:', err.message)
-          );
-
-          try {
-            const hubsRes = await getHubs();
-            const currentHub = hubsRes?.allHub?.find((h) => String(h._id) === String(targetHubId));
-            if (currentHub?.hasVms) {
-              await Promise.allSettled([
-                patchVehicleMceasy(targetHubId, storedLocationName),
-                patchDriverMceasy(targetHubId, storedLocationName),
-              ]);
-            }
-          } catch (err) {
-            console.warn('[DataSync] Hub/VMS check error:', err.message);
-          }
-        } else {
-          await Promise.allSettled(
-            [todayStr, tomorrowStr, dayAfterTomorrowStr].map((dStr) =>
-              sync(['results'], dStr, 15000).catch((err) =>
-                console.warn('[DataSync] Background routing sync error:', err.message)
-              )
-            )
-          );
-        }
-
-        setStatus('common.driver_location');
         await Promise.allSettled(
-          getActiveWeekDays(now).map((dStr) => sync(['location-histories'], dStr, 10000))
+          entityPlan.map(([deliveryDate, entities]) =>
+            withTimeout(
+              syncOperationalData({ deliveryDate, hubId: targetHubId, entities }),
+              entities.length * 15000
+            ).catch((err) =>
+              console.warn(`[DataSync] Sync error (${deliveryDate}):`, err.message)
+            )
+          )
         );
 
         localStorage.setItem(syncKey, todayStr);
@@ -248,6 +182,7 @@ export default function DataSync({ children }) {
             dateFrom: pastDates[0],
             dateTo: yesterdayStr,
           }).catch(() => []);
+
           const existingDates = new Set(
             (existingKpiList || [])
               .filter(
@@ -256,10 +191,29 @@ export default function DataSync({ children }) {
               .map((k) => k.date)
           );
 
+          const allMissingTasks = [];
+          const missingDates = [];
+
           for (const dStr of pastDates) {
             if (!existingDates.has(dStr)) {
-              await handleKpiProcess(targetHubId, dStr, storedUser);
+              const tasksForDate = await fetchMissingPendingTasks(targetHubId, dStr, storedUser);
+              if (tasksForDate.length > 0) {
+                allMissingTasks.push(...tasksForDate);
+                missingDates.push(dStr);
+              }
             }
+          }
+
+          if (allMissingTasks.length > 0) {
+            pendingDatesRef.current = missingDates;
+            setUncompletedPendingTasks(allMissingTasks);
+            const reasons = await getReasons().catch(() => []);
+            setPendingReasonsList(Array.isArray(reasons) ? reasons : []);
+            const template =
+              tRef.current?.('summary.tabs.pending_reasons.toast_uncompleted', {
+                count: allMissingTasks.length,
+              }) || `Terdapat ${allMissingTasks.length} data pending yang belum memiliki alasan!`;
+            toastWarning(template.replace('{count}', allMissingTasks.length));
           }
         }
 
@@ -337,12 +291,12 @@ export default function DataSync({ children }) {
           onClose={() => setUncompletedPendingTasks([])}
           onSuccess={async () => {
             const { storedLocation, storedUser } = getLocalStorage();
-            const targetDate = pendingDateRef.current;
-            if (storedLocation && targetDate) {
+            const targetDates = pendingDatesRef.current;
+            if (storedLocation && targetDates.length > 0) {
               try {
                 await processKpiData({
                   hubId: storedLocation,
-                  deliveryDate: targetDate,
+                  deliveryDates: targetDates,
                   userName: storedUser?.name || 'system',
                 });
               } catch (err) {

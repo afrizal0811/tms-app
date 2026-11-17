@@ -44,12 +44,13 @@ const DynamicMap = dynamic(
 
     const MapInner = ({ children, bounds, onMapReady }) => {
       const map = rl.useMap();
+      const boundsKey = bounds && bounds.length > 0 ? JSON.stringify(bounds) : '';
 
       useEffect(() => {
-        if (bounds && bounds.length > 0) {
-          map.fitBounds(L.latLngBounds(bounds), { padding: [50, 50], maxZoom: 16 });
+        if (boundsKey) {
+          map.fitBounds(L.latLngBounds(JSON.parse(boundsKey)), { padding: [50, 50], maxZoom: 16 });
         }
-      }, [bounds, map]);
+      }, [boundsKey, map]);
 
       useEffect(() => {
         if (onMapReady) onMapReady(map);

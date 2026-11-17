@@ -1,3 +1,4 @@
+import { isTaskUnassigned } from '@/lib/deliveryStatus';
 import { resolveRouteCategory } from '../../../helper/resolveRouteCategory';
 
 export function calculateDistanceSummary(
@@ -34,6 +35,12 @@ export function calculateDistanceSummary(
       );
 
       plates.forEach((plat) => {
+        if (Array.isArray(tasksData) && tasksData.length > 0) {
+          const hasActiveTask = tasksData.some(
+            (t) => !isTaskUnassigned(t) && (t.basePlat || t.vehicleName || t.plat) === plat
+          );
+          if (!hasActiveTask) return;
+        }
         processedPlates.add(plat);
         const route = { basePlat: plat, vehicleName: plat };
         const category = resolveRouteCategory(route, item, tasksData, driverData, driverMap);
@@ -55,12 +62,17 @@ export function calculateDistanceSummary(
       const taskDist = Number(task.distance ?? task.travelDistance ?? 0);
       if (taskDist > 0) {
         let category = (task.typeStorage || task.storage || '').toUpperCase();
-        if (!category.includes('DRY') && !category.includes('FRZ') && !category.includes('FROZEN')) {
+        if (
+          !category.includes('DRY') &&
+          !category.includes('FRZ') &&
+          !category.includes('FROZEN')
+        ) {
           const route = { basePlat: plat, vehicleName: plat };
           category = resolveRouteCategory(route, null, tasksData, driverData, driverMap);
         }
         if (category.includes('DRY')) rawDistDryMeters += taskDist * 1000;
-        else if (category.includes('FRZ') || category.includes('FROZEN')) rawDistFrzMeters += taskDist * 1000;
+        else if (category.includes('FRZ') || category.includes('FROZEN'))
+          rawDistFrzMeters += taskDist * 1000;
       }
     });
   }

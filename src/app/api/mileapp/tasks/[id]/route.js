@@ -1,50 +1,101 @@
 import prisma from '@/lib/prisma';
 import { formatMinutesToHHMM, formatUTC7, getBasePlate } from '@/lib/utils';
+import { getMileAppUserMap } from '../../help';
+import {
+  buildDriversByEmailMap,
+  formatPendingTask,
+  formatTask,
+  parseDurationToMinutes,
+  TASK_TIMESTAMP_FIELDS,
+} from '../taskFormatter';
 import { NextResponse } from 'next/server';
 
-let userCache = {
-  data: {},
-  expiresAt: 0,
-};
+const STRIPPED_VENDOR_FIELDS = [
+  'assignedVehicle',
+  'parentId',
+  'subId',
+  'priority',
+  'totalSo',
+  'originalWeight',
+  'originalVolume',
+  'expectedVehicle',
+  'vehicleCapacity',
+  'groupVisit',
+  'orderIndex',
+  'organization',
+  'content',
+  'title',
+  'flowId',
+  'organizationId',
+  'hub',
+  'isDeleted',
+  'taskType',
+  'assignedTo',
+  'visitGroup',
+  'visitGroupPriority',
+  'appVersion',
+  'deviceInformation',
+  'createdCoordinate',
+  'doneFrom',
+  'expectedDoneTime',
+  'geoLock',
+  'geoLockTrigger',
+  'idLocal',
+  'idleDuration',
+  'inLocation',
+  'isLastDoneOrder',
+  'label',
+  'namaPenerimaPic',
+  'openTaskTime',
+  'outLocation',
+  'photoDelivery_0_id',
+  'photoDelivery_0_path',
+  'photoDelivery_0_url',
+  'tandaTanganPenerima_path',
+  'tandaTanganPenerima_url',
+  'useGeoLock',
+  'workflow',
+];
 
-async function getMileAppUserMap(apiUrl, apiToken) {
-  const now = Date.now();
-  if (userCache.expiresAt > now && Object.keys(userCache.data).length > 0) {
-    return userCache.data;
-  }
+async function calculatePlanTravelDuration(data) {
+  if (!data?.routingResultId || data.routePlannedOrder == null || !data.eta) return null;
 
-  try {
-    const usersUrl = new URL(`${apiUrl}/users`);
-    usersUrl.searchParams.append('status', 'active');
-    usersUrl.searchParams.append('limit', '1000');
+  const plateKey = data.basePlat || getBasePlate(data.plat) || data.plat;
+  let refEtd = null;
 
-    const res = await fetch(usersUrl.toString(), {
-      headers: {
-        Authorization: `Bearer ${apiToken}`,
-        'Content-Type': 'application/json',
+  if (data.routePlannedOrder > 1) {
+    const prevTask = await prisma.task.findFirst({
+      where: {
+        routing_result_id: data.routingResultId,
+        route_planned_order: data.routePlannedOrder - 1,
+        ...(plateKey ? { plat: { contains: plateKey } } : {}),
       },
+      select: { etd: true },
     });
-
-    if (res.ok) {
-      const json = await res.json();
-      const list = json?.data || [];
-      const map = {};
-      list.forEach((u) => {
-        if (u.email) {
-          map[u.email.toLowerCase().trim()] = u.name;
-        }
-      });
-      userCache = {
-        data: map,
-        expiresAt: now + 60 * 60 * 1000,
-      };
-      return map;
-    }
-  } catch (err) {
-    console.error('Gagal mengambil data users:', err);
+    refEtd = prevTask?.etd || null;
+  } else if (data.routePlannedOrder === 1) {
+    const routingRes = await prisma.routingResult.findUnique({
+      where: { id: data.routingResultId },
+      select: { hub_times: true },
+    });
+    const hubTimes =
+      typeof routingRes?.hub_times === 'string'
+        ? JSON.parse(routingRes.hub_times)
+        : routingRes?.hub_times || {};
+    const firstHub = (hubTimes[plateKey] || []).find(
+      (h) => h.category === 'first' || h.order === 0
+    );
+    refEtd = firstHub?.etd || null;
   }
 
-  return userCache.data || {};
+  if (!refEtd) return null;
+  const [pH, pM] = refEtd.split(':').map(Number);
+  const [eH, eM] = data.eta.split(':').map(Number);
+  if (Number.isNaN(pH) || Number.isNaN(pM) || Number.isNaN(eH) || Number.isNaN(eM)) return null;
+
+  let diff = eH * 60 + eM - (pH * 60 + pM);
+  if (diff < 0) diff += 24 * 60;
+  return diff;
 }
 
 export async function GET(request, { params }) {
@@ -53,6 +104,7 @@ export async function GET(request, { params }) {
     const resolvedParams = await params;
     const id = resolvedParams?.id;
     const hubId = searchParams.get('hubId');
+    const vendorOnly = searchParams.get('vendorOnly') === '1';
 
     if (!id) {
       return NextResponse.json(
@@ -64,24 +116,83 @@ export async function GET(request, { params }) {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL;
     const apiToken = process.env.API_TOKEN;
 
+    if (vendorOnly) {
+      if (!apiUrl || !apiToken) {
+        return NextResponse.json(
+          { error: 'Kesalahan konfigurasi server internal' },
+          { status: 500 }
+        );
+      }
+      const externalRes = await fetch(`${apiUrl}/task/${id}`, {
+        headers: {
+          Authorization: `Bearer ${apiToken}`,
+          'Content-Type': 'application/json',
+        },
+        cache: 'no-store',
+      });
+      const json = await externalRes.json();
+      const vendorTask = json ? json.task : json;
+      if (!externalRes.ok || !vendorTask) {
+        return NextResponse.json(
+          { error: `Gagal mengambil data vendor untuk task ${id}`, details: vendorTask },
+          { status: externalRes.ok ? 404 : externalRes.status }
+        );
+      }
+      return NextResponse.json({
+        histories: Array.isArray(vendorTask.histories) ? vendorTask.histories : [],
+        waitingTime: vendorTask.waitingTime != null ? Number(vendorTask.waitingTime) : null,
+        source: 'vendor',
+      });
+    }
+
+    const dbTask = await prisma.task.findUnique({
+      where: { id },
+      include: {
+        list_products: { orderBy: { id: 'asc' } },
+        pending_detail: true,
+      },
+    });
+
+    if (dbTask) {
+      const localData = formatTask(dbTask);
+      const travelMins = parseDurationToMinutes(dbTask.travel_duration);
+      if (travelMins != null) {
+        localData.travelDuration = Number(travelMins.toFixed(2));
+        localData.travelDurationHour = formatMinutesToHHMM(travelMins, true);
+      } else {
+        localData.travelDuration = null;
+        localData.travelDurationHour = null;
+      }
+
+      if (dbTask.pending_detail) {
+        localData.pendingDetail = formatPendingTask(dbTask.pending_detail);
+      }
+
+      const plannedTravelDuration = await calculatePlanTravelDuration(localData);
+      if (plannedTravelDuration != null) {
+        localData.plannedTravelDuration = plannedTravelDuration;
+        localData.plannedTravelDurationHour = formatMinutesToHHMM(plannedTravelDuration);
+      }
+
+      localData.source = 'db';
+      return NextResponse.json(localData);
+    }
+
     if (!apiUrl || !apiToken) {
       return NextResponse.json({ error: 'Kesalahan konfigurasi server internal' }, { status: 500 });
     }
 
     const externalUrl = new URL(`${apiUrl}/task/${id}`);
-    const driverWhere = hubId && hubId !== 'all' ? { hub_id: hubId } : {};
-    const vehicleWhere = hubId && hubId !== 'all' ? { hubs_id: hubId } : {};
 
-    const [externalResponse, userMap, driverList, vehicleList] = await Promise.all([
+    const [externalResponse, userMap, driversByEmail] = await Promise.all([
       fetch(externalUrl.toString(), {
         headers: {
           Authorization: `Bearer ${apiToken}`,
           'Content-Type': 'application/json',
         },
       }),
-      getMileAppUserMap(apiUrl, apiToken),
-      prisma.driverList.findMany({ where: driverWhere }),
-      prisma.vehicle.findMany({ where: vehicleWhere }),
+      getMileAppUserMap(),
+      buildDriversByEmailMap(hubId),
     ]);
 
     const fetchData = await externalResponse.json();
@@ -106,63 +217,10 @@ export async function GET(request, { params }) {
       );
     }
 
-    const vehiclesByDriverId = new Map(
-      vehicleList.filter((v) => v.driver_id).map((v) => [v.driver_id, v])
-    );
-    const driversByEmail = {};
-    driverList.forEach((d) => {
-      const email = (d.email || '').toLowerCase().trim();
-      if (email && email !== '-') {
-        const v = vehiclesByDriverId.get(d.id);
-        const mappedTypeStr = v?.type ? (v.storage ? `${v.storage}-${v.type}` : v.type) : null;
-        driversByEmail[email] = {
-          id: d.id,
-          name: d.name,
-          email: d.email,
-          plat: v?.license_number || null,
-          basePlat: v ? getBasePlate(v.license_number) : null,
-          type: mappedTypeStr,
-          assignedVehicleId: v?.vehicle_id || null,
-        };
-      }
-    });
-
-    if (driverList.length === 0 && vehicleList.length === 0) {
-      const oldWhere = hubId && hubId !== 'all' ? { hubs: { some: { id: hubId } } } : {};
-      const [rawDrivers, mappingsDB] = await Promise.all([
-        prisma.driver.findMany({ where: oldWhere }),
-        prisma.vehicleMapping.findMany(),
-      ]);
-
-      const mappingsObj = mappingsDB.reduce((acc, curr) => {
-        acc[curr.plat] = curr.mapped_type ?? curr.mappedType;
-        acc[getBasePlate(curr.plat)] = curr.mapped_type ?? curr.mappedType;
-        return acc;
-      }, {});
-
-      rawDrivers.forEach((d) => {
-        const basePlat = getBasePlate(d.plat);
-        const mappedType = mappingsObj[basePlat] || mappingsObj[d.plat];
-        let mappedTypeStr = d.type;
-        if (mappedType) {
-          mappedTypeStr = d.storage ? `${d.storage}-${mappedType}` : mappedType;
-        }
-
-        const email = (d.email || '').toLowerCase().trim();
-        if (email && email !== '-' && !driversByEmail[email]) {
-          driversByEmail[email] = {
-            ...d,
-            type: mappedTypeStr,
-            basePlat,
-          };
-        }
-      });
-    }
-
     const mapUserName = (email) => {
       if (!email) return null;
       const cleanEmail = String(email).toLowerCase().trim();
-      return driversByEmail[cleanEmail]?.name || userMap[cleanEmail] || email;
+      return driversByEmail[cleanEmail]?.name || userMap.get(cleanEmail) || email;
     };
 
     data.createdByName = mapUserName(data.createdBy);
@@ -170,20 +228,9 @@ export async function GET(request, { params }) {
     data.assignedByName = mapUserName(data.assignedBy);
     data.doneByName = mapUserName(data.doneBy);
 
-    if (data.startTime) data.startTime = formatUTC7(data.startTime, 'YYYY-MM-DDTHH:mm:ss');
-    if (data.endTime) data.endTime = formatUTC7(data.endTime, 'YYYY-MM-DDTHH:mm:ss');
-    if (data.assignedTime) data.assignedTime = formatUTC7(data.assignedTime, 'YYYY-MM-DDTHH:mm:ss');
-    if (data.updatedTime) data.updatedTime = formatUTC7(data.updatedTime, 'YYYY-MM-DDTHH:mm:ss');
-    if (data.doneTime) data.doneTime = formatUTC7(data.doneTime, 'YYYY-MM-DDTHH:mm:ss');
-    if (data.createdTime) data.createdTime = formatUTC7(data.createdTime, 'YYYY-MM-DDTHH:mm:ss');
-    if (data.klikJikaSudahSampai)
-      data.klikJikaSudahSampai = formatUTC7(data.klikJikaSudahSampai, 'YYYY-MM-DDTHH:mm:ss');
-    if (data.page1DoneTime)
-      data.page1DoneTime = formatUTC7(data.page1DoneTime, 'YYYY-MM-DDTHH:mm:ss');
-    if (data.page2DoneTime)
-      data.page2DoneTime = formatUTC7(data.page2DoneTime, 'YYYY-MM-DDTHH:mm:ss');
-    if (data.page3DoneTime)
-      data.page3DoneTime = formatUTC7(data.page3DoneTime, 'YYYY-MM-DDTHH:mm:ss');
+    for (const field of TASK_TIMESTAMP_FIELDS) {
+      if (data[field]) data[field] = formatUTC7(data[field], 'YYYY-MM-DDTHH:mm:ss');
+    }
 
     if (data.volumeCbm != null) data.volumeCbm = Number(Number(data.volumeCbm).toFixed(2));
     if (data.weightKg != null) data.weightKg = Number(Number(data.weightKg).toFixed(2));
@@ -199,50 +246,9 @@ export async function GET(request, { params }) {
     if (data.etd && typeof data.etd === 'string') data.etd = data.etd.substring(0, 5);
     data.travelDuration = data.travelDuration ? Number(data.travelDuration.toFixed(2)) : null;
 
-    delete data.assignedVehicle;
-    delete data.parentId;
-    delete data.subId;
-    delete data.priority;
-    delete data.totalSo;
-    delete data.originalWeight;
-    delete data.originalVolume;
-    delete data.expectedVehicle;
-    delete data.vehicleCapacity;
-    delete data.groupVisit;
-    delete data.orderIndex;
-    delete data.organization;
-    delete data.content;
-    delete data.title;
-    delete data.flowId;
-    delete data.organizationId;
-    delete data.hub;
-    delete data.isDeleted;
-    delete data.taskType;
-    delete data.assignedTo;
-    delete data.visitGroup;
-    delete data.visitGroupPriority;
-    delete data.appVersion;
-    delete data.deviceInformation;
-    delete data.createdCoordinate;
-    delete data.doneFrom;
-    delete data.expectedDoneTime;
-    delete data.geoLock;
-    delete data.geoLockTrigger;
-    delete data.idLocal;
-    delete data.idleDuration;
-    delete data.inLocation;
-    delete data.isLastDoneOrder;
-    delete data.label;
-    delete data.namaPenerimaPic;
-    delete data.openTaskTime;
-    delete data.outLocation;
-    delete data.photoDelivery_0_id;
-    delete data.photoDelivery_0_path;
-    delete data.photoDelivery_0_url;
-    delete data.tandaTanganPenerima_path;
-    delete data.tandaTanganPenerima_url;
-    delete data.useGeoLock;
-    delete data.workflow;
+    for (const field of STRIPPED_VENDOR_FIELDS) {
+      delete data[field];
+    }
 
     const assigneeEmail =
       data.assignee && data.assignee.length > 0 ? data.assignee[0].toLowerCase().trim() : null;
@@ -270,56 +276,13 @@ export async function GET(request, { params }) {
     if (Array.isArray(data.assignee)) data.assignee = data.assignee.join(', ');
     if (!data.reason && data.alasan) data.reason = data.alasan;
 
-    let plannedTravelDuration = null;
-    if (data.routingResultId && data.routePlannedOrder != null && data.eta) {
-      const plateKey = data.basePlat || getBasePlate(data.plat) || data.plat;
-      if (data.routePlannedOrder > 1) {
-        const prevTask = await prisma.task.findFirst({
-          where: {
-            routing_result_id: data.routingResultId,
-            route_planned_order: data.routePlannedOrder - 1,
-            ...(plateKey ? { plat: { contains: plateKey } } : {}),
-          },
-          select: { etd: true },
-        });
-        if (prevTask?.etd) {
-          const [pH, pM] = prevTask.etd.split(':').map(Number);
-          const [eH, eM] = data.eta.split(':').map(Number);
-          if (!isNaN(pH) && !isNaN(eH)) {
-            let diff = eH * 60 + eM - (pH * 60 + pM);
-            if (diff < 0) diff += 24 * 60;
-            plannedTravelDuration = diff;
-          }
-        }
-      } else if (data.routePlannedOrder === 1) {
-        const routingRes = await prisma.routingResult.findUnique({
-          where: { id: data.routingResultId },
-          select: { hub_times: true },
-        });
-        const hubTimes =
-          typeof routingRes?.hub_times === 'string'
-            ? JSON.parse(routingRes.hub_times)
-            : routingRes?.hub_times || {};
-        const firstHub = (hubTimes[plateKey] || []).find(
-          (h) => h.category === 'first' || h.order === 0
-        );
-        if (firstHub?.etd) {
-          const [hH, hM] = firstHub.etd.split(':').map(Number);
-          const [eH, eM] = data.eta.split(':').map(Number);
-          if (!isNaN(hH) && !isNaN(eH)) {
-            let diff = eH * 60 + eM - (hH * 60 + hM);
-            if (diff < 0) diff += 24 * 60;
-            plannedTravelDuration = diff;
-          }
-        }
-      }
-    }
-
+    const plannedTravelDuration = await calculatePlanTravelDuration(data);
     if (plannedTravelDuration != null) {
       data.plannedTravelDuration = plannedTravelDuration;
       data.plannedTravelDurationHour = formatMinutesToHHMM(plannedTravelDuration);
     }
 
+    data.source = 'vendor';
     return NextResponse.json(data);
   } catch (error) {
     console.error('Error Single Task:', error);

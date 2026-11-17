@@ -68,7 +68,7 @@ export default function SystemUpdateModal() {
 
   if (!mounted || !isOpen) return null;
 
-  const footer = <Button text={t('update.btn_update')} onClick={handleApplyUpdate} />;
+  const footer = <Button text={t('common.button.btn_reload')} onClick={handleApplyUpdate} />;
 
   return (
     <Modal

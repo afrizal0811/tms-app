@@ -280,8 +280,7 @@ export async function deleteVehicleType(id) {
   );
 }
 
-// vehicle non tms
-export async function getTruckNonTms({ startDate, endDate }) {
+export async function getVehicleExternals({ startDate, endDate }) {
   const { storedLocation } = getLocalStorage();
   const params = new URLSearchParams();
   if (storedLocation) params.append('hubId', storedLocation);
@@ -289,23 +288,44 @@ export async function getTruckNonTms({ startDate, endDate }) {
   if (endDate) params.append('endDate', endDate);
 
   return await apiFetch(
-    `/api/mileapp/vehicles/non-tms?${params.toString()}`,
-    'Gagal mengambil data truck usage'
+    `/api/mileapp/vehicles/external?${params.toString()}`,
+    'Gagal mengambil data kendaraan eksternal'
   );
 }
 
-export async function postTruckNonTms(payload) {
-  return await apiFetch('/api/mileapp/vehicles/non-tms', 'Gagal menyimpan data penggunaan truk', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
+export async function postVehicleExternal(payload) {
+  return await apiFetch(
+    '/api/mileapp/vehicles/external',
+    'Gagal menyimpan data kendaraan eksternal',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }
+  );
 }
 
-export async function deleteTruckNonTms(payload) {
-  return await apiFetch('/api/mileapp/vehicles/non-tms', 'Gagal menghapus data penggunaan truk', {
-    method: 'DELETE',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
+export async function deleteVehicleExternal(payload) {
+  return await apiFetch(
+    '/api/mileapp/vehicles/external',
+    'Gagal menghapus data kendaraan eksternal',
+    {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
+export async function getVehicleUsages(params = {}) {
+  const q = new URLSearchParams();
+  if (params.hubId) q.append('hubId', params.hubId);
+  if (params.date) q.append('date', params.date);
+  if (params.dateFrom) q.append('dateFrom', params.dateFrom);
+  if (params.dateTo) q.append('dateTo', params.dateTo);
+
+  return await apiFetch(
+    `/api/mileapp/vehicles/usages?${q.toString()}`,
+    'Gagal mengambil data Vehicle Usage dari database'
+  );
 }

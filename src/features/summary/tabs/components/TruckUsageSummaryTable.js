@@ -26,12 +26,10 @@ export default function TruckUsageSummaryTable({
   const otvBg =
     'bg-[#d9f2d0]! dark:bg-slate-800! dark:bg-gradient-to-t! dark:from-green-900/30! dark:to-green-900/30!';
 
-  const headerTooltip = (tootltip, text, className = '', addClass = '') => {
+  const headerTooltip = (tooltip, text, className = '', addClass = '') => {
     return (
-      <Tooltip tooltipContent={tootltip}>
-        <td
-          className={`${isEmpty(className) ? thClassTooltip : className} ${addClass && `${addClass}`}`}
-        >
+      <Tooltip tooltipContent={tooltip}>
+        <td className={`${isEmpty(className) ? thClassTooltip : className} ${addClass}`.trim()}>
           <span className="border-b-2 border-dotted border-slate-700 dark:border-slate-400 pb-px">
             {text}
           </span>
@@ -39,6 +37,8 @@ export default function TruckUsageSummaryTable({
       </Tooltip>
     );
   };
+
+  const formatPct = (val) => (val ? `${(val * 100).toFixed(2)}%` : '0.00%');
 
   const getPctClass = (val) => {
     if (val > 1) return 'bg-[#ff0000] dark:bg-red-700 text-white font-bold';
@@ -50,22 +50,17 @@ export default function TruckUsageSummaryTable({
   };
 
   const renderRows = (cat, bgColor, totalBg) => {
-    const rows = activeTypes.map((type) => {
+    const visibleTypes = activeTypes.filter((type) => (summaryData[cat]?.types?.[type]?.V || 0) > 0);
+    const rows = visibleTypes.map((type) => {
       const d = summaryData[cat].types[type];
 
       if (isPercentage) {
         return (
           <tr key={`${cat}-${type}`} className="hover:opacity-90">
             <td className={`${tdClass} text-left font-medium ${bgColor}`}>{type}</td>
-            <td className={`${tdClass} ${getPctClass(d.PctTMS)}`}>
-              {d.PctTMS ? (d.PctTMS * 100).toFixed(2) + '%' : '0.00%'}
-            </td>
-            <td className={`${tdClass} ${getPctClass(d.PctManual)}`}>
-              {d.PctManual ? (d.PctManual * 100).toFixed(2) + '%' : '0.00%'}
-            </td>
-            <td className={`${tdClass} ${getPctClass(d.PctTVU)}`}>
-              {d.PctTVU ? (d.PctTVU * 100).toFixed(2) + '%' : '0.00%'}
-            </td>
+            <td className={`${tdClass} ${getPctClass(d.PctTMS)}`}>{formatPct(d.PctTMS)}</td>
+            <td className={`${tdClass} ${getPctClass(d.PctManual)}`}>{formatPct(d.PctManual)}</td>
+            <td className={`${tdClass} ${getPctClass(d.PctTVU)}`}>{formatPct(d.PctTVU)}</td>
           </tr>
         );
       }
@@ -77,9 +72,7 @@ export default function TruckUsageSummaryTable({
           <td className={`${tdClass} ${bgColor}`}>{d.Manual || 0}</td>
           <td className={`${tdClass} ${bgColor}`}>{d.TVU || 0}</td>
           <td className={`${tdClass} ${bgColor}`}>{d.TV || 0}</td>
-          <td className={`${tdClass} ${bgColor}`}>
-            {d.PctTVU ? (d.PctTVU * 100).toFixed(2) + '%' : '0.00%'}
-          </td>
+          <td className={`${tdClass} ${bgColor}`}>{formatPct(d.PctTVU)}</td>
           <td className={`${tdClass} ${bgColor}`}></td>
           <td className={`${tdClass} ${bgColor}`}></td>
           <td className={`${tdClass} ${bgColor}`}></td>
@@ -95,15 +88,9 @@ export default function TruckUsageSummaryTable({
           <td className={`${tdClass} text-left ${totalBg}`}>
             {translate('summary.tabs.truck_usage.total_used')}
           </td>
-          <td className={`${tdClass} ${getPctClass(t.PctTMS)}`}>
-            {t.PctTMS ? (t.PctTMS * 100).toFixed(2) + '%' : '0.00%'}
-          </td>
-          <td className={`${tdClass} ${getPctClass(t.PctManual)}`}>
-            {t.PctManual ? (t.PctManual * 100).toFixed(2) + '%' : '0.00%'}
-          </td>
-          <td className={`${tdClass} ${getPctClass(t.PctTVU)}`}>
-            {t.PctTVU ? (t.PctTVU * 100).toFixed(2) + '%' : '0.00%'}
-          </td>
+          <td className={`${tdClass} ${getPctClass(t.PctTMS)}`}>{formatPct(t.PctTMS)}</td>
+          <td className={`${tdClass} ${getPctClass(t.PctManual)}`}>{formatPct(t.PctManual)}</td>
+          <td className={`${tdClass} ${getPctClass(t.PctTVU)}`}>{formatPct(t.PctTVU)}</td>
         </tr>,
       ];
     }
@@ -118,9 +105,7 @@ export default function TruckUsageSummaryTable({
         <td className={`${tdClass} ${totalBg}`}>{t.Manual || 0}</td>
         <td className={`${tdClass} ${totalBg}`}>{t.TVU || 0}</td>
         <td className={`${tdClass} ${totalBg}`}>{t.TV || 0}</td>
-        <td className={`${tdClass} ${totalBg}`}>
-          {t.PctTVU ? (t.PctTVU * 100).toFixed(2) + '%' : '0.00%'}
-        </td>
+        <td className={`${tdClass} ${totalBg}`}>{formatPct(t.PctTVU)}</td>
         <td className={`${tdClass} ${totalBg}`}>{t.V || 0}</td>
         <td className={`${tdClass} ${totalBg}`}>{t.VU || 0}</td>
         <td className={`${tdClass} ${totalBg}`}>{t.IV || 0}</td>
@@ -139,15 +124,9 @@ export default function TruckUsageSummaryTable({
             '',
             `${tdClass} text-left ${otvBg}`
           )}
-          <td className={`${tdClass} ${getPctClass(t.PctTMS)}`}>
-            {t.PctTMS ? (t.PctTMS * 100).toFixed(2) + '%' : '0.00%'}
-          </td>
-          <td className={`${tdClass} ${getPctClass(t.PctManual)}`}>
-            {t.PctManual ? (t.PctManual * 100).toFixed(2) + '%' : '0.00%'}
-          </td>
-          <td className={`${tdClass} ${getPctClass(t.PctTVU)}`}>
-            {t.PctTVU ? (t.PctTVU * 100).toFixed(2) + '%' : '0.00%'}
-          </td>
+          <td className={`${tdClass} ${getPctClass(t.PctTMS)}`}>{formatPct(t.PctTMS)}</td>
+          <td className={`${tdClass} ${getPctClass(t.PctManual)}`}>{formatPct(t.PctManual)}</td>
+          <td className={`${tdClass} ${getPctClass(t.PctTVU)}`}>{formatPct(t.PctTVU)}</td>
         </tr>
       );
     }
@@ -164,9 +143,7 @@ export default function TruckUsageSummaryTable({
         <td className={`${tdClass} ${otvBg}`}>{t.Manual || 0}</td>
         <td className={`${tdClass} ${otvBg}`}>{t.TVU || 0}</td>
         <td className={`${tdClass} ${otvBg}`}>{t.TV || 0}</td>
-        <td className={`${tdClass} ${otvBg}`}>
-          {t.PctTVU ? (t.PctTVU * 100).toFixed(2) + '%' : '0.00%'}
-        </td>
+        <td className={`${tdClass} ${otvBg}`}>{formatPct(t.PctTVU)}</td>
         <td className={`${tdClass} ${otvBg}`}>{t.V || 0}</td>
         <td className={`${tdClass} ${otvBg}`}>{t.VU || 0}</td>
         <td className={`${tdClass} ${otvBg}`}>{t.IV || 0}</td>
@@ -196,8 +173,8 @@ export default function TruckUsageSummaryTable({
           </tr>
         </thead>
         <tbody>
-          {renderRows('Dry', dryBg, dryTotBg, isPercentage)}
-          {renderRows('Frozen', frzBg, frzTotBg, isPercentage)}
+          {renderRows('Dry', dryBg, dryTotBg)}
+          {renderRows('Frozen', frzBg, frzTotBg)}
           {renderOTVRow()}
         </tbody>
       </table>

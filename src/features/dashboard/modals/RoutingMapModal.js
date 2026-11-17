@@ -14,21 +14,14 @@ import {
 } from '@/lib/utils';
 import JSZip from 'jszip';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import MapViewSection from '../components/MapViewSection';
-import { renderGroupToJpeg } from '../helper/help';
-
-const getGroupKey = (item) => {
-  const driver = item?.driver || item?.assignee || 'N/A';
-  const plat =
-    getBasePlate(item?.plat || item?.vehicleName) || item?.plat || item?.vehicleName || '';
-  return `${driver}_${plat}`;
-};
+import MapViewSection, { assignPlanSequences } from '../components/MapViewSection';
+import { getGroupKey, getGroupTasks, renderGroupToJpeg } from '../helper/help';
 
 export default function RoutingMapModal({ isOpen, onClose, data, selectedDate }) {
   const { t } = useLanguage();
   const [userSelectedGroup, setUserSelectedGroup] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState('');
-  const [taskFilterType, setTaskFilterType] = useState('real');
+  const [taskFilterType, setTaskFilterType] = useState('plan');
   const [prevGroup, setPrevGroup] = useState(null);
   const [mapRo, setMapRo] = useState(null);
   const [mapReal, setMapReal] = useState(null);
@@ -109,15 +102,10 @@ export default function RoutingMapModal({ isOpen, onClose, data, selectedDate })
     setSelectedCustomer(hasHub ? 'HUB' : '');
   }
 
-  const filteredTasks = useMemo(() => {
-    if (!selectedGroup || !data) return [];
-    return data
-      .filter((d) => (d.groupKey || getGroupKey(d)) === selectedGroup)
-      .map((t) => ({
-        ...t,
-        longlat: t.longlat || t.rawTask?.longlat || t.coordinate || t.location || '',
-      }));
-  }, [data, selectedGroup]);
+  const filteredTasks = useMemo(
+    () => (selectedGroup ? getGroupTasks(data, selectedGroup) : []),
+    [data, selectedGroup]
+  );
 
   const nameFrequency = useMemo(() => {
     const counts = {};
@@ -144,17 +132,15 @@ export default function RoutingMapModal({ isOpen, onClose, data, selectedDate })
   const customerOptions = useMemo(() => {
     if (!filteredTasks.length) return [];
 
-    const sortedTasks = [...filteredTasks].sort((a, b) => {
-      if (taskFilterType === 'plan') {
-        return (a.roSequence ?? 999999) - (b.roSequence ?? 999999);
-      }
-      return (a.realSequence ?? 999999) - (b.realSequence ?? 999999);
-    });
+    const seqKey = taskFilterType === 'plan' ? 'roSequence' : 'realSequence';
+    const sorted = [...filteredTasks].sort((a, b) => (a[seqKey] || 999999) - (b[seqKey] || 999999));
+    const sequencedTasks =
+      taskFilterType === 'plan' ? assignPlanSequences(sorted, 'roSequence') : sorted;
 
     const options = [];
     const seen = new Set();
 
-    sortedTasks.forEach((t) => {
+    sequencedTasks.forEach((t) => {
       if (!t.customerName || t.customerName === 'HUB') return;
 
       const isPending = isEmpty(t.realSequence);
@@ -164,35 +150,47 @@ export default function RoutingMapModal({ isOpen, onClose, data, selectedDate })
           seen.add('Pickup');
           options.push({ value: 'Pickup', label: 'PICKUP', isPending: false });
         }
-      } else {
-        const rawStr = t.originalCustomerString || t.customerName;
-        const displayName = resolveDisplayName(rawStr, t.flow);
-        if (!seen.has(displayName)) {
-          seen.add(displayName);
-          const prefix =
-            taskFilterType === 'plan'
-              ? !isEmpty(t.roSequence)
-                ? `${t.roSequence}. `
-                : ''
-              : !isEmpty(t.realSequence)
-                ? `${t.realSequence}. `
-                : '';
-          options.push({
-            value: displayName,
-            label: `${prefix}${displayName}`,
-            isPending: isPending,
-          });
-        }
+        return;
       }
+
+      const rawStr = t.originalCustomerString || t.customerName;
+      const displayName = resolveDisplayName(rawStr, t.flow);
+      if (seen.has(displayName)) return;
+
+      seen.add(displayName);
+      const seq = t[seqKey];
+      const seqPrefix = !isEmpty(seq) ? `${seq}. ` : '';
+      const manualPrefix = t.isManualAssign ? '[M] ' : '';
+      options.push({
+        value: displayName,
+        label: `${seqPrefix}${manualPrefix}${displayName}`,
+        isPending,
+      });
     });
 
     const hasHub = filteredTasks.some((t) => t.type === 'HUB_START');
     return hasHub ? [{ value: 'HUB', label: 'HUB', isPending: false }, ...options] : options;
   }, [filteredTasks, resolveDisplayName, taskFilterType]);
 
+  const resetMapZoom = useCallback(async () => {
+    const targetMap = mapRo || mapReal;
+    if (!targetMap) return;
+    const coords = filteredTasks
+      .map((t) => parseCoordinates(t.longlat))
+      .filter(Boolean)
+      .map((c) => [c.lat, c.lon]);
+    if (coords.length > 0) {
+      const L = (await import('leaflet')).default;
+      targetMap.fitBounds(L.latLngBounds(coords), { padding: [50, 50], maxZoom: 16 });
+    }
+  }, [filteredTasks, mapRo, mapReal]);
+
   const handleFocusCustomer = async (val) => {
     setSelectedCustomer(val);
-    if (!val) return;
+    if (!val) {
+      resetMapZoom();
+      return;
+    }
     const targetTask = filteredTasks.find((t) => {
       if (val === 'HUB' && t.type === 'HUB_START') return true;
       if (val === 'Pickup' && t.flow === 'Pickup') return true;
@@ -202,20 +200,21 @@ export default function RoutingMapModal({ isOpen, onClose, data, selectedDate })
 
     if (targetTask) {
       const coords = parseCoordinates(targetTask.longlat);
-      if (coords && mapRo) {
+      const targetMap = mapRo || mapReal;
+      if (coords && targetMap) {
         const zoomLevel = 16;
         const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
 
         if (isMobile) {
           const L = (await import('leaflet')).default;
-          const mapSize = mapRo.getSize();
-          const targetPoint = mapRo.project([coords.lat, coords.lon], zoomLevel);
+          const mapSize = targetMap.getSize();
+          const targetPoint = targetMap.project([coords.lat, coords.lon], zoomLevel);
           const offsetY = mapSize.y * 0.25;
           const newCenterPoint = new L.Point(targetPoint.x, targetPoint.y + offsetY);
-          const newCenterLatLng = mapRo.unproject(newCenterPoint, zoomLevel);
-          mapRo.setView(newCenterLatLng, zoomLevel, { animate: true, duration: 1.0 });
+          const newCenterLatLng = targetMap.unproject(newCenterPoint, zoomLevel);
+          targetMap.setView(newCenterLatLng, zoomLevel, { animate: true, duration: 1.0 });
         } else {
-          mapRo.setView([coords.lat, coords.lon], zoomLevel, { animate: true, duration: 1.0 });
+          targetMap.setView([coords.lat, coords.lon], zoomLevel, { animate: true, duration: 1.0 });
         }
       }
     }
@@ -236,11 +235,15 @@ export default function RoutingMapModal({ isOpen, onClose, data, selectedDate })
     }
   };
 
-  const handleCloseInfo = () => setSelectedCustomer('');
+  const handleCloseInfo = () => {
+    setSelectedCustomer('');
+    resetMapZoom();
+  };
   const handleCloseModal = () => {
     if (isExporting) return;
     setUserSelectedGroup('');
     setSelectedCustomer('');
+    setTaskFilterType('plan');
     setPrevGroup(null);
     onClose();
   };
@@ -325,29 +328,41 @@ export default function RoutingMapModal({ isOpen, onClose, data, selectedDate })
         <div className="flex flex-col w-1/2 lg:w-72 gap-1">
           <div className="flex items-center justify-between">
             <label className="text-[10px] font-bold tracking-wide">{t('common.task')}</label>
-            <div className="flex items-center gap-0.5 bg-gray-200/80 p-0.5 rounded text-[10px] font-semibold">
-              <button
-                type="button"
-                onClick={() => setTaskFilterType('plan')}
-                className={`px-1.5 py-0.5 rounded cursor-pointer transition-colors ${
-                  taskFilterType === 'plan'
-                    ? 'bg-teal-700 text-white shadow-xs'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                {t('dashboard.map.plan')}
-              </button>
-              <button
-                type="button"
-                onClick={() => setTaskFilterType('real')}
-                className={`px-1.5 py-0.5 rounded cursor-pointer transition-colors ${
-                  taskFilterType === 'real'
-                    ? 'bg-green-700 text-white shadow-xs'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                {t('dashboard.map.real')}
-              </button>
+            <div className="flex items-center gap-1 bg-gray-100 border border-gray-300 p-0.5 rounded-md shadow-inner text-[11px] font-semibold">
+              {[
+                {
+                  id: 'plan',
+                  label: t('dashboard.map.plan'),
+                  activeBg: 'bg-[#D97706]',
+                  dotBg: 'bg-[#D97706]',
+                },
+                {
+                  id: 'real',
+                  label: t('common.actual_seq'),
+                  activeBg: 'bg-green-700',
+                  dotBg: 'bg-green-700',
+                },
+              ].map((mode) => {
+                const isActive = taskFilterType === mode.id;
+                return (
+                  <button
+                    key={mode.id}
+                    type="button"
+                    aria-pressed={isActive}
+                    onClick={() => setTaskFilterType(mode.id)}
+                    className={`flex items-center gap-1.5 px-2 py-0.5 rounded-[5px] cursor-pointer transition-all ${
+                      isActive
+                        ? `${mode.activeBg} text-white shadow-sm`
+                        : 'text-gray-700 hover:bg-white hover:text-gray-900 hover:shadow-xs'
+                    }`}
+                  >
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-white' : mode.dotBg}`}
+                    />
+                    {mode.label}
+                  </button>
+                );
+              })}
             </div>
           </div>
           <select
@@ -420,7 +435,7 @@ export default function RoutingMapModal({ isOpen, onClose, data, selectedDate })
           />
 
           <MapViewSection
-            title={t('dashboard.map.real')}
+            title={t('common.actual_seq')}
             tasks={filteredTasks}
             sequenceKey="realSequence"
             colorClass="bg-[#10B981]"

@@ -321,7 +321,7 @@ export default function VehicleData() {
 
   return (
     <PageTemplate
-      title={t('vehicle.title')}
+      title={t('common.vehicle_data')}
       subtitle={
         <>
           {t('vehicle.subtitle')}{' '}

@@ -54,7 +54,7 @@ export default function TimeDriverModal({ isOpen, onClose, data, translate }) {
       width: 'w-[30%]',
       sortable: false,
       align: 'center',
-      label: translate('summary.tabs.time_driver.modal.start_time'),
+      label: translate('common.start_time'),
       render: (row) => {
         const hasOutStart = row.isStartOutRadius;
         const content = (
@@ -78,7 +78,7 @@ export default function TimeDriverModal({ isOpen, onClose, data, translate }) {
       width: 'w-[30%]',
       sortable: false,
       align: 'center',
-      label: translate('summary.tabs.time_driver.modal.finish_time'),
+      label: translate('common.finish_time'),
       render: (row) => {
         const hasOutFinish = row.isFinishOutRadius;
         const diffDay = row.dayDiff;
@@ -173,7 +173,7 @@ export default function TimeDriverModal({ isOpen, onClose, data, translate }) {
                           <LeafletTooltip direction="top" offset={[0, -10]}>
                             <div
                               dangerouslySetInnerHTML={{
-                                __html: `<b>${translate('summary.tabs.time_driver.modal.start_time')}</b><br>${formatDateUniversal(entry.startTime, 'DD/MM/YYYY HH:mm')}`,
+                                __html: `<b>${translate('common.start_time')}</b><br>${formatDateUniversal(entry.startTime, 'DD/MM/YYYY HH:mm')}`,
                               }}
                             />
                           </LeafletTooltip>
@@ -192,7 +192,7 @@ export default function TimeDriverModal({ isOpen, onClose, data, translate }) {
                           <LeafletTooltip direction="top" offset={[0, -10]}>
                             <div
                               dangerouslySetInnerHTML={{
-                                __html: `<b>${translate('summary.tabs.time_driver.modal.finish_time')}</b><br>${formatDateUniversal(entry.finishTime, 'DD/MM/YYYY HH:mm')} <span class="text-red-500">${hasDayDiff ? `(+${entry.dayDiff})` : ''}</span>`,
+                                __html: `<b>${translate('common.finish_time')}</b><br>${formatDateUniversal(entry.finishTime, 'DD/MM/YYYY HH:mm')} <span class="text-red-500">${hasDayDiff ? `(+${entry.dayDiff})` : ''}</span>`,
                               }}
                             />
                           </LeafletTooltip>

@@ -1,6 +1,6 @@
 import ConfirmModal from '@/components/modal/ConfirmModal';
 import Modal from '@/components/modal/Modal';
-import { deleteTruckNonTms, postTruckNonTms } from '@/lib/api/mileapp';
+import { deleteVehicleExternal, postVehicleExternal } from '@/lib/api/mileapp';
 import { getLocalStorage } from '@/lib/localStorageHandler';
 import { toastError, toastSuccess } from '@/lib/toast';
 import { formatLongDate, getBasePlate } from '@/lib/utils';
@@ -132,7 +132,7 @@ export default function TruckUsageModal({
 
     setIsLoading(true);
     try {
-      const resData = await postTruckNonTms({
+      const resData = await postVehicleExternal({
         hubId: activeHub,
         date: data.date,
         storageType: data.storage,
@@ -159,7 +159,7 @@ export default function TruckUsageModal({
     setIsConfirmOpen(false);
     setIsLoading(true);
     try {
-      await deleteTruckNonTms({
+      await deleteVehicleExternal({
         hubId: activeHub,
         date: data.date,
         storageType: data.storage,

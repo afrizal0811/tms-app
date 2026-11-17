@@ -215,14 +215,14 @@ export default function UpdateCoordinatePage() {
 
   const subtitle = (
     <>
-      {t('longlat.subtitle')}{' '}
-      <span className="font-semibold text-sky-600">{t('longlat.highlight_subtitle')}</span>.
+      {t('coordinate.subtitle')}{' '}
+      <span className="font-semibold text-sky-600">{t('coordinate.highlight_subtitle')}</span>.
     </>
   );
 
   return (
     <PageTemplate
-      title={t('longlat.title')}
+      title={t('coordinate.title')}
       subtitle={subtitle}
       headerItems={headerItems}
       isEmpty={!loading && isEmpty(processedData)}

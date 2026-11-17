@@ -1,4 +1,5 @@
 import prisma from '@/lib/prisma';
+import { recalculateVehicleUsageForTask } from '@/lib/services/vehicleUsageService';
 import { NextResponse } from 'next/server';
 import { clearPendingCheckCache } from './check/route';
 
@@ -118,6 +119,12 @@ export async function POST(request) {
     const results = await prisma.$transaction(upsertOperations);
     clearPendingCheckCache();
 
+    const batchUser = rawList.find((e) => e.updated_by || e.created_by || e.userName);
+    const resolvedUser = batchUser?.updated_by || batchUser?.created_by || batchUser?.userName || 'system';
+    Promise.all(taskIds.map((tId) => recalculateVehicleUsageForTask(tId, resolvedUser))).catch((err) =>
+      console.warn('[PendingDetails] Gagal recalculate vehicle usage:', err.message)
+    );
+
     return NextResponse.json(
       { message: 'Success', data: isBatch ? results.map(formatPending) : formatPending(results[0]) },
       { status: 200 }
@@ -142,6 +149,10 @@ export async function DELETE(request) {
       where: { task_id: taskId },
     });
     clearPendingCheckCache();
+
+    recalculateVehicleUsageForTask(taskId).catch((err) =>
+      console.warn('[PendingDetails] Gagal recalculate vehicle usage saat delete:', err.message)
+    );
 
     return NextResponse.json({ message: 'Detail pending berhasil dihapus' }, { status: 200 });
   } catch (error) {

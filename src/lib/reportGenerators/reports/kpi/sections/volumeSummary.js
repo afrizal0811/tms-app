@@ -27,13 +27,12 @@ export function calculateVolumeSummary(resultsData, tasksData, driverMap, driver
         const truckId = plat || '-';
         const matchingTasks = Array.isArray(tasksData)
           ? tasksData.filter(
-              (t) =>
-                !isTaskUnassigned(t) && (t.basePlat || t.vehicleName || t.plat) === truckId
+              (t) => !isTaskUnassigned(t) && (t.basePlat || t.vehicleName || t.plat) === truckId
             )
           : [];
         const taskCount = matchingTasks.length;
-        const tripsCount = taskCount || 1;
-        if (tripsCount === 0) return;
+        if (taskCount === 0) return;
+        const tripsCount = taskCount;
 
         matchingTasks.forEach((t) => {
           if (t.id || t._id) countedTaskIds.add(String(t.id || t._id));

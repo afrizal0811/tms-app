@@ -283,10 +283,10 @@ export default function Dashboard({ driverData }) {
   ];
 
   const cardTabs = [
-    { id: 'Detail', label: t('dashboard.tabs.detail'), extraContent: getPingDot('Detail') },
+    { id: 'Detail', label: t('common.detail'), extraContent: getPingDot('Detail') },
     {
       id: 'RoutingVsActual',
-      label: t('dashboard.tabs.routing_vs_actual'),
+      label: t('common.routing_vs_actual'),
       extraContent: getPingDot('RoutingVsActual'),
     },
   ];

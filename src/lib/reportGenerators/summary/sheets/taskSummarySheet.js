@@ -152,7 +152,7 @@ export function generateTaskSummarySheet(
 
   excelData.push([]);
 
-  excelData.push([translate('summary.tabs.task_summary.explanation')]);
+  excelData.push([translate('common.explanation')]);
   const legendTitleRow = excelData.length - 1;
 
   merges.push({ s: { r: legendTitleRow, c: 0 }, e: { r: legendTitleRow, c: 2 } });

@@ -267,7 +267,7 @@ export default function VehicleManager({ vehicleTypes, isReadOnly, translate }) 
         onCancel={() => setDeleteConfig({ isOpen: false, item: null })}
         onConfirm={confirmDelete}
         title={translate('common.modal.delete_title', {
-          text: translate('setting.tab.general.vehicle_title'),
+          text: translate('common.vehicle_data'),
         })}
         message={
           <span>
@@ -292,7 +292,7 @@ export default function VehicleManager({ vehicleTypes, isReadOnly, translate }) 
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4 border-b border-gray-100 dark:border-slate-800 pb-3">
         <div>
           <h2 className="text-lg font-bold text-gray-900 dark:text-slate-200">
-            {translate('setting.tab.general.vehicle_title')}{' '}
+            {translate('common.vehicle_data')}{' '}
             {activeHub?.hubName ? `(${activeHub.hubName})` : ''}
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">

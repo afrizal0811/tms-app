@@ -1,61 +1,13 @@
 import prisma from '@/lib/prisma';
+import { formatTask, parseJsonField } from '@/app/api/mileapp/tasks/taskFormatter';
 import {
   DELIVERY_STATUS_KEYS,
   isTaskUnassigned,
   normalizeDeliveryStatus,
 } from '@/lib/deliveryStatus';
-import { formatDateUniversal, getBasePlate, parseCustomerString } from '@/lib/utils';
+import { formatDateUniversal } from '@/lib/utils';
 import { computeKpiMetrics } from '@/lib/reportGenerators/reports/kpi/sections';
 import { convertLocationHistories } from '@/lib/reportGenerators/helper/convertLocationHistories';
-
-function formatDbTask(dbTask) {
-  const cust = parseCustomerString(dbTask.customer_order);
-  return {
-    id: dbTask.id,
-    hubId: dbTask.hub_id,
-    routingResultId: dbTask.routing_result_id,
-    customerOrder: dbTask.customer_order,
-    customerName: cust.fullCustomerName || cust.name || '',
-    address: dbTask.address,
-    flow: dbTask.flow,
-    typeStorage: dbTask.type_storage,
-    status: dbTask.status,
-    statusDelivery: dbTask.status_delivery,
-    reason: dbTask.reason,
-    deliveryDate: dbTask.delivery_date,
-    startTime: dbTask.start_time,
-    endTime: dbTask.end_time,
-    assignedTime: dbTask.assigned_time,
-    doneTime: dbTask.done_time,
-    arrivalTime: dbTask.arrival_time,
-    assignedVehicleId: dbTask.assigned_vehicle_id,
-    assignee: dbTask.assignee,
-    driverName: dbTask.driver_name,
-    plat: dbTask.plat,
-    basePlat: getBasePlate(dbTask.plat),
-    vehicleType: dbTask.vehicle_type,
-    routePlannedOrder: dbTask.route_planned_order,
-    weightKg: dbTask.weight_kg,
-    volumeCbm: dbTask.volume_cbm,
-    distance: dbTask.distance,
-    travelDistance: dbTask.travel_distance,
-    travelDuration: dbTask.travel_duration,
-    expectedCoordinate: dbTask.expected_coordinate,
-    doneCoordinate: dbTask.done_coordinate,
-    newCoordinate: dbTask.new_coordinate,
-  };
-}
-
-function parseJsonField(val, fallback = {}) {
-  if (typeof val === 'string') {
-    try {
-      return JSON.parse(val || '{}');
-    } catch {
-      return fallback;
-    }
-  }
-  return val || fallback;
-}
 
 function formatDbRoutingResult(item) {
   const hubTimes = parseJsonField(item.hub_times, {});
@@ -319,7 +271,7 @@ export async function processAndStoreKpi({ hubId, deliveryDate, userName = 'syst
   });
 
   const taskList = tasks.map((t) => {
-    const base = formatDbTask(t);
+    const base = formatTask(t);
     base.pendingDetail = pendingMap.get(t.id) || null;
     return base;
   });
@@ -331,7 +283,7 @@ export async function processAndStoreKpi({ hubId, deliveryDate, userName = 'syst
   let additionalResults = [];
   if (missingRoutingIds.length > 0) {
     additionalResults = await prisma.routingResult.findMany({
-      where: { id: { in: missingRoutingIds } },
+      where: { id: { in: missingRoutingIds }, hub_id: hubId },
     });
   }
 

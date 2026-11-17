@@ -164,7 +164,7 @@ export default function ReportTemplate({
           onClick={() => setIsSettingsOpen(!isSettingsOpen)}
           className="text-sm text-sky-600 dark:text-sky-400 font-medium hover:underline focus:outline-none cursor-pointer"
         >
-          {t('setting.title')}
+          {t('common.setting')}
         </button>
         {isSettingsOpen && (
           <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 w-64 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-md shadow-lg z-50 p-4 flex flex-col gap-4">
