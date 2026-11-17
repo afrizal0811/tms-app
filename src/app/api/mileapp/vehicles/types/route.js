@@ -108,6 +108,9 @@ export async function GET(request) {
       if (!allowedTypes.has(resolvedType)) {
         resolvedType = resolvedType.replace(/^(DRY|FROZEN|FRZ)-/, '');
       }
+      if (!allowedTypes.has(resolvedType)) {
+        resolvedType = resolvedType.replace(/-\d+$/, '');
+      }
 
       if (!allowedTypes.has(resolvedType)) return;
 

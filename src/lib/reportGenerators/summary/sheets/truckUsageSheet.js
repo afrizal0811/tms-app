@@ -44,7 +44,10 @@ function extractVehicleType(dType, vehicleTypes) {
   const cleanUpper = dType.replace(/["'\\]/g, '').trim().toUpperCase();
   if (vehicleTypes.includes(cleanUpper)) return cleanUpper;
 
-  return cleanUpper.replace(/^(DRY|FROZEN|FRZ)-/, '');
+  const withoutStorage = cleanUpper.replace(/^(DRY|FROZEN|FRZ)-/, '');
+  if (vehicleTypes.includes(withoutStorage)) return withoutStorage;
+
+  return withoutStorage.replace(/-\d+$/, '');
 }
 
 function buildUsageStat(tms, manual, vehicleCount, workingDays) {
