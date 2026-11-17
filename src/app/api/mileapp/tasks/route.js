@@ -1,10 +1,12 @@
 import prisma from '@/lib/prisma';
 import {
   formatDateUniversal,
+  formatListProductsForApi,
   formatMinutesToHHMM,
   formatUTC7,
   getBasePlate,
   parseCustomerString,
+  parseProductItem,
   tomorrowDate,
 } from '@/lib/utils';
 import { resolveUserName } from '../help';
@@ -96,10 +98,7 @@ function getLocalDateFromUtcString(utcStr, offsetHours = 7) {
 function formatDbTask(dbTask) {
   const cust = parseCustomerString(dbTask.customer_order);
   const others = parseJsonField(dbTask.others);
-  const listProduct =
-    typeof dbTask.list_product === 'string'
-      ? JSON.parse(dbTask.list_product || '[]')
-      : dbTask.list_product || [];
+  const listProduct = formatListProductsForApi(dbTask.list_products);
   const syncUser = parseJsonField(dbTask.sync_user);
   const taskUser = parseJsonField(dbTask.task_user);
 
@@ -349,10 +348,16 @@ async function saveTasks(tasks, targetHubId, currentUser = 'System') {
         updated_at: nowIso,
       };
 
+      const parsedCust = parseCustomerString(t.customerOrder);
+
       const data = {
         hub_id: resolvedHubId,
         routing_result_id: routingResultId,
         customer_order: t.customerOrder || null,
+        customer_id: parsedCust.id || null,
+        location_id: parsedCust.location || null,
+        customer_name: parsedCust.name || null,
+        invoice_number: parsedCust.invoiceNumber || null,
         address: t.address || null,
         flow: t.flow || null,
         type_storage: t.typeStorage || null,
@@ -381,12 +386,13 @@ async function saveTasks(tasks, targetHubId, currentUser = 'System') {
         expected_coordinate: t.expectedCoordinate || t.longlat || null,
         done_coordinate: t.doneCoordinate || null,
         new_coordinate: t.klikLokasiClient || null,
-        list_product: t.listProduct || [],
         others,
         created_from: t.createdFrom || 'API',
         sync_user: syncUser,
         task_user: taskUser,
       };
+
+      const rawProducts = Array.isArray(t.listProduct) ? t.listProduct : [];
 
       if (existingTask) {
         return prisma.task
@@ -394,7 +400,7 @@ async function saveTasks(tasks, targetHubId, currentUser = 'System') {
             where: { id },
             data,
           })
-          .then(() => ({ type: 'update' }));
+          .then(() => ({ type: 'update', id, products: rawProducts }));
       }
 
       return prisma.task
@@ -406,17 +412,36 @@ async function saveTasks(tasks, targetHubId, currentUser = 'System') {
             ...data,
           },
         })
-        .then(() => ({ type: 'insert' }))
+        .then(() => ({ type: 'insert', id, products: rawProducts }))
         .catch(async (err) => {
           if (err?.code === 'P2002') {
             await prisma.task.update({ where: { id }, data });
-            return { type: 'update' };
+            return { type: 'update', id, products: rawProducts };
           }
           throw err;
         });
     });
 
     const results = await Promise.all(operations);
+    const syncedTasks = results.filter((r) => r && r.type !== 'skip' && r.id);
+
+    if (syncedTasks.length > 0) {
+      const syncedIds = syncedTasks.map((r) => r.id);
+      const productRows = syncedTasks.flatMap((r) =>
+        r.products.map((item) => ({
+          task_id: r.id,
+          ...parseProductItem(item),
+        }))
+      );
+
+      await prisma.$transaction(async (tx) => {
+        await tx.listProduct.deleteMany({ where: { task_id: { in: syncedIds } } });
+        if (productRows.length > 0) {
+          await tx.listProduct.createMany({ data: productRows });
+        }
+      });
+    }
+
     insertedCount += results.filter((r) => r?.type === 'insert').length;
     updatedCount += results.filter((r) => r?.type === 'update').length;
     skippedCount += results.filter((r) => r?.type === 'skip').length;
@@ -701,6 +726,11 @@ export async function GET(request) {
 
     const existingDbTasks = await prisma.task.findMany({
       where,
+      include: {
+        list_products: {
+          orderBy: { id: 'asc' },
+        },
+      },
       orderBy: [{ route_planned_order: 'asc' }, { start_time: 'asc' }],
     });
 

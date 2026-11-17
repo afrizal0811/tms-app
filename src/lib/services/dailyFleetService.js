@@ -36,7 +36,7 @@ export async function syncDailyFleetForDate(hubId, deliveryDate, userName = 'sys
       id: true,
       hub_id: true,
       delivery_date: true,
-      routing_result_id: true,
+      vehicle_usage_id: true,
       plat: true,
       driver_name: true,
       assignee: true,
@@ -121,20 +121,25 @@ export async function syncDailyFleetForDate(hubId, deliveryDate, userName = 'sys
     if (!group) {
       const email = (task.assignee || '').toLowerCase().trim();
       const matchedDriver = driverByEmail.get(email);
-      const matchedVehicle = vehicleByPlate.get(basePlat) || vehicleByPlate.get(rawPlat.toUpperCase());
+      const matchedVehicle =
+        vehicleByPlate.get(basePlat) || vehicleByPlate.get(rawPlat.toUpperCase());
 
       const maxWeight = matchedVehicle?.max_weight || matchedDriver?.max_weight || 0;
       const maxVolume = matchedVehicle?.max_volume || matchedDriver?.max_volume || 0;
-      const rawVehicleType = task.vehicle_type || matchedVehicle?.type || matchedDriver?.type || null;
+      const rawVehicleType =
+        task.vehicle_type || matchedVehicle?.type || matchedDriver?.type || null;
       const vehicleType = rawVehicleType
-        ? String(rawVehicleType).replace(/^(dry|frozen)[\s\-_]*/i, '').trim() || null
+        ? String(rawVehicleType)
+            .replace(/^(dry|frozen)[\s\-_]*/i, '')
+            .trim() || null
         : null;
-      const storageType = task.type_storage || matchedVehicle?.storage || matchedDriver?.storage || null;
+      const storageType =
+        task.type_storage || matchedVehicle?.storage || matchedDriver?.storage || null;
 
       group = {
         hub_id: task.hub_id,
         date: deliveryDate,
-        _routingSet: new Set(),
+        _tasks: [],
         plat: basePlat,
         driver_name: task.driver_name || matchedDriver?.name || 'Driver',
         driver_email: email || null,
@@ -152,7 +157,6 @@ export async function syncDailyFleetForDate(hubId, deliveryDate, userName = 'sys
           partial: 0,
           pending_gr: 0,
         },
-        task_ids: [],
         total_distance: 0,
       };
       groups.set(groupKey, group);
@@ -164,12 +168,8 @@ export async function syncDailyFleetForDate(hubId, deliveryDate, userName = 'sys
     const dist = task.travel_distance || task.distance || 0;
     group.total_distance = Number((group.total_distance + dist).toFixed(2));
 
-    if (task.routing_result_id) {
-      group._routingSet.add(task.routing_result_id);
-    }
-
     group.task_data.total += 1;
-    group.task_ids.push(task.id);
+    group._tasks.push(task);
 
     const effectiveStatus = pendingMap.get(task.id) || task.status_delivery || task.status;
     const cat = categorizeDeliveryStatus(effectiveStatus);
@@ -191,7 +191,6 @@ export async function syncDailyFleetForDate(hubId, deliveryDate, userName = 'sys
     };
 
     const payload = {
-      routing_result_ids: Array.from(item._routingSet),
       driver_name: item.driver_name,
       driver_email: item.driver_email,
       vehicle_type: item.vehicle_type,
@@ -201,7 +200,6 @@ export async function syncDailyFleetForDate(hubId, deliveryDate, userName = 'sys
       act_volume: item.act_volume,
       max_volume: item.max_volume,
       task_data: item.task_data,
-      task_ids: item.task_ids,
       total_distance: item.total_distance,
       sync_user: syncUser,
     };
@@ -225,7 +223,56 @@ export async function syncDailyFleetForDate(hubId, deliveryDate, userName = 'sys
   });
 
   if (upsertOps.length > 0) {
-    await prisma.$transaction(upsertOps);
+    const savedFleets = await prisma.$transaction(upsertOps);
+    const assignedTaskIds = new Set();
+    const taskLinkOps = [];
+
+    savedFleets.forEach((fleet) => {
+      const group = groups.get(`${fleet.hub_id}_${fleet.date}_${fleet.plat}`);
+      if (!group) return;
+
+      const changedIds = [];
+      group._tasks.forEach((task) => {
+        assignedTaskIds.add(task.id);
+        if (task.vehicle_usage_id !== fleet.id) {
+          changedIds.push(task.id);
+        }
+      });
+
+      if (changedIds.length > 0) {
+        taskLinkOps.push(
+          prisma.task.updateMany({
+            where: { id: { in: changedIds } },
+            data: { vehicle_usage_id: fleet.id },
+          })
+        );
+      }
+    });
+
+    const staleIds = tasks
+      .filter((t) => t.vehicle_usage_id && !assignedTaskIds.has(t.id))
+      .map((t) => t.id);
+
+    if (staleIds.length > 0) {
+      taskLinkOps.push(
+        prisma.task.updateMany({
+          where: { id: { in: staleIds } },
+          data: { vehicle_usage_id: null },
+        })
+      );
+    }
+
+    if (taskLinkOps.length > 0) {
+      await prisma.$transaction(taskLinkOps);
+    }
+  } else {
+    const staleIds = tasks.filter((t) => t.vehicle_usage_id).map((t) => t.id);
+    if (staleIds.length > 0) {
+      await prisma.task.updateMany({
+        where: { id: { in: staleIds } },
+        data: { vehicle_usage_id: null },
+      });
+    }
   }
 
   return upsertOps.length;
@@ -241,4 +288,3 @@ export async function recalculateDailyFleetForTask(taskId, userName = 'system') 
     await syncDailyFleetForDate(task.hub_id, task.delivery_date, userName);
   }
 }
-
